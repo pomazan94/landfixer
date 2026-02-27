@@ -1,0 +1,336 @@
+{
+  "name": "17 - Campaign Cloner",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input: source campaign info (set manually or via webhook)\n// This workflow clones a profitable campaign to another account\nconst sourceCampaignId = $input.first().json.source_campaign_id || 1;\nconst sourceAdGroupId = $input.first().json.source_ad_group_id || 1;\nconst targetAccountToken = $input.first().json.target_account_token || $env.GEOZO_API_TOKEN;\n\nreturn [{\n  json: {\n    source_campaign_id: sourceCampaignId,\n    source_ad_group_id: sourceAdGroupId,\n    target_token: targetAccountToken\n  }\n}];"
+      },
+      "id": "setup",
+      "name": "Setup Clone Parameters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ads/all",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters[ad_group_id]",
+              "value": "={{ $json.source_ad_group_id }}"
+            },
+            {
+              "name": "filters[status_id_in][]",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-source-ads",
+      "name": "Fetch Source Ads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/campaigns",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Private-Token",
+              "value": "={{ $('Setup Clone Parameters').first().json.target_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"Clone of campaign {{ $('Setup Clone Parameters').first().json.source_campaign_id }} - {{ $now.format('dd.MM HH:mm') }}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "create-campaign",
+      "name": "Create Target Campaign",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const campaignResponse = $input.first().json;\nconst newCampaignId = campaignResponse.data?.id || campaignResponse.id;\n\nreturn [{\n  json: {\n    new_campaign_id: newCampaignId,\n    target_token: $('Setup Clone Parameters').first().json.target_token\n  }\n}];"
+      },
+      "id": "extract-campaign-id",
+      "name": "Extract Campaign ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/campaigns/{{ $json.new_campaign_id }}/ad_groups",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Private-Token",
+              "value": "={{ $json.target_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"name\": \"Cloned ad group - {{ $now.format('dd.MM HH:mm') }}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "create-ad-group",
+      "name": "Create Target Ad Group",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const agResponse = $input.first().json;\nconst newAdGroupId = agResponse.data?.id || agResponse.id;\nconst sourceAds = $('Fetch Source Ads').first().json;\nconst ads = sourceAds.data || sourceAds;\n\nif (!Array.isArray(ads) || ads.length === 0) {\n  return [{ json: { error: 'No source ads found' } }];\n}\n\n// Prepare ads for cloning (slightly modify titles)\nreturn ads.map(ad => ({\n  json: {\n    new_ad_group_id: newAdGroupId,\n    original_title: ad.title,\n    original_url: ad.original_url,\n    bid: ad.one_bid_for_all_geo,\n    target_token: $('Setup Clone Parameters').first().json.target_token\n  }\n}));"
+      },
+      "id": "prepare-ad-clones",
+      "name": "Prepare Ad Clones",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $env.CLAUDE_MODEL || 'claude-sonnet-4-20250514' }}\",\n  \"max_tokens\": 128,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Слегка перефразируй этот тизерный заголовок, сохранив смысл и длину (30-120 символов). Измени 1-2 слова. Ответь ТОЛЬКО новым заголовком:\\n\\n{{ $json.original_title }}\"\n    }\n  ]\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "rephrase-title",
+      "name": "Slightly Rephrase Title",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "claude-api-cred",
+          "name": "Claude API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ad_groups/{{ $json.new_ad_group_id }}/ads/teaser/create",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Private-Token",
+              "value": "={{ $json.target_token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "title",
+              "value": "={{ $('Slightly Rephrase Title').first().json.content?.[0]?.text || $json.original_title }}"
+            },
+            {
+              "name": "original_url",
+              "value": "={{ $json.original_url }}"
+            },
+            {
+              "name": "one_bid_for_all_geo",
+              "value": "={{ $json.bid }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-clone-ad",
+      "name": "Create Cloned Ad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 0]
+    },
+    {
+      "parameters": {
+        "time": 7,
+        "unit": "seconds"
+      },
+      "id": "rate-wait",
+      "name": "Rate Limit Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1980, 0]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Setup Clone Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup Clone Parameters": {
+      "main": [
+        [
+          {
+            "node": "Fetch Source Ads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Source Ads": {
+      "main": [
+        [
+          {
+            "node": "Create Target Campaign",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Target Campaign": {
+      "main": [
+        [
+          {
+            "node": "Extract Campaign ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Campaign ID": {
+      "main": [
+        [
+          {
+            "node": "Create Target Ad Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Target Ad Group": {
+      "main": [
+        [
+          {
+            "node": "Prepare Ad Clones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Ad Clones": {
+      "main": [
+        [
+          {
+            "node": "Slightly Rephrase Title",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slightly Rephrase Title": {
+      "main": [
+        [
+          {
+            "node": "Create Cloned Ad",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Cloned Ad": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "scale",
+      "id": "tag-scale"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

@@ -1,0 +1,212 @@
+{
+  "name": "06 - Trend Hunter",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every 2 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://trends.google.com/trends/trendingsearches/daily/rss?geo=RU",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "fetch-google-trends",
+      "name": "Fetch Google Trends RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, -100]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://news.google.com/rss?hl=ru&gl=RU&ceid=RU:ru",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "fetch-news-rss",
+      "name": "Fetch News RSS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 50]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse RSS feeds and extract trending topics\nconst trendsXml = $('Fetch Google Trends RSS').first().json.data || '';\nconst newsXml = $('Fetch News RSS').first().json.data || '';\n\n// Simple XML title extraction\nfunction extractTitles(xml) {\n  const titles = [];\n  const regex = /<title[^>]*><!\\[CDATA\\[(.+?)\\]\\]><\\/title>|<title[^>]*>([^<]+)<\\/title>/g;\n  let match;\n  while ((match = regex.exec(xml)) !== null) {\n    const title = match[1] || match[2];\n    if (title && title.length > 5 && !title.includes('Google') && !title.includes('RSS')) {\n      titles.push(title.trim());\n    }\n  }\n  return titles;\n}\n\nconst trendTopics = extractTitles(trendsXml).slice(0, 10);\nconst newsTopics = extractTitles(newsXml).slice(0, 10);\n\n// Evergreen topics database\nconst evergreenTopics = [\n  'похудение без диет',\n  'боль в суставах лечение',\n  'давление нормализовать',\n  'пенсия повышение',\n  'заработок в интернете',\n  'омоложение лица',\n  'грибок ногтей лечение',\n  'зрение восстановить',\n  'сахарный диабет новое лечение',\n  'варикоз убрать'\n];\n\n// Combine all topics\nconst allTopics = [\n  ...trendTopics.map(t => ({ topic: t, source: 'google_trends' })),\n  ...newsTopics.map(t => ({ topic: t, source: 'news_rss' })),\n  ...evergreenTopics.map(t => ({ topic: t, source: 'evergreen' }))\n];\n\n// Pick up to 5 topics for this cycle\nconst selectedTopics = allTopics\n  .sort(() => Math.random() - 0.5)\n  .slice(0, 5);\n\nreturn selectedTopics.map(t => ({ json: t }));"
+      },
+      "id": "parse-trends",
+      "name": "Parse & Select Trends",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $env.CLAUDE_MODEL || 'claude-sonnet-4-20250514' }}\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Сгенерируй 10 кликбейтных заголовков для нативных тизеров на тему: '{{ $json.topic }}'.\\n\\nТребования:\\n- Длина 30-120 символов\\n- Интригующий стиль, вызывающий желание кликнуть\\n- Без явной лжи, но с преувеличением\\n- Разные подходы: вопрос, шок, секрет, открытие, история\\n- На русском языке\\n\\nФормат ответа — JSON массив строк, только заголовки, без нумерации:\\n[\\\"заголовок1\\\", \\\"заголовок2\\\", ...]\"\n    }\n  ]\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "claude-generate",
+      "name": "Generate Headlines (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "claude-api-cred",
+          "name": "Claude API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst topic = $('Parse & Select Trends').first().json.topic;\nconst source = $('Parse & Select Trends').first().json.source;\n\n// Extract titles from Claude response\nlet titles = [];\ntry {\n  const content = response.content?.[0]?.text || response.text || '';\n  // Try to parse JSON array from response\n  const jsonMatch = content.match(/\\[([\\s\\S]*?)\\]/);\n  if (jsonMatch) {\n    titles = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  // Fallback: split by newlines\n  const content = response.content?.[0]?.text || '';\n  titles = content.split('\\n').filter(l => l.trim().length > 20).map(l => l.replace(/^[\\d.\\-*]+\\s*/, '').trim());\n}\n\n// Filter valid titles (30-120 chars)\ntitles = titles.filter(t => t && t.length >= 30 && t.length <= 120);\n\nreturn titles.map(title => ({\n  json: {\n    trend_topic: topic,\n    trend_source: source,\n    title: title,\n    status: 'pending'\n  }\n}));"
+      },
+      "id": "parse-titles",
+      "name": "Parse Generated Titles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO content_queue (trend_source, trend_topic, generated_titles, status, priority)\nVALUES (\n  '{{ $json.trend_source }}',\n  '{{ $json.trend_topic }}',\n  '{{ JSON.stringify([$json.title]) }}'::jsonb,\n  'pending',\n  {{ $json.trend_source === 'google_trends' ? 2 : ($json.trend_source === 'news_rss' ? 1 : 0) }}\n)\nON CONFLICT DO NOTHING;",
+        "options": {}
+      },
+      "id": "save-to-queue",
+      "name": "Save to Content Queue",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1140, 0],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 2 Hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch Google Trends RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch News RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Google Trends RSS": {
+      "main": [
+        [
+          {
+            "node": "Parse & Select Trends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch News RSS": {
+      "main": [
+        [
+          {
+            "node": "Parse & Select Trends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Select Trends": {
+      "main": [
+        [
+          {
+            "node": "Generate Headlines (Claude)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Headlines (Claude)": {
+      "main": [
+        [
+          {
+            "node": "Parse Generated Titles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Generated Titles": {
+      "main": [
+        [
+          {
+            "node": "Save to Content Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "creator",
+      "id": "tag-creator"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

@@ -1,0 +1,178 @@
+{
+  "name": "16 - Spy Module (Competitive Intelligence)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Daily at 04:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  competitor_titles,\n  site_url,\n  scanned_at\nFROM position_tracking\nWHERE scanned_at >= NOW() - INTERVAL '24 hours'\nORDER BY scanned_at DESC\nLIMIT 50;",
+        "options": {}
+      },
+      "id": "fetch-recent-scans",
+      "name": "Fetch Recent Scans",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [220, 0],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const scans = $input.all();\nconst allTeasers = [];\n\nscans.forEach(scan => {\n  let titles = scan.json.competitor_titles;\n  if (typeof titles === 'string') {\n    try { titles = JSON.parse(titles); } catch(e) { titles = []; }\n  }\n  if (Array.isArray(titles)) {\n    titles.forEach(t => {\n      allTeasers.push({\n        title: t.title || '',\n        url: t.url || '',\n        position: t.position || 0,\n        site: scan.json.site_url\n      });\n    });\n  }\n});\n\n// Deduplicate by title\nconst seen = new Set();\nconst unique = allTeasers.filter(t => {\n  if (!t.title || t.title.length < 10 || seen.has(t.title)) return false;\n  seen.add(t.title);\n  return true;\n});\n\n// Take top competitors by frequency\nreturn [{\n  json: {\n    total_unique_teasers: unique.length,\n    competitor_titles: unique.slice(0, 30).map(t => t.title),\n    sample_teasers: unique.slice(0, 30)\n  }\n}];"
+      },
+      "id": "aggregate-competitors",
+      "name": "Aggregate Competitor Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $env.CLAUDE_MODEL || 'claude-sonnet-4-20250514' }}\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Проанализируй заголовки конкурентов из тизерных сетей и дай рекомендации.\\n\\nЗаголовки конкурентов ({{ $json.total_unique_teasers }} уникальных):\\n{{ $json.competitor_titles.join('\\n') }}\\n\\nОтветь:\\n1. Какие темы и подходы доминируют?\\n2. Какие триггеры используются (страх, любопытство, шок, выгода)?\\n3. Какие паттерны заголовков самые частые?\\n4. Предложи 5 улучшенных заголовков, которые могут выделиться на фоне конкурентов\\n5. Какие темы пока не охвачены конкурентами?\\n\\nКратко, по делу. Формат для Telegram.\"\n    }\n  ]\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "analyze-with-claude",
+      "name": "Analyze with Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "claude-api-cred",
+          "name": "Claude API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const claudeResponse = $input.first().json;\nconst competitorData = $('Aggregate Competitor Data').first().json;\n\nconst analysis = claudeResponse.content?.[0]?.text || 'Analysis failed';\n\n// Save unique competitors to DB\nconst competitors = competitorData.sample_teasers || [];\n\nreturn [{\n  json: {\n    analysis: analysis,\n    competitors_count: competitorData.total_unique_teasers,\n    competitors: competitors\n  }\n}];"
+      },
+      "id": "prepare-output",
+      "name": "Prepare Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=🕵️ SPY MODULE - Competitor Analysis\n\nAnalyzed {{ $json.competitors_count }} unique competitor teasers\n\n{{ $json.analysis }}",
+        "additionalFields": {}
+      },
+      "id": "send-report",
+      "name": "Send Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1100, 0],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily at 04:00": {
+      "main": [
+        [
+          {
+            "node": "Fetch Recent Scans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Recent Scans": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Competitor Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Competitor Data": {
+      "main": [
+        [
+          {
+            "node": "Analyze with Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze with Claude": {
+      "main": [
+        [
+          {
+            "node": "Prepare Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Output": {
+      "main": [
+        [
+          {
+            "node": "Send Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "scraper",
+      "id": "tag-scraper"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

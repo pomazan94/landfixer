@@ -1,0 +1,283 @@
+{
+  "name": "13 - Block Optimizer (Blacklist/Whitelist)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "10 0 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Daily at 00:10",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/stats/tmp_with_postbacks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters[date_from]",
+              "value": "={{ $now.minus({ days: 7 }).format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "filters[date_to]",
+              "value": "={{ $now.minus({ days: 1 }).format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "groups[0]",
+              "value": "block_id"
+            },
+            {
+              "name": "groups[1]",
+              "value": "ad_id"
+            },
+            {
+              "name": "per_page",
+              "value": "1000"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-block-stats",
+      "name": "Fetch Block Stats (7 days)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const statsRaw = $input.first().json;\nconst stats = statsRaw.data || statsRaw;\n\nif (!Array.isArray(stats)) {\n  return [{ json: { error: 'No block stats' } }];\n}\n\n// Aggregate by block_id\nconst blockAgg = {};\nstats.forEach(s => {\n  const blockId = s.block_id;\n  if (!blockId) return;\n  if (!blockAgg[blockId]) {\n    blockAgg[blockId] = { spend: 0, revenue: 0, clicks: 0, shows: 0, ads: new Set() };\n  }\n  blockAgg[blockId].spend += parseFloat(s.money) || 0;\n  blockAgg[blockId].revenue += parseFloat(s.postbacks_confirmed_money) || 0;\n  blockAgg[blockId].clicks += parseInt(s.clicks_count) || 0;\n  blockAgg[blockId].shows += parseInt(s.shows_count) || 0;\n  if (s.ad_id) blockAgg[blockId].ads.add(s.ad_id);\n});\n\nconst blacklist = [];\nconst whitelist = [];\nconst yellow = [];\n\nfor (const [blockId, b] of Object.entries(blockAgg)) {\n  const roi = b.spend > 0 ? ((b.revenue - b.spend) / b.spend * 100) : 0;\n  const ctr = b.shows > 0 ? (b.clicks / b.shows * 100) : 0;\n\n  const blockInfo = {\n    block_id: parseInt(blockId),\n    roi: Math.round(roi * 100) / 100,\n    ctr: Math.round(ctr * 10000) / 10000,\n    clicks: b.clicks,\n    shows: b.shows,\n    spend: Math.round(b.spend * 100) / 100,\n    revenue: Math.round(b.revenue * 100) / 100,\n    ad_count: b.ads.size\n  };\n\n  // GREEN: profitable block\n  if (roi > 20 && b.clicks > 10 && ctr > 0.5) {\n    blockInfo.classification = 'green';\n    whitelist.push(blockInfo);\n  }\n  // RED: losing block\n  else if ((roi < -30 && b.clicks > 20) || (ctr < 0.1 && b.shows > 500)) {\n    blockInfo.classification = 'red';\n    blacklist.push(blockInfo);\n  }\n  // YELLOW: observation\n  else {\n    blockInfo.classification = 'yellow';\n    yellow.push(blockInfo);\n  }\n}\n\nreturn [{\n  json: {\n    blacklist_blocks: blacklist.map(b => b.block_id),\n    whitelist_blocks: whitelist.map(b => b.block_id),\n    blacklist_details: blacklist,\n    whitelist_details: whitelist,\n    yellow_details: yellow,\n    total_analyzed: Object.keys(blockAgg).length\n  }\n}];"
+      },
+      "id": "classify-blocks",
+      "name": "Classify Blocks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ads/all",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters[status_id_in][]",
+              "value": "1"
+            },
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-ad-groups",
+      "name": "Fetch Active Ad Groups",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 150],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const blockData = $('Classify Blocks').first().json;\nconst adsRaw = $('Fetch Active Ad Groups').first().json;\nconst ads = adsRaw.data || adsRaw;\n\n// Get unique ad_group_ids\nconst adGroupIds = [...new Set((Array.isArray(ads) ? ads : []).map(a => a.ad_group_id).filter(Boolean))];\n\nif (adGroupIds.length === 0) {\n  return [{ json: { action: 'SKIP', reason: 'No ad groups found' } }];\n}\n\n// Prepare updates for each ad group\nreturn adGroupIds.map(agId => ({\n  json: {\n    ad_group_id: agId,\n    blacklist_blocks: blockData.blacklist_blocks,\n    whitelist_blocks: blockData.whitelist_blocks,\n    blacklist_count: blockData.blacklist_blocks.length,\n    whitelist_count: blockData.whitelist_blocks.length,\n    total_analyzed: blockData.total_analyzed\n  }\n}));"
+      },
+      "id": "prepare-updates",
+      "name": "Prepare Updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 0]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ad_groups/{{ $json.ad_group_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"blacklist_blocks\": {{ JSON.stringify($json.blacklist_blocks) }},\n  \"whitelist_blocks\": {{ JSON.stringify($json.whitelist_blocks) }}\n}",
+        "options": {}
+      },
+      "id": "update-ad-group",
+      "name": "Update Ad Group Lists",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO block_stats (block_id, date, classification)\nSELECT b.block_id, CURRENT_DATE, b.classification\nFROM jsonb_array_elements('{{ JSON.stringify([...$json.blacklist_blocks.map(id => ({block_id: id, classification: 'red'})), ...$json.whitelist_blocks.map(id => ({block_id: id, classification: 'green'}))]) }}'::jsonb) AS b(val)\nCROSS JOIN LATERAL (\n  SELECT (val->>'block_id')::int as block_id, val->>'classification' as classification\n) b\nON CONFLICT DO NOTHING;",
+        "options": {}
+      },
+      "id": "log-to-db",
+      "name": "Log Classifications",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [960, 150],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=🎯 BLOCK OPTIMIZER {{ $now.format('dd.MM.yyyy') }}\n\nAnalyzed: {{ $json.total_analyzed }} blocks\n🟢 Whitelisted: {{ $json.whitelist_count }} blocks\n🔴 Blacklisted: {{ $json.blacklist_count }} blocks\n\nUpdated ad group #{{ $json.ad_group_id }}",
+        "additionalFields": {}
+      },
+      "id": "notify",
+      "name": "Notify Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1180, 0],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily at 00:10": {
+      "main": [
+        [
+          {
+            "node": "Fetch Block Stats (7 days)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Active Ad Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Block Stats (7 days)": {
+      "main": [
+        [
+          {
+            "node": "Classify Blocks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Blocks": {
+      "main": [
+        [
+          {
+            "node": "Prepare Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Active Ad Groups": {
+      "main": [
+        [
+          {
+            "node": "Prepare Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Updates": {
+      "main": [
+        [
+          {
+            "node": "Update Ad Group Lists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Ad Group Lists": {
+      "main": [
+        [
+          {
+            "node": "Log Classifications",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "optimizer",
+      "id": "tag-optimizer"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

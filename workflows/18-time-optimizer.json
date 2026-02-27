@@ -1,0 +1,321 @@
+{
+  "name": "18 - Time Targeting Optimizer",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 5 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Weekly Monday 05:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/stats/tmp_with_postbacks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters[date_from]",
+              "value": "={{ $now.minus({ days: 30 }).format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "filters[date_to]",
+              "value": "={{ $now.minus({ days: 1 }).format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "groups[0]",
+              "value": "date"
+            },
+            {
+              "name": "groups[1]",
+              "value": "hour"
+            },
+            {
+              "name": "per_page",
+              "value": "1000"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-30day-stats",
+      "name": "Fetch 30-Day Hourly Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const statsRaw = $input.first().json;\nconst stats = statsRaw.data || statsRaw;\n\nif (!Array.isArray(stats)) {\n  return [{ json: { error: 'No time stats data' } }];\n}\n\n// Aggregate by day-of-week and hour\nconst dayHourMap = {}; // { dayOfWeek: { hour: { clicks, shows, money, revenue } } }\nconst dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];\n\nstats.forEach(s => {\n  if (!s.date || s.hour === undefined) return;\n  const date = new Date(s.date);\n  const dayOfWeek = dayNames[date.getDay()];\n  const hour = parseInt(s.hour);\n\n  if (!dayHourMap[dayOfWeek]) dayHourMap[dayOfWeek] = {};\n  if (!dayHourMap[dayOfWeek][hour]) {\n    dayHourMap[dayOfWeek][hour] = { clicks: 0, shows: 0, money: 0, revenue: 0, count: 0 };\n  }\n\n  dayHourMap[dayOfWeek][hour].clicks += parseInt(s.clicks_count) || 0;\n  dayHourMap[dayOfWeek][hour].shows += parseInt(s.shows_count) || 0;\n  dayHourMap[dayOfWeek][hour].money += parseFloat(s.money) || 0;\n  dayHourMap[dayOfWeek][hour].revenue += parseFloat(s.postbacks_confirmed_money) || 0;\n  dayHourMap[dayOfWeek][hour].count += 1;\n});\n\n// Format summary for Claude\nlet summary = '';\nfor (const day of dayNames) {\n  if (!dayHourMap[day]) continue;\n  summary += `\\n${day.toUpperCase()}:\\n`;\n  for (let h = 0; h < 24; h++) {\n    const d = dayHourMap[day][h];\n    if (!d) continue;\n    const roi = d.money > 0 ? ((d.revenue - d.money) / d.money * 100) : 0;\n    const ctr = d.shows > 0 ? (d.clicks / d.shows * 100) : 0;\n    summary += `  ${String(h).padStart(2, '0')}:00 - CTR: ${ctr.toFixed(2)}%, ROI: ${roi.toFixed(0)}%, Clicks: ${d.clicks}, Spend: $${d.money.toFixed(2)}\\n`;\n  }\n}\n\nreturn [{ json: { summary, dayHourMap } }];"
+      },
+      "id": "aggregate-time-data",
+      "name": "Aggregate Time Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $env.CLAUDE_MODEL || 'claude-sonnet-4-20250514' }}\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Проанализируй статистику тизерной рекламы по дням недели и часам за 30 дней.\\n\\nДанные:\\n{{ $json.summary }}\\n\\nОпредели:\\n1. Лучшие часы по CTR и ROI (когда запускать рекламу)\\n2. Худшие часы (когда лучше выключать)\\n3. Лучшие/худшие дни недели\\n4. Оптимальное расписание (time_targeting)\\n\\nВыведи оптимальное расписание в формате JSON:\\n{\\n  \\\"monday\\\": [8,9,10,11,12,13,18,19,20,21],\\n  \\\"tuesday\\\": [...],\\n  ...\\n}\\nГде массив = активные часы (0-23). Включай только профитные часы.\\n\\nСначала анализ (кратко), затем JSON.\"\n    }\n  ]\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "claude-analyze",
+      "name": "Analyze with Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "claude-api-cred",
+          "name": "Claude API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const claudeResponse = $input.first().json;\nconst text = claudeResponse.content?.[0]?.text || '';\n\n// Extract JSON from Claude response\nlet timeTargeting = null;\nconst jsonMatch = text.match(/\\{[\\s\\S]*?\"monday\"[\\s\\S]*?\\}/i);\nif (jsonMatch) {\n  try {\n    timeTargeting = JSON.parse(jsonMatch[0]);\n  } catch(e) {\n    // Try more aggressive parsing\n    const cleanJson = jsonMatch[0].replace(/\\/\\/[^\\n]*/g, '').replace(/,\\s*}/g, '}');\n    try { timeTargeting = JSON.parse(cleanJson); } catch(e2) {}\n  }\n}\n\nif (!timeTargeting) {\n  // Default schedule: common profitable hours\n  timeTargeting = {\n    monday: [8,9,10,11,12,13,14,15,16,17,18,19,20,21],\n    tuesday: [8,9,10,11,12,13,14,15,16,17,18,19,20,21],\n    wednesday: [8,9,10,11,12,13,14,15,16,17,18,19,20,21],\n    thursday: [8,9,10,11,12,13,14,15,16,17,18,19,20,21],\n    friday: [8,9,10,11,12,13,14,15,16,17,18,19,20,21],\n    saturday: [10,11,12,13,14,15,16,17,18,19,20],\n    sunday: [10,11,12,13,14,15,16,17,18,19,20]\n  };\n}\n\nreturn [{\n  json: {\n    analysis: text.substring(0, 2000),\n    time_targeting: timeTargeting\n  }\n}];"
+      },
+      "id": "parse-schedule",
+      "name": "Parse Schedule",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ads/all",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters[status_id_in][]",
+              "value": "1"
+            },
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-ad-groups",
+      "name": "Fetch Ad Groups",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 150],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const schedule = $('Parse Schedule').first().json;\nconst adsRaw = $('Fetch Ad Groups').first().json;\nconst ads = adsRaw.data || adsRaw;\n\nconst adGroupIds = [...new Set((Array.isArray(ads) ? ads : []).map(a => a.ad_group_id).filter(Boolean))];\n\nreturn adGroupIds.map(agId => ({\n  json: {\n    ad_group_id: agId,\n    time_targeting: schedule.time_targeting,\n    analysis: schedule.analysis\n  }\n}));"
+      },
+      "id": "prepare-updates",
+      "name": "Prepare Updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 0]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ad_groups/{{ $json.ad_group_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"time_targeting\": {{ JSON.stringify($json.time_targeting) }}\n}",
+        "options": {}
+      },
+      "id": "update-time-targeting",
+      "name": "Update Time Targeting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1360, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=⏰ TIME OPTIMIZER\n\nUpdated time targeting for ad group #{{ $json.ad_group_id }}\n\n{{ $json.analysis.substring(0, 1500) }}",
+        "additionalFields": {}
+      },
+      "id": "notify",
+      "name": "Notify Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1360, 150],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Weekly Monday 05:00": {
+      "main": [
+        [
+          {
+            "node": "Fetch 30-Day Hourly Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch 30-Day Hourly Stats": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Time Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Time Data": {
+      "main": [
+        [
+          {
+            "node": "Analyze with Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze with Claude": {
+      "main": [
+        [
+          {
+            "node": "Parse Schedule",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Ad Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Schedule": {
+      "main": [
+        [
+          {
+            "node": "Prepare Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Ad Groups": {
+      "main": [
+        [
+          {
+            "node": "Prepare Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Updates": {
+      "main": [
+        [
+          {
+            "node": "Update Time Targeting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Time Targeting": {
+      "main": [
+        [
+          {
+            "node": "Notify Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "optimizer",
+      "id": "tag-optimizer"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

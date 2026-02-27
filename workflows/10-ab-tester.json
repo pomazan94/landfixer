@@ -1,0 +1,346 @@
+{
+  "name": "10 - A/B Testing Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every 4 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Start (Create Test)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM ab_tests WHERE status = 'running' ORDER BY started_at DESC LIMIT 5;",
+        "options": {}
+      },
+      "id": "fetch-active-tests",
+      "name": "Fetch Active Tests",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [220, 0],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const tests = $input.all();\n\nif (tests.length === 0 || !tests[0].json.id) {\n  return []; // No active tests\n}\n\nreturn tests.map(t => ({ json: t.json }));"
+      },
+      "id": "check-tests",
+      "name": "Check Active Tests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/stats/tmp_with_postbacks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters[date_from]",
+              "value": "={{ $now.minus({ days: 3 }).format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "filters[date_to]",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "groups[0]",
+              "value": "ad_id"
+            },
+            {
+              "name": "per_page",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-test-stats",
+      "name": "Fetch Stats for Test Ads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const testData = $('Check Active Tests').first().json;\nconst statsRaw = $input.first().json;\nconst stats = statsRaw.data || statsRaw;\n\nif (!Array.isArray(stats) || !testData.variants) {\n  return [{ json: { action: 'SKIP', reason: 'No data' } }];\n}\n\n// Parse variants from the test\nlet variants = testData.variants;\nif (typeof variants === 'string') {\n  try { variants = JSON.parse(variants); } catch(e) { variants = []; }\n}\n\nconst variantAdIds = variants.map(v => v.ad_id);\nconst minClicks = 50; // Minimum clicks for statistical significance\n\n// Get stats for test variant ads\nconst variantStats = stats\n  .filter(s => variantAdIds.includes(s.ad_id))\n  .map(s => {\n    const spend = parseFloat(s.money) || 0;\n    const revenue = parseFloat(s.postbacks_confirmed_money) || 0;\n    const clicks = parseInt(s.clicks_count) || 0;\n    const shows = parseInt(s.shows_count) || 0;\n    const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n    const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n    return {\n      ad_id: s.ad_id,\n      clicks, shows, spend, revenue, ctr, roi,\n      has_enough_data: clicks >= minClicks\n    };\n  });\n\n// Check if enough data collected\nconst allHaveData = variantStats.every(v => v.has_enough_data);\n\nif (!allHaveData) {\n  return [{ json: {\n    action: 'WAITING',\n    test_id: testData.id,\n    reason: 'Not enough clicks yet',\n    variants: variantStats\n  }}];\n}\n\n// Find winner by CTR (primary) and ROI (secondary)\nconst sorted = [...variantStats].sort((a, b) => {\n  if (b.roi !== a.roi) return b.roi - a.roi;\n  return b.ctr - a.ctr;\n});\n\nconst winner = sorted[0];\nconst losers = sorted.slice(1);\n\nreturn [{\n  json: {\n    action: 'DECIDE',\n    test_id: testData.id,\n    test_name: testData.test_name,\n    winner: winner,\n    losers: losers.map(l => l.ad_id),\n    all_variants: sorted\n  }\n}];"
+      },
+      "id": "analyze-results",
+      "name": "Analyze Test Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-decide",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "DECIDE",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "should-decide",
+      "name": "Ready to Decide?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ads/all/stop",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ad_ids\": {{ JSON.stringify($json.losers) }}\n}",
+        "options": {}
+      },
+      "id": "stop-losers",
+      "name": "Stop Loser Ads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, -50],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ads/all/bid",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ads\": [\n    {\n      \"ad_id\": {{ $json.winner.ad_id }},\n      \"one_bid_for_all_geo\": {{ Math.min(($json.winner.spend / $json.winner.clicks * 1.2), parseFloat($env.MAX_BID_CEILING || '0.10')).toFixed(4) }}\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "scale-winner",
+      "name": "Scale Winner (Raise Bid)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE ab_tests SET\n  status = 'completed',\n  winner_ad_id = {{ $json.winner.ad_id }},\n  finished_at = NOW()\nWHERE id = {{ $json.test_id }};",
+        "options": {}
+      },
+      "id": "update-test-status",
+      "name": "Mark Test Completed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1540, 0],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=🧪 A/B TEST RESULT\n\nTest: {{ $json.test_name }}\n\n🏆 Winner: Ad #{{ $json.winner.ad_id }}\n  CTR: {{ $json.winner.ctr.toFixed(2) }}%\n  ROI: {{ $json.winner.roi.toFixed(1) }}%\n  Clicks: {{ $json.winner.clicks }}\n\n❌ Stopped losers: {{ $json.losers.join(', ') }}\n\nWinner bid raised for scaling.",
+        "additionalFields": {}
+      },
+      "id": "notify-result",
+      "name": "Notify Test Result",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1540, 150],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 4 Hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch Active Tests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Active Tests": {
+      "main": [
+        [
+          {
+            "node": "Check Active Tests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Active Tests": {
+      "main": [
+        [
+          {
+            "node": "Fetch Stats for Test Ads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Stats for Test Ads": {
+      "main": [
+        [
+          {
+            "node": "Analyze Test Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Test Results": {
+      "main": [
+        [
+          {
+            "node": "Ready to Decide?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ready to Decide?": {
+      "main": [
+        [
+          {
+            "node": "Stop Loser Ads",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Scale Winner (Raise Bid)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stop Loser Ads": {
+      "main": [
+        [
+          {
+            "node": "Mark Test Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scale Winner (Raise Bid)": {
+      "main": [
+        [
+          {
+            "node": "Mark Test Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Test Completed": {
+      "main": [
+        [
+          {
+            "node": "Notify Test Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "testing",
+      "id": "tag-testing"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

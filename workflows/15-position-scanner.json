@@ -1,0 +1,211 @@
+{
+  "name": "15 - Position Scanner",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every 2 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT DISTINCT site_url FROM position_tracking\nUNION\nSELECT unnest(ARRAY[\n  'https://example-news-site.com',\n  'https://example-blog.com'\n]) AS site_url\nLIMIT 20;",
+        "options": {}
+      },
+      "id": "get-target-sites",
+      "name": "Get Target Sites",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [220, 0],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const sites = $input.all().map(i => i.json.site_url).filter(Boolean);\n\nif (sites.length === 0) {\n  return [{ json: { skip: true, reason: 'No target sites configured' } }];\n}\n\n// User-Agent rotation pool\nconst userAgents = [\n  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',\n  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1'\n];\n\n// Referer rotation\nconst referers = [\n  'https://www.google.com/',\n  'https://yandex.ru/',\n  'https://www.bing.com/',\n  'https://dzen.ru/',\n  ''\n];\n\nreturn sites.map(site => {\n  const ua = userAgents[Math.floor(Math.random() * userAgents.length)];\n  const ref = referers[Math.floor(Math.random() * referers.length)];\n\n  return {\n    json: {\n      site_url: site,\n      user_agent: ua,\n      referer: ref\n    }\n  };\n});"
+      },
+      "id": "prepare-requests",
+      "name": "Prepare Scan Requests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.site_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "={{ $json.user_agent }}"
+            },
+            {
+              "name": "Referer",
+              "value": "={{ $json.referer }}"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "ru-RU,ru;q=0.9,en-US;q=0.8"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "proxy": "={{ $env.PROXY_HOST ? 'http://' + $env.PROXY_USER + ':' + $env.PROXY_PASSWORD + '@' + $env.PROXY_HOST + ':' + $env.PROXY_PORT : '' }}",
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-page",
+      "name": "Fetch Page via Proxy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = $input.first().json.data || $input.first().json.body || '';\nconst siteUrl = $('Prepare Scan Requests').first().json.site_url;\n\n// Parse Geozo widget teasers from HTML\n// Look for common Geozo widget patterns\nconst teasers = [];\n\n// Pattern 1: data-geozo or class containing geozo\nconst widgetRegex = /class=[\"'][^\"']*geozo[^\"']*[\"'][^>]*>([\\s\\S]*?)<\\/div>/gi;\nlet widgetMatch;\nwhile ((widgetMatch = widgetRegex.exec(html)) !== null) {\n  const widgetHtml = widgetMatch[1];\n  // Extract individual teasers from widget\n  const teaserRegex = /<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>([\\s\\S]*?)<\\/a>/gi;\n  let teaserMatch;\n  let position = 0;\n  while ((teaserMatch = teaserRegex.exec(widgetHtml)) !== null) {\n    position++;\n    const url = teaserMatch[1];\n    const content = teaserMatch[2];\n    // Extract title from content\n    const titleMatch = content.match(/<[^>]*class=[\"'][^\"']*title[^\"']*[\"'][^>]*>([^<]+)/i)\n      || content.match(/>([^<]{20,})</)\n      || [null, content.replace(/<[^>]+>/g, '').trim().substring(0, 120)];\n    const title = (titleMatch[1] || '').trim();\n    if (title.length > 5) {\n      teasers.push({ position, title, url, source: siteUrl });\n    }\n  }\n}\n\n// Pattern 2: iframe-based widgets\nconst iframeRegex = /src=[\"']([^\"']*geozo[^\"']*)[\"']/gi;\nlet iframeMatch;\nwhile ((iframeMatch = iframeRegex.exec(html)) !== null) {\n  teasers.push({ position: 0, title: '[iframe widget detected]', url: iframeMatch[1], source: siteUrl });\n}\n\n// If no widget found, try general native ad patterns\nif (teasers.length === 0) {\n  const nativeAdRegex = /<div[^>]*class=[\"'][^\"']*(?:teaser|native|widget|recommend)[^\"']*[\"'][^>]*>[\\s\\S]*?<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>[\\s\\S]*?<\\/a>/gi;\n  let nativeMatch;\n  let pos = 0;\n  while ((nativeMatch = nativeAdRegex.exec(html)) !== null && pos < 20) {\n    pos++;\n    teasers.push({ position: pos, title: '[native ad detected]', url: nativeMatch[1], source: siteUrl });\n  }\n}\n\nreturn [{\n  json: {\n    site_url: siteUrl,\n    teasers_found: teasers.length,\n    teasers: teasers,\n    scanned_at: $now.toISO()\n  }\n}];"
+      },
+      "id": "parse-positions",
+      "name": "Parse Teaser Positions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const scanResult = $input.first().json;\nconst teasers = scanResult.teasers || [];\n\nif (teasers.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No teasers found on page' } }];\n}\n\n// TODO: Match our teasers by title similarity or URL pattern\n// This requires knowing our teaser titles from the DB\n// For now, store all found teasers for analysis\n\nreturn [{\n  json: {\n    site_url: scanResult.site_url,\n    total_teasers: scanResult.teasers_found,\n    teasers: teasers,\n    scanned_at: scanResult.scanned_at\n  }\n}];"
+      },
+      "id": "analyze-positions",
+      "name": "Analyze Our Positions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO position_tracking (site_url, total_teasers_in_block, competitor_titles)\nVALUES (\n  '{{ $json.site_url }}',\n  {{ $json.total_teasers }},\n  '{{ JSON.stringify($json.teasers) }}'::jsonb\n);",
+        "options": {}
+      },
+      "id": "save-positions",
+      "name": "Save Positions",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1320, 0],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 2 Hours": {
+      "main": [
+        [
+          {
+            "node": "Get Target Sites",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Target Sites": {
+      "main": [
+        [
+          {
+            "node": "Prepare Scan Requests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Scan Requests": {
+      "main": [
+        [
+          {
+            "node": "Fetch Page via Proxy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Page via Proxy": {
+      "main": [
+        [
+          {
+            "node": "Parse Teaser Positions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Teaser Positions": {
+      "main": [
+        [
+          {
+            "node": "Analyze Our Positions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Our Positions": {
+      "main": [
+        [
+          {
+            "node": "Save Positions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "scraper",
+      "id": "tag-scraper"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

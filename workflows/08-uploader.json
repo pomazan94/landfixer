@@ -1,0 +1,255 @@
+{
+  "name": "08 - Teaser Uploader",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT cq.id, cq.trend_topic, cq.generated_titles, cq.generated_image_prompts\nFROM content_queue cq\nWHERE cq.status = 'ready'\nORDER BY cq.priority DESC, cq.created_at ASC\nLIMIT 10;",
+        "options": {}
+      },
+      "id": "fetch-ready",
+      "name": "Fetch Ready Content",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [220, 0],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-items",
+              "leftValue": "={{ $input.all().length }}",
+              "rightValue": "0",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-items",
+      "name": "Has Ready Items?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\n// Extract title from generated_titles JSON array\nlet titles = item.generated_titles;\nif (typeof titles === 'string') {\n  try { titles = JSON.parse(titles); } catch(e) { titles = [titles]; }\n}\nconst title = Array.isArray(titles) ? titles[0] : (titles || item.trend_topic);\n\n// Get the landing URL from environment or use a default\nconst landingUrl = $env.DEFAULT_LANDING_URL || 'https://example.com/landing';\nconst adGroupId = $env.DEFAULT_AD_GROUP_ID || '1';\nconst defaultBid = parseFloat($env.DEFAULT_BID || '0.01');\n\nreturn [{\n  json: {\n    queue_id: item.id,\n    title: title,\n    original_url: landingUrl,\n    ad_group_id: parseInt(adGroupId),\n    bid: defaultBid\n  }\n}];"
+      },
+      "id": "prepare-upload",
+      "name": "Prepare Upload Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ad_groups/{{ $json.ad_group_id }}/ads/teaser/create",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "title",
+              "value": "={{ $json.title }}"
+            },
+            {
+              "name": "original_url",
+              "value": "={{ $json.original_url }}"
+            },
+            {
+              "name": "one_bid_for_all_geo",
+              "value": "={{ $json.bid }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "create-teaser",
+      "name": "Create Teaser via API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const apiResponse = $input.first().json;\nconst uploadData = $('Prepare Upload Data').first().json;\n\nconst adId = apiResponse.data?.id || apiResponse.id;\n\nreturn [{\n  json: {\n    queue_id: uploadData.queue_id,\n    ad_id: adId,\n    title: uploadData.title,\n    original_url: uploadData.original_url,\n    ad_group_id: uploadData.ad_group_id,\n    bid: uploadData.bid,\n    status: adId ? 'uploaded' : 'upload_failed',\n    api_response: apiResponse\n  }\n}];"
+      },
+      "id": "parse-response",
+      "name": "Parse API Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO teasers (ad_id, ad_group_id, title, original_url, bid, status, generation_source)\nVALUES (\n  {{ $json.ad_id || 'NULL' }},\n  {{ $json.ad_group_id }},\n  '{{ $json.title.replace(/'/g, \"''\") }}',\n  '{{ $json.original_url }}',\n  {{ $json.bid }},\n  '{{ $json.status }}',\n  'auto_generated'\n);\n\nUPDATE content_queue SET status = '{{ $json.status }}' WHERE id = {{ $json.queue_id }};",
+        "options": {}
+      },
+      "id": "save-to-db",
+      "name": "Save Teaser to DB",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1320, 0],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "time": 7,
+        "unit": "seconds"
+      },
+      "id": "rate-limit-wait",
+      "name": "Rate Limit Wait (7s)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1540, 0]
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Fetch Ready Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Ready Content": {
+      "main": [
+        [
+          {
+            "node": "Has Ready Items?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Ready Items?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Upload Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Upload Data": {
+      "main": [
+        [
+          {
+            "node": "Create Teaser via API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Teaser via API": {
+      "main": [
+        [
+          {
+            "node": "Parse API Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse API Response": {
+      "main": [
+        [
+          {
+            "node": "Save Teaser to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Teaser to DB": {
+      "main": [
+        [
+          {
+            "node": "Rate Limit Wait (7s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "creator",
+      "id": "tag-creator"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

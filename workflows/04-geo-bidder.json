@@ -1,0 +1,226 @@
+{
+  "name": "04 - Geo Bid Optimizer",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Daily at 02:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/stats/tmp_with_postbacks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters[date_from]",
+              "value": "={{ $now.minus({ days: 7 }).format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "filters[date_to]",
+              "value": "={{ $now.minus({ days: 1 }).format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "groups[0]",
+              "value": "country_code"
+            },
+            {
+              "name": "groups[1]",
+              "value": "ad_id"
+            },
+            {
+              "name": "per_page",
+              "value": "1000"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-geo-stats",
+      "name": "Fetch Geo Stats (7 days)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, -50],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/targeting/min_bids",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-min-bids",
+      "name": "Fetch Min Bids",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const statsRaw = $('Fetch Geo Stats (7 days)').first().json;\nconst minBidsRaw = $('Fetch Min Bids').first().json;\n\nconst stats = statsRaw.data || statsRaw;\nconst minBids = minBidsRaw.data || minBidsRaw;\n\nif (!Array.isArray(stats)) {\n  return [{ json: { error: 'No geo stats data' } }];\n}\n\n// Build min bids map\nconst minBidMap = {};\nif (Array.isArray(minBids)) {\n  minBids.forEach(mb => {\n    minBidMap[mb.country_code] = {\n      min: parseFloat(mb.min_bid) || 0.001,\n      recommended: parseFloat(mb.recommended_bid) || 0.005\n    };\n  });\n}\n\nconst maxCeiling = parseFloat($env.MAX_BID_CEILING || '0.10');\n\n// Group stats by ad_id, then by country\nconst adGeoStats = {};\nstats.forEach(d => {\n  const adId = d.ad_id;\n  const country = d.country_code;\n  if (!adId || !country) return;\n\n  if (!adGeoStats[adId]) adGeoStats[adId] = {};\n  if (!adGeoStats[adId][country]) {\n    adGeoStats[adId][country] = { spend: 0, revenue: 0, clicks: 0, shows: 0 };\n  }\n\n  adGeoStats[adId][country].spend += parseFloat(d.money) || 0;\n  adGeoStats[adId][country].revenue += parseFloat(d.postbacks_confirmed_money) || 0;\n  adGeoStats[adId][country].clicks += parseInt(d.clicks_count) || 0;\n  adGeoStats[adId][country].shows += parseInt(d.shows_count) || 0;\n});\n\nconst results = [];\n\nfor (const adId of Object.keys(adGeoStats)) {\n  const geoBids = {};\n  const details = [];\n\n  for (const country of Object.keys(adGeoStats[adId])) {\n    const g = adGeoStats[adId][country];\n    const roi = g.spend > 0 ? ((g.revenue - g.spend) / g.spend * 100) : 0;\n    const ctr = g.shows > 0 ? (g.clicks / g.shows * 100) : 0;\n    const minBid = minBidMap[country]?.min || 0.001;\n    const recBid = minBidMap[country]?.recommended || 0.005;\n\n    // Calculate optimal bid based on ROI\n    let optimalBid = recBid;\n    if (roi > 50 && g.clicks > 10) {\n      optimalBid = recBid * 1.5; // Scale profitable geos\n    } else if (roi > 0 && g.clicks > 5) {\n      optimalBid = recBid * 1.1;\n    } else if (roi < -30 && g.clicks > 10) {\n      optimalBid = minBid; // Minimize losing geos\n    } else if (roi < -50 && g.spend > 2) {\n      optimalBid = 0; // Effectively disable this geo\n    }\n\n    // Enforce bounds\n    if (optimalBid > maxCeiling) optimalBid = maxCeiling;\n    if (optimalBid > 0 && optimalBid < minBid) optimalBid = minBid;\n\n    if (optimalBid > 0) {\n      geoBids[country] = Math.round(optimalBid * 10000) / 10000;\n    }\n\n    details.push({\n      country, roi: Math.round(roi * 100) / 100,\n      clicks: g.clicks, spend: Math.round(g.spend * 100) / 100,\n      bid: geoBids[country] || 0\n    });\n  }\n\n  if (Object.keys(geoBids).length > 0) {\n    results.push({\n      json: {\n        ad_id: parseInt(adId),\n        geo_bids: geoBids,\n        details: details\n      }\n    });\n  }\n}\n\nif (results.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No geo bid changes needed' } }];\n}\n\nreturn results;"
+      },
+      "id": "calculate-geo-bids",
+      "name": "Calculate Optimal Geo Bids",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ads/all/bid",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ads\": [\n    {\n      \"ad_id\": {{ $json.ad_id }},\n      \"geo_bids\": {{ JSON.stringify($json.geo_bids) }}\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "update-geo-bids",
+      "name": "Update Geo Bids",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO geo_stats (ad_id, country_code, date, shows, clicks, money, postbacks_confirmed_money, roi)\nSELECT \n  {{ $json.ad_id }},\n  d->>'country',\n  CURRENT_DATE,\n  (d->>'clicks')::int,\n  (d->>'clicks')::int,\n  (d->>'spend')::decimal,\n  0,\n  (d->>'roi')::decimal\nFROM jsonb_array_elements('{{ JSON.stringify($json.details) }}'::jsonb) AS d;",
+        "options": {}
+      },
+      "id": "log-to-db",
+      "name": "Log Geo Stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [920, 0],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily at 02:00": {
+      "main": [
+        [
+          {
+            "node": "Fetch Geo Stats (7 days)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Min Bids",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Geo Stats (7 days)": {
+      "main": [
+        [
+          {
+            "node": "Calculate Optimal Geo Bids",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Min Bids": {
+      "main": [
+        [
+          {
+            "node": "Calculate Optimal Geo Bids",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Optimal Geo Bids": {
+      "main": [
+        [
+          {
+            "node": "Update Geo Bids",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Geo Bids": {
+      "main": [
+        [
+          {
+            "node": "Log Geo Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "optimizer",
+      "id": "tag-optimizer"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

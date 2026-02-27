@@ -1,0 +1,268 @@
+{
+  "name": "02 - Balance Watchdog",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/balance",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-balance",
+      "name": "Get Current Balance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, -50],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/balance/history",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters[date_from]",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "filters[date_to]",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-history",
+      "name": "Get Balance History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const balanceData = $('Get Current Balance').first().json;\nconst historyData = $('Get Balance History').first().json;\n\nconst currentBalance = parseFloat(balanceData.data?.balance || balanceData.balance || 0);\n\n// Calculate spend from history\nconst history = historyData.data || [];\nconst spendEntries = history.filter(h => h.type === 'spend');\nconst totalSpendToday = spendEntries.reduce((sum, h) => sum + Math.abs(parseFloat(h.amount) || 0), 0);\n\n// Calculate spend rate\nconst now = new Date();\nconst hoursElapsed = now.getHours() + now.getMinutes() / 60;\nconst spendRatePerHour = hoursElapsed > 0 ? totalSpendToday / hoursElapsed : 0;\n\n// Estimate hours remaining\nconst hoursRemaining = spendRatePerHour > 0 ? currentBalance / spendRatePerHour : 999;\n\n// Thresholds from env\nconst minBalanceAlert = parseFloat($env.MIN_BALANCE_ALERT || '10');\n\nlet alerts = [];\n\nif (currentBalance < minBalanceAlert) {\n  alerts.push({\n    type: 'LOW_BALANCE',\n    severity: 'critical',\n    message: `💰 BALANCE LOW! $${currentBalance.toFixed(2)} remaining (threshold: $${minBalanceAlert})`\n  });\n}\n\nif (hoursRemaining < 6 && hoursRemaining < 999) {\n  alerts.push({\n    type: 'BALANCE_RUNNING_OUT',\n    severity: 'warning',\n    message: `⏰ Balance will run out in ~${hoursRemaining.toFixed(1)} hours at current rate`\n  });\n}\n\nif (spendRatePerHour > 0) {\n  // Check for anomalous spend rate (would need historical comparison)\n  // For now just log it\n}\n\nreturn [{\n  json: {\n    balance: Math.round(currentBalance * 100) / 100,\n    total_spend_today: Math.round(totalSpendToday * 100) / 100,\n    spend_rate_per_hour: Math.round(spendRatePerHour * 10000) / 10000,\n    hours_remaining: Math.round(hoursRemaining * 100) / 100,\n    hours_elapsed: Math.round(hoursElapsed * 100) / 100,\n    alerts: alerts,\n    has_alerts: alerts.length > 0,\n    collected_at: $now.toISO()\n  }\n}];"
+      },
+      "id": "calculate-metrics",
+      "name": "Calculate Balance Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO balance_history (account_id, balance, spend_rate_per_hour, hours_remaining)\nVALUES (1, {{ $json.balance }}, {{ $json.spend_rate_per_hour }}, {{ $json.hours_remaining }});",
+        "options": {}
+      },
+      "id": "save-to-db",
+      "name": "Save to PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [700, -100],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-alerts",
+              "leftValue": "={{ $json.has_alerts }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-alerts",
+      "name": "Has Alerts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nlet message = `💰 BALANCE WATCHDOG ${$now.format('dd.MM.yyyy HH:mm')}\\n\\n`;\nmessage += `Balance: $${data.balance}\\n`;\nmessage += `Spend today: $${data.total_spend_today}\\n`;\nmessage += `Rate: $${data.spend_rate_per_hour}/hour\\n`;\nmessage += `Estimated remaining: ${data.hours_remaining}h\\n\\n`;\n\nif (data.alerts && data.alerts.length > 0) {\n  message += `⚠️ ALERTS:\\n`;\n  data.alerts.forEach(a => {\n    message += `${a.message}\\n`;\n  });\n}\n\nreturn [{ json: { message } }];"
+      },
+      "id": "format-message",
+      "name": "Format Alert Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 100]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "send-telegram",
+      "name": "Send Telegram Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1140, 100],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Get Current Balance",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Balance History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Current Balance": {
+      "main": [
+        [
+          {
+            "node": "Calculate Balance Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Balance History": {
+      "main": [
+        [
+          {
+            "node": "Calculate Balance Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Balance Metrics": {
+      "main": [
+        [
+          {
+            "node": "Save to PostgreSQL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Has Alerts?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Alerts?": {
+      "main": [
+        [
+          {
+            "node": "Format Alert Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Alert Message": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "monitoring",
+      "id": "tag-monitoring"
+    },
+    {
+      "name": "mvp",
+      "id": "tag-mvp"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

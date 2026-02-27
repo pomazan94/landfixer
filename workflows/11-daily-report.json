@@ -1,0 +1,347 @@
+{
+  "name": "11 - Daily Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "55 23 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Daily at 23:55",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/stats/tmp_with_postbacks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters[date_from]",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "filters[date_to]",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "groups[0]",
+              "value": "ad_id"
+            },
+            {
+              "name": "order_by[0][column]",
+              "value": "money"
+            },
+            {
+              "name": "order_by[0][direction]",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-daily-stats",
+      "name": "Fetch Daily Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, -100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/balance",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-balance",
+      "name": "Fetch Balance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 50],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/stats/tmp_with_postbacks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters[date_from]",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "filters[date_to]",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "groups[0]",
+              "value": "country_code"
+            },
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch-geo-stats",
+      "name": "Fetch Geo Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "geozo-api-cred",
+          "name": "Geozo API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const statsRaw = $('Fetch Daily Stats').first().json;\nconst balanceRaw = $('Fetch Balance').first().json;\nconst geoRaw = $('Fetch Geo Stats').first().json;\n\nconst stats = statsRaw.data || statsRaw;\nconst balance = parseFloat(balanceRaw.data?.balance || balanceRaw.balance || 0);\nconst geoStats = geoRaw.data || geoRaw;\n\nlet totalSpend = 0, totalRevenue = 0, totalClicks = 0, totalShows = 0;\nconst adPerformance = [];\n\nif (Array.isArray(stats)) {\n  stats.forEach(s => {\n    const spend = parseFloat(s.money) || 0;\n    const revenue = parseFloat(s.postbacks_confirmed_money) || 0;\n    const clicks = parseInt(s.clicks_count) || 0;\n    const shows = parseInt(s.shows_count) || 0;\n    const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n\n    totalSpend += spend;\n    totalRevenue += revenue;\n    totalClicks += clicks;\n    totalShows += shows;\n\n    adPerformance.push({ ad_id: s.ad_id, spend, revenue, roi, clicks });\n  });\n}\n\n// Sort by ROI\nadPerformance.sort((a, b) => b.roi - a.roi);\n\nconst totalRoi = totalSpend > 0 ? ((totalRevenue - totalSpend) / totalSpend * 100) : 0;\nconst totalProfit = totalRevenue - totalSpend;\n\n// Best and worst\nconst top5 = adPerformance.filter(a => a.roi > 0).slice(0, 5);\nconst worst5 = adPerformance.filter(a => a.roi < 0 && a.spend > 0).slice(-5).reverse();\n\n// Geo breakdown\nconst geoBreakdown = [];\nif (Array.isArray(geoStats)) {\n  geoStats.forEach(g => {\n    const spend = parseFloat(g.money) || 0;\n    const revenue = parseFloat(g.postbacks_confirmed_money) || 0;\n    const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n    geoBreakdown.push({ country: g.country_code, spend, revenue, roi: Math.round(roi) });\n  });\n  geoBreakdown.sort((a, b) => b.roi - a.roi);\n}\n\n// Count from DB (approximation from stats)\nconst activeAds = adPerformance.filter(a => a.clicks > 0).length;\n\nreturn [{\n  json: {\n    date: $now.format('yyyy-MM-dd'),\n    balance: Math.round(balance * 100) / 100,\n    total_spend: Math.round(totalSpend * 100) / 100,\n    total_revenue: Math.round(totalRevenue * 100) / 100,\n    total_profit: Math.round(totalProfit * 100) / 100,\n    total_roi: Math.round(totalRoi * 100) / 100,\n    total_clicks: totalClicks,\n    total_shows: totalShows,\n    active_ads: activeAds,\n    top5: top5,\n    worst5: worst5,\n    geo_breakdown: geoBreakdown.slice(0, 10)\n  }\n}];"
+      },
+      "id": "compile-report",
+      "name": "Compile Report Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $env.CLAUDE_MODEL || 'claude-sonnet-4-20250514' }}\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Составь краткий дневной отчёт медиабайера на основе данных. Используй эмодзи. Выдели ключевые инсайты и рекомендации на завтра.\\n\\nДанные за {{ $json.date }}:\\n- Баланс: ${{ $json.balance }}\\n- Расход: ${{ $json.total_spend }}\\n- Доход: ${{ $json.total_revenue }}\\n- Профит: ${{ $json.total_profit }}\\n- ROI: {{ $json.total_roi }}%\\n- Клики: {{ $json.total_clicks }}\\n- Показы: {{ $json.total_shows }}\\n- Активных объявлений: {{ $json.active_ads }}\\n\\nТоп-5 профитных:\\n{{ $json.top5.map(a => `Ad #${a.ad_id}: ROI ${a.roi.toFixed(1)}%, Profit $${(a.revenue-a.spend).toFixed(2)}`).join('\\n') }}\\n\\nТоп-5 убыточных:\\n{{ $json.worst5.map(a => `Ad #${a.ad_id}: ROI ${a.roi.toFixed(1)}%, Loss $${(a.spend-a.revenue).toFixed(2)}`).join('\\n') }}\\n\\nГео:\\n{{ $json.geo_breakdown.map(g => `${g.country}: ROI ${g.roi}%, Spend $${g.spend.toFixed(2)}`).join('\\n') }}\\n\\nФормат: текст для Telegram (без markdown, максимум 3000 символов).\"\n    }\n  ]\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "generate-report",
+      "name": "Generate Report (Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "claude-api-cred",
+          "name": "Claude API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const claudeResponse = $input.first().json;\nconst reportData = $('Compile Report Data').first().json;\n\nconst reportText = claudeResponse.content?.[0]?.text || 'Report generation failed';\n\nreturn [{\n  json: {\n    report_text: reportText,\n    ...reportData\n  }\n}];"
+      },
+      "id": "prepare-output",
+      "name": "Prepare Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO daily_pnl (date, total_spend, total_revenue, gross_profit, roi_percent, balance_end)\nVALUES (\n  '{{ $json.date }}',\n  {{ $json.total_spend }},\n  {{ $json.total_revenue }},\n  {{ $json.total_profit }},\n  {{ $json.total_roi }},\n  {{ $json.balance }}\n)\nON CONFLICT (date) DO UPDATE SET\n  total_spend = EXCLUDED.total_spend,\n  total_revenue = EXCLUDED.total_revenue,\n  gross_profit = EXCLUDED.gross_profit,\n  roi_percent = EXCLUDED.roi_percent,\n  balance_end = EXCLUDED.balance_end;",
+        "options": {}
+      },
+      "id": "save-pnl",
+      "name": "Save P&L",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1180, -80],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.report_text }}",
+        "additionalFields": {}
+      },
+      "id": "send-telegram",
+      "name": "Send Report to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1180, 80],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily at 23:55": {
+      "main": [
+        [
+          {
+            "node": "Fetch Daily Stats",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Balance",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Geo Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Daily Stats": {
+      "main": [
+        [
+          {
+            "node": "Compile Report Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Balance": {
+      "main": [
+        [
+          {
+            "node": "Compile Report Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Geo Stats": {
+      "main": [
+        [
+          {
+            "node": "Compile Report Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Report Data": {
+      "main": [
+        [
+          {
+            "node": "Generate Report (Claude)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Report (Claude)": {
+      "main": [
+        [
+          {
+            "node": "Prepare Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Output": {
+      "main": [
+        [
+          {
+            "node": "Save P&L",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Report to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "reporting",
+      "id": "tag-reporting"
+    },
+    {
+      "name": "mvp",
+      "id": "tag-mvp"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

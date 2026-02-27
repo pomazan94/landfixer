@@ -1,0 +1,42 @@
+{
+  "stats_alert": {
+    "template": "📊 GEOZO STATS ALERT {datetime}\n\n{alert_section}\n\n📈 Total ads analyzed: {total_ads}\n🔴 Critical: {critical_count} | 🟡 Warning: {warning_count} | 🟢 Profit: {profit_count}",
+    "variables": ["datetime", "alert_section", "total_ads", "critical_count", "warning_count", "profit_count"]
+  },
+  "balance_alert": {
+    "template": "💰 BALANCE WATCHDOG {datetime}\n\nBalance: ${balance}\nSpend today: ${spend_today}\nRate: ${rate}/hour\nEstimated remaining: {hours_remaining}h\n\n⚠️ ALERTS:\n{alerts}",
+    "variables": ["datetime", "balance", "spend_today", "rate", "hours_remaining", "alerts"]
+  },
+  "smart_bidder": {
+    "template": "🤖 SMART BIDDER {datetime}\n\nTotal changes: {total_changes}\n⬆️ Raised: {raised} | ⬇️ Lowered: {lowered} | 🛑 Stopped: {stopped}\n\n{details}",
+    "variables": ["datetime", "total_changes", "raised", "lowered", "stopped", "details"]
+  },
+  "budget_pacer": {
+    "template": "⏱ BUDGET PACER {datetime}\n\n{reason}\n\nSpend: ${spend} / ${budget}\nRemaining: ${remaining}\nRate: ${actual_rate}/h (target: ${target_rate}/h)\nAction: {action}\nAds adjusted: {ads_count}",
+    "variables": ["datetime", "reason", "spend", "budget", "remaining", "actual_rate", "target_rate", "action", "ads_count"]
+  },
+  "daily_report": {
+    "template": "📊 DAILY REPORT {date}\n\n💰 Balance: ${balance}\n📈 Spend: ${spend}\n📉 Revenue: ${revenue}\n💵 Profit: ${profit}\n🎯 ROI: {roi}%\n\n🏆 Top 5:\n{top5}\n\n💀 Worst 5:\n{worst5}\n\n🌍 Geo:\n{geo}",
+    "variables": ["date", "balance", "spend", "revenue", "profit", "roi", "top5", "worst5", "geo"]
+  },
+  "anomaly_alert": {
+    "template": "🔍 ANOMALY DETECTOR {datetime}\n\nFound {count} anomalies\n\n{details}",
+    "variables": ["datetime", "count", "details"]
+  },
+  "remoderation": {
+    "template": "🔄 REMODERATION\n\nAd #{ad_id}\nBan reason: {ban_reason}\nOld title: {old_title}\nNew title: {new_title}\n\nSent for remoderation.",
+    "variables": ["ad_id", "ban_reason", "old_title", "new_title"]
+  },
+  "ab_test_result": {
+    "template": "🧪 A/B TEST RESULT\n\nTest: {test_name}\n\n🏆 Winner: Ad #{winner_id}\n  CTR: {winner_ctr}%\n  ROI: {winner_roi}%\n  Clicks: {winner_clicks}\n\n❌ Stopped losers: {losers}\n\nWinner bid raised for scaling.",
+    "variables": ["test_name", "winner_id", "winner_ctr", "winner_roi", "winner_clicks", "losers"]
+  },
+  "block_optimizer": {
+    "template": "🎯 BLOCK OPTIMIZER {date}\n\nAnalyzed: {total} blocks\n🟢 Whitelisted: {whitelist_count} blocks\n🔴 Blacklisted: {blacklist_count} blocks",
+    "variables": ["date", "total", "whitelist_count", "blacklist_count"]
+  },
+  "system_status": {
+    "template": "🤖 MASTER ORCHESTRATOR - Daily Status\n{datetime}\n\n📊 System Status: {status}\nTotal workflows: {total_workflows}\n\n📈 Today's Metrics:\n  Stats collected: {stats_count}\n  Balance checks: {balance_checks}\n  Bid changes: {bid_changes}\n  New teasers: {new_teasers}\n  Anomalies: {anomalies}\n  Balance: ${balance}\n\n✅ All systems operational",
+    "variables": ["datetime", "status", "total_workflows", "stats_count", "balance_checks", "bid_changes", "new_teasers", "anomalies", "balance"]
+  }
+}
