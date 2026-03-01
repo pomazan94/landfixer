@@ -16,7 +16,10 @@
       "name": "Daily at 00:10",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -61,7 +64,10 @@
       "name": "Fetch Block Stats (7 days)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, 0],
+      "position": [
+        220,
+        0
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -77,7 +83,10 @@
       "name": "Classify Blocks",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [480, 0]
+      "position": [
+        480,
+        0
+      ]
     },
     {
       "parameters": {
@@ -110,7 +119,10 @@
       "name": "Fetch Active Ad Groups",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [480, 150],
+      "position": [
+        480,
+        150
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -126,7 +138,10 @@
       "name": "Prepare Updates",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [740, 0]
+      "position": [
+        740,
+        0
+      ]
     },
     {
       "parameters": {
@@ -143,7 +158,10 @@
       "name": "Update Ad Group Lists",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [960, 0],
+      "position": [
+        960,
+        0
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -161,7 +179,10 @@
       "name": "Log Classifications",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [960, 150],
+      "position": [
+        960,
+        150
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
@@ -179,13 +200,27 @@
       "name": "Notify Telegram",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1180, 0],
+      "position": [
+        1180,
+        0
+      ],
       "credentials": {
         "telegramApi": {
           "id": "telegram-cred",
           "name": "Telegram Bot"
         }
       }
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        150
+      ]
     }
   ],
   "connections": {
@@ -259,6 +294,22 @@
           },
           {
             "node": "Notify Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Called by Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Fetch Block Stats (7 days)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Active Ad Groups",
             "type": "main",
             "index": 0
           }

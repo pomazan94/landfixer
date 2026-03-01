@@ -16,7 +16,10 @@
       "name": "Every 2 Hours",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -28,7 +31,10 @@
       "name": "Get Target Sites",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [220, 0],
+      "position": [
+        220,
+        0
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
@@ -44,7 +50,10 @@
       "name": "Prepare Scan Requests",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 0]
+      "position": [
+        440,
+        0
+      ]
     },
     {
       "parameters": {
@@ -85,7 +94,10 @@
       "name": "Fetch Page via Proxy",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [660, 0]
+      "position": [
+        660,
+        0
+      ]
     },
     {
       "parameters": {
@@ -95,7 +107,10 @@
       "name": "Parse Teaser Positions",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, 0]
+      "position": [
+        880,
+        0
+      ]
     },
     {
       "parameters": {
@@ -105,7 +120,10 @@
       "name": "Analyze Our Positions",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1100, 0]
+      "position": [
+        1100,
+        0
+      ]
     },
     {
       "parameters": {
@@ -117,13 +135,27 @@
       "name": "Save Positions",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1320, 0],
+      "position": [
+        1320,
+        0
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
           "name": "PostgreSQL"
         }
       }
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        150
+      ]
     }
   ],
   "connections": {
@@ -187,6 +219,17 @@
         [
           {
             "node": "Save Positions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Called by Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Get Target Sites",
             "type": "main",
             "index": 0
           }

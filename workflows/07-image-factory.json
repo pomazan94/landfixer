@@ -16,7 +16,10 @@
       "name": "Every Hour",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -28,7 +31,10 @@
       "name": "Fetch Pending Content",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [220, 0],
+      "position": [
+        220,
+        0
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
@@ -63,7 +69,10 @@
       "name": "Has Pending Items?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [440, 0]
+      "position": [
+        440,
+        0
+      ]
     },
     {
       "parameters": {
@@ -86,7 +95,10 @@
       "name": "Generate Image Prompt (Claude)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [660, 0],
+      "position": [
+        660,
+        0
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "claude-api-cred",
@@ -102,7 +114,10 @@
       "name": "Prepare Image Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, 0]
+      "position": [
+        880,
+        0
+      ]
     },
     {
       "parameters": {
@@ -124,7 +139,10 @@
       "name": "Generate Square Image (1:1)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1100, -80]
+      "position": [
+        1100,
+        -80
+      ]
     },
     {
       "parameters": {
@@ -146,7 +164,10 @@
       "name": "Generate Horizontal Image (16:9)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1100, 80]
+      "position": [
+        1100,
+        80
+      ]
     },
     {
       "parameters": {
@@ -156,7 +177,10 @@
       "name": "Combine Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1320, 0]
+      "position": [
+        1320,
+        0
+      ]
     },
     {
       "parameters": {
@@ -168,13 +192,27 @@
       "name": "Update Queue Status",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1540, 0],
+      "position": [
+        1540,
+        0
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
           "name": "PostgreSQL"
         }
       }
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        150
+      ]
     }
   ],
   "connections": {
@@ -265,6 +303,17 @@
         [
           {
             "node": "Update Queue Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Called by Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Fetch Pending Content",
             "type": "main",
             "index": 0
           }

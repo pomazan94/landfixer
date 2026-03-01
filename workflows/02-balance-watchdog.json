@@ -16,7 +16,10 @@
       "name": "Every Hour",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -36,7 +39,10 @@
       "name": "Get Current Balance",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, -50],
+      "position": [
+        220,
+        -50
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -75,7 +81,10 @@
       "name": "Get Balance History",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, 100],
+      "position": [
+        220,
+        100
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -91,7 +100,10 @@
       "name": "Calculate Balance Metrics",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [480, 0]
+      "position": [
+        480,
+        0
+      ]
     },
     {
       "parameters": {
@@ -103,7 +115,10 @@
       "name": "Save to PostgreSQL",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [700, -100],
+      "position": [
+        700,
+        -100
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
@@ -138,7 +153,10 @@
       "name": "Has Alerts?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [700, 100]
+      "position": [
+        700,
+        100
+      ]
     },
     {
       "parameters": {
@@ -148,7 +166,10 @@
       "name": "Format Alert Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [920, 100]
+      "position": [
+        920,
+        100
+      ]
     },
     {
       "parameters": {
@@ -160,13 +181,27 @@
       "name": "Send Telegram Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1140, 100],
+      "position": [
+        1140,
+        100
+      ],
       "credentials": {
         "telegramApi": {
           "id": "telegram-cred",
           "name": "Telegram Bot"
         }
       }
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        150
+      ]
     }
   ],
   "connections": {
@@ -240,6 +275,22 @@
         [
           {
             "node": "Send Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Called by Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Get Current Balance",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Balance History",
             "type": "main",
             "index": 0
           }

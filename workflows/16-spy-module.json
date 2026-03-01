@@ -16,7 +16,10 @@
       "name": "Daily at 04:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -28,7 +31,10 @@
       "name": "Fetch Recent Scans",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [220, 0],
+      "position": [
+        220,
+        0
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
@@ -44,7 +50,10 @@
       "name": "Aggregate Competitor Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 0]
+      "position": [
+        440,
+        0
+      ]
     },
     {
       "parameters": {
@@ -67,7 +76,10 @@
       "name": "Analyze with Claude",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [660, 0],
+      "position": [
+        660,
+        0
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "claude-api-cred",
@@ -83,7 +95,10 @@
       "name": "Prepare Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, 0]
+      "position": [
+        880,
+        0
+      ]
     },
     {
       "parameters": {
@@ -95,13 +110,27 @@
       "name": "Send Report",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1100, 0],
+      "position": [
+        1100,
+        0
+      ],
       "credentials": {
         "telegramApi": {
           "id": "telegram-cred",
           "name": "Telegram Bot"
         }
       }
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        150
+      ]
     }
   ],
   "connections": {
@@ -154,6 +183,17 @@
         [
           {
             "node": "Send Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Called by Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Fetch Recent Scans",
             "type": "main",
             "index": 0
           }

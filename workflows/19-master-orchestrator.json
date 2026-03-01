@@ -6,27 +6,124 @@
         "rule": {
           "interval": [
             {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "main-loop",
+      "name": "Main Loop (15 min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
               "field": "cronExpression",
               "expression": "0 6 * * *"
             }
           ]
         }
       },
-      "id": "daily-start",
-      "name": "Daily Start (06:00)",
+      "id": "daily-morning",
+      "name": "Morning Start (06:00)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
+      "position": [0, -200]
     },
     {
       "parameters": {
-        "jsCode": "// Master Orchestrator - Central Health Check & Coordination\n// This workflow monitors the health of all sub-workflows\n// and provides a daily system status report\n\nconst schedule = {\n  continuous: [\n    { name: '01-Stats Puller', interval: '15 min', critical: true },\n    { name: '02-Balance Watchdog', interval: '1 hour', critical: true },\n    { name: '03-Smart Bidder', interval: '30 min', critical: true }\n  ],\n  hourly: [\n    { name: '07-Image Factory', interval: '1 hour', critical: false },\n    { name: '08-Uploader', interval: '1 hour', critical: false },\n    { name: '12-Anomaly Detector', interval: '1 hour', critical: false }\n  ],\n  periodic: [\n    { name: '04-Geo Bidder', interval: 'daily 02:00', critical: false },\n    { name: '05-Budget Pacer', interval: '2 hours', critical: true },\n    { name: '06-Trend Hunter', interval: '2 hours', critical: false },\n    { name: '09-Remoderator', interval: '30 min', critical: false },\n    { name: '10-AB Tester', interval: '4 hours', critical: false },\n    { name: '15-Position Scanner', interval: '2 hours', critical: false }\n  ],\n  daily: [\n    { name: '11-Daily Report', interval: 'daily 23:55', critical: true },\n    { name: '13-Block Optimizer', interval: 'daily 00:10', critical: false },\n    { name: '16-Spy Module', interval: 'daily 04:00', critical: false }\n  ],\n  weekly: [\n    { name: '14-Coefficient Tuner', interval: 'weekly Mon 03:00', critical: false },\n    { name: '18-Time Optimizer', interval: 'weekly Mon 05:00', critical: false }\n  ],\n  manual: [\n    { name: '17-Campaign Cloner', interval: 'manual trigger', critical: false }\n  ]\n};\n\nconst systemStatus = {\n  timestamp: $now.toISO(),\n  schedule: schedule,\n  total_workflows: 19,\n  status: 'operational'\n};\n\nreturn [{ json: systemStatus }];"
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "55 23 * * *"
+            }
+          ]
+        }
       },
-      "id": "system-check",
-      "name": "System Status Check",
+      "id": "daily-evening",
+      "name": "Evening Wrap-up (23:55)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 900]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-trigger",
+      "name": "Weekly Monday (03:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 1300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determine which workflows to run based on current time\nconst now = new Date();\nconst minute = now.getMinutes();\nconst hour = now.getHours();\n\nconst toRun = [];\n\n// EVERY 15 MIN: Stats Puller (always)\ntoRun.push({ workflow: '01 - Stats Puller', reason: 'Every 15 min' });\n\n// EVERY 30 MIN (on :00 and :30): Smart Bidder, Remoderator\nif (minute === 0 || minute === 30 || minute === 15 || minute === 45) {\n  toRun.push({ workflow: '03 - Smart Bidder', reason: 'Every 30 min' });\n  toRun.push({ workflow: '09 - Re-moderator', reason: 'Every 30 min' });\n}\n\n// EVERY HOUR (on :00): Balance, Image Factory, Uploader, Anomaly Detector\nif (minute < 15) {\n  toRun.push({ workflow: '02 - Balance Watchdog', reason: 'Every hour' });\n  toRun.push({ workflow: '07 - Image Factory', reason: 'Every hour' });\n  toRun.push({ workflow: '08 - Teaser Uploader', reason: 'Every hour' });\n  toRun.push({ workflow: '12 - Anomaly Detector', reason: 'Every hour' });\n}\n\n// EVERY 2 HOURS (even hours): Budget Pacer, Trend Hunter, Position Scanner\nif (hour % 2 === 0 && minute < 15) {\n  toRun.push({ workflow: '05 - Budget Pacer', reason: 'Every 2 hours' });\n  toRun.push({ workflow: '06 - Trend Hunter', reason: 'Every 2 hours' });\n  toRun.push({ workflow: '15 - Position Scanner', reason: 'Every 2 hours' });\n}\n\n// EVERY 4 HOURS: AB Tester\nif (hour % 4 === 0 && minute < 15) {\n  toRun.push({ workflow: '10 - A/B Testing Engine', reason: 'Every 4 hours' });\n}\n\nreturn [{ json: { workflows: toRun, count: toRun.length, timestamp: $now.toISO() } }];"
+      },
+      "id": "scheduler-logic",
+      "name": "Scheduler Logic",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 0]
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst workflows = data.workflows || [];\n\nreturn workflows.map(w => ({ json: w }));"
+      },
+      "id": "split-workflows",
+      "name": "Split Into Individual",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $json.workflow }}",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "execute-sub-workflow",
+      "name": "Execute Sub-Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Morning routine: run startup sequence\nconst morningWorkflows = [\n  '01 - Stats Puller',\n  '02 - Balance Watchdog',\n  '06 - Trend Hunter',\n  '07 - Image Factory',\n  '08 - Teaser Uploader',\n  '09 - Re-moderator',\n  '15 - Position Scanner'\n];\n\nreturn morningWorkflows.map(w => ({ json: { workflow: w, reason: 'Morning startup' } }));"
+      },
+      "id": "morning-sequence",
+      "name": "Morning Startup Sequence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, -200]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $json.workflow }}",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "execute-morning",
+      "name": "Execute Morning Workflows",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [500, -200]
     },
     {
       "parameters": {
@@ -34,11 +131,11 @@
         "query": "SELECT\n  (SELECT COUNT(*) FROM ad_stats WHERE date = CURRENT_DATE) as stats_today,\n  (SELECT COUNT(*) FROM balance_history WHERE collected_at >= CURRENT_DATE) as balance_checks_today,\n  (SELECT COUNT(*) FROM bid_history WHERE changed_at >= CURRENT_DATE) as bid_changes_today,\n  (SELECT COUNT(*) FROM teasers WHERE created_at >= CURRENT_DATE) as new_teasers_today,\n  (SELECT COUNT(*) FROM anomalies WHERE detected_at >= CURRENT_DATE) as anomalies_today,\n  (SELECT balance FROM balance_history ORDER BY collected_at DESC LIMIT 1) as last_known_balance,\n  (SELECT COUNT(*) FROM teasers WHERE status = 'uploaded' AND created_at >= CURRENT_DATE - INTERVAL '7 days') as active_teasers_week;",
         "options": {}
       },
-      "id": "fetch-system-metrics",
+      "id": "fetch-metrics",
       "name": "Fetch System Metrics",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [220, 150],
+      "position": [750, -200],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
@@ -48,13 +145,13 @@
     },
     {
       "parameters": {
-        "jsCode": "const status = $('System Status Check').first().json;\nconst metrics = $('Fetch System Metrics').first().json;\n\nlet msg = `🤖 MASTER ORCHESTRATOR - Daily Status\\n`;\nmsg += `${$now.format('dd.MM.yyyy HH:mm')}\\n\\n`;\n\nmsg += `📊 System Status: ${status.status.toUpperCase()}\\n`;\nmsg += `Total workflows: ${status.total_workflows}\\n\\n`;\n\nmsg += `📈 Today's Metrics:\\n`;\nmsg += `  Stats collected: ${metrics.stats_today || 0}\\n`;\nmsg += `  Balance checks: ${metrics.balance_checks_today || 0}\\n`;\nmsg += `  Bid changes: ${metrics.bid_changes_today || 0}\\n`;\nmsg += `  New teasers: ${metrics.new_teasers_today || 0}\\n`;\nmsg += `  Anomalies: ${metrics.anomalies_today || 0}\\n`;\nmsg += `  Balance: $${metrics.last_known_balance || 'N/A'}\\n`;\nmsg += `  Active teasers (7d): ${metrics.active_teasers_week || 0}\\n\\n`;\n\nmsg += `⏰ Schedule Overview:\\n`;\nmsg += `  Critical (always on): ${status.schedule.continuous.length} workflows\\n`;\nmsg += `  Hourly: ${status.schedule.hourly.length} workflows\\n`;\nmsg += `  Periodic: ${status.schedule.periodic.length} workflows\\n`;\nmsg += `  Daily: ${status.schedule.daily.length} workflows\\n`;\nmsg += `  Weekly: ${status.schedule.weekly.length} workflows\\n`;\nmsg += `  Manual: ${status.schedule.manual.length} workflows\\n\\n`;\n\nmsg += `✅ All systems operational`;\n\nreturn [{ json: { message: msg } }];"
+        "jsCode": "const m = $input.first().json;\n\nlet msg = `🤖 MASTER ORCHESTRATOR - Morning Status\\n`;\nmsg += `${$now.format('dd.MM.yyyy HH:mm')}\\n\\n`;\nmsg += `📊 System: OPERATIONAL\\n`;\nmsg += `📈 Yesterday's recap:\\n`;\nmsg += `  Stats entries: ${m.stats_today || 0}\\n`;\nmsg += `  Balance checks: ${m.balance_checks_today || 0}\\n`;\nmsg += `  Bid changes: ${m.bid_changes_today || 0}\\n`;\nmsg += `  New teasers: ${m.new_teasers_today || 0}\\n`;\nmsg += `  Anomalies: ${m.anomalies_today || 0}\\n`;\nmsg += `  Balance: $${m.last_known_balance || 'N/A'}\\n`;\nmsg += `  Active teasers (7d): ${m.active_teasers_week || 0}\\n\\n`;\nmsg += `⏰ Schedule: All 18 workflows connected\\n`;\nmsg += `✅ Morning startup sequence launched`;\n\nreturn [{ json: { message: msg } }];"
       },
-      "id": "format-status",
-      "name": "Format Status Report",
+      "id": "format-morning-status",
+      "name": "Format Morning Status",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [480, 0]
+      "position": [1000, -200]
     },
     {
       "parameters": {
@@ -62,41 +159,165 @@
         "text": "={{ $json.message }}",
         "additionalFields": {}
       },
-      "id": "send-status",
-      "name": "Send Status to Telegram",
+      "id": "send-morning-status",
+      "name": "Send Morning Status",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [700, 0],
+      "position": [1250, -200],
       "credentials": {
         "telegramApi": {
           "id": "telegram-cred",
           "name": "Telegram Bot"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Evening wrap-up sequence\nconst eveningWorkflows = [\n  '11 - Daily Report',\n  '13 - Block Optimizer (Blacklist/Whitelist)',\n  '04 - Geo Bid Optimizer',\n  '16 - Spy Module (Competitive Intelligence)'\n];\n\nreturn eveningWorkflows.map(w => ({ json: { workflow: w, reason: 'Evening wrap-up' } }));"
+      },
+      "id": "evening-sequence",
+      "name": "Evening Wrap-up Sequence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, 900]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $json.workflow }}",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "execute-evening",
+      "name": "Execute Evening Workflows",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [500, 900]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Weekly optimization sequence\nconst weeklyWorkflows = [\n  '14 - Coefficient Tuner (OS/Browser/ISP)',\n  '18 - Time Targeting Optimizer'\n];\n\nreturn weeklyWorkflows.map(w => ({ json: { workflow: w, reason: 'Weekly optimization' } }));"
+      },
+      "id": "weekly-sequence",
+      "name": "Weekly Optimization Sequence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [250, 1300]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $json.workflow }}",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "execute-weekly",
+      "name": "Execute Weekly Workflows",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [500, 1300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=📅 WEEKLY OPTIMIZATION LAUNCHED\n\nRunning:\n- Coefficient Tuner (OS/Browser/ISP)\n- Time Targeting Optimizer\n\nResults will be reported individually.",
+        "additionalFields": {}
+      },
+      "id": "notify-weekly",
+      "name": "Notify Weekly Start",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [750, 1300],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log execution to track orchestrator activity\nconst workflow = $json.workflow || 'unknown';\nconst reason = $json.reason || 'scheduled';\n\nreturn [{ json: {\n  log: `[${$now.format('HH:mm:ss')}] Triggered: ${workflow} (${reason})`,\n  workflow: workflow,\n  status: 'triggered'\n} }];"
+      },
+      "id": "log-execution",
+      "name": "Log Execution",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 300]
     }
   ],
   "connections": {
-    "Daily Start (06:00)": {
+    "Main Loop (15 min)": {
       "main": [
         [
           {
-            "node": "System Status Check",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch System Metrics",
+            "node": "Scheduler Logic",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "System Status Check": {
+    "Scheduler Logic": {
       "main": [
         [
           {
-            "node": "Format Status Report",
+            "node": "Split Into Individual",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Individual": {
+      "main": [
+        [
+          {
+            "node": "Execute Sub-Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Sub-Workflow": {
+      "main": [
+        [
+          {
+            "node": "Log Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Morning Start (06:00)": {
+      "main": [
+        [
+          {
+            "node": "Morning Startup Sequence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Morning Startup Sequence": {
+      "main": [
+        [
+          {
+            "node": "Execute Morning Workflows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Morning Workflows": {
+      "main": [
+        [
+          {
+            "node": "Fetch System Metrics",
             "type": "main",
             "index": 0
           }
@@ -107,18 +328,73 @@
       "main": [
         [
           {
-            "node": "Format Status Report",
+            "node": "Format Morning Status",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Format Status Report": {
+    "Format Morning Status": {
       "main": [
         [
           {
-            "node": "Send Status to Telegram",
+            "node": "Send Morning Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evening Wrap-up (23:55)": {
+      "main": [
+        [
+          {
+            "node": "Evening Wrap-up Sequence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evening Wrap-up Sequence": {
+      "main": [
+        [
+          {
+            "node": "Execute Evening Workflows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Monday (03:00)": {
+      "main": [
+        [
+          {
+            "node": "Weekly Optimization Sequence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Optimization Sequence": {
+      "main": [
+        [
+          {
+            "node": "Execute Weekly Workflows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Weekly Workflows": {
+      "main": [
+        [
+          {
+            "node": "Notify Weekly Start",
             "type": "main",
             "index": 0
           }
@@ -136,8 +412,12 @@
     {
       "name": "system",
       "id": "tag-system"
+    },
+    {
+      "name": "orchestrator",
+      "id": "tag-orchestrator"
     }
   ],
   "pinData": {},
-  "versionId": "1"
+  "versionId": "2"
 }

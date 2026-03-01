@@ -16,7 +16,10 @@
       "name": "Every 2 Hours",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -34,7 +37,10 @@
       "name": "Fetch Google Trends RSS",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, -100]
+      "position": [
+        220,
+        -100
+      ]
     },
     {
       "parameters": {
@@ -52,7 +58,10 @@
       "name": "Fetch News RSS",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, 50]
+      "position": [
+        220,
+        50
+      ]
     },
     {
       "parameters": {
@@ -62,7 +71,10 @@
       "name": "Parse & Select Trends",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [480, 0]
+      "position": [
+        480,
+        0
+      ]
     },
     {
       "parameters": {
@@ -85,7 +97,10 @@
       "name": "Generate Headlines (Claude)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, 0],
+      "position": [
+        700,
+        0
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "claude-api-cred",
@@ -101,7 +116,10 @@
       "name": "Parse Generated Titles",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [920, 0]
+      "position": [
+        920,
+        0
+      ]
     },
     {
       "parameters": {
@@ -113,13 +131,27 @@
       "name": "Save to Content Queue",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1140, 0],
+      "position": [
+        1140,
+        0
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
           "name": "PostgreSQL"
         }
       }
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        150
+      ]
     }
   ],
   "connections": {
@@ -188,6 +220,22 @@
         [
           {
             "node": "Save to Content Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Called by Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Fetch Google Trends RSS",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch News RSS",
             "type": "main",
             "index": 0
           }

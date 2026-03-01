@@ -16,7 +16,10 @@
       "name": "Every 15 Minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -69,7 +72,10 @@
       "name": "Fetch Stats from Geozo",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, 0],
+      "position": [
+        220,
+        0
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -85,7 +91,10 @@
       "name": "Calculate ROI & Metrics",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 0]
+      "position": [
+        440,
+        0
+      ]
     },
     {
       "parameters": {
@@ -97,7 +106,10 @@
       "name": "Save Stats to PostgreSQL",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [660, -100],
+      "position": [
+        660,
+        -100
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
@@ -132,7 +144,10 @@
       "name": "Has Alert?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [660, 100]
+      "position": [
+        660,
+        100
+      ]
     },
     {
       "parameters": {
@@ -142,7 +157,10 @@
       "name": "Format Alert Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [880, 100]
+      "position": [
+        880,
+        100
+      ]
     },
     {
       "parameters": {
@@ -156,13 +174,27 @@
       "name": "Send Telegram Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1100, 100],
+      "position": [
+        1100,
+        100
+      ],
       "credentials": {
         "telegramApi": {
           "id": "telegram-cred",
           "name": "Telegram Bot"
         }
       }
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        150
+      ]
     }
   ],
   "connections": {
@@ -220,6 +252,17 @@
         [
           {
             "node": "Send Telegram Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Called by Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Fetch Stats from Geozo",
             "type": "main",
             "index": 0
           }

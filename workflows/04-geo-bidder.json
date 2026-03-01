@@ -16,7 +16,10 @@
       "name": "Daily at 02:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -61,7 +64,10 @@
       "name": "Fetch Geo Stats (7 days)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, -50],
+      "position": [
+        220,
+        -50
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -87,7 +93,10 @@
       "name": "Fetch Min Bids",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, 100],
+      "position": [
+        220,
+        100
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -103,7 +112,10 @@
       "name": "Calculate Optimal Geo Bids",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [480, 0]
+      "position": [
+        480,
+        0
+      ]
     },
     {
       "parameters": {
@@ -120,7 +132,10 @@
       "name": "Update Geo Bids",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, 0],
+      "position": [
+        700,
+        0
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -138,13 +153,27 @@
       "name": "Log Geo Stats",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [920, 0],
+      "position": [
+        920,
+        0
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
           "name": "PostgreSQL"
         }
       }
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        150
+      ]
     }
   ],
   "connections": {
@@ -202,6 +231,22 @@
         [
           {
             "node": "Log Geo Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Called by Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Fetch Geo Stats (7 days)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Min Bids",
             "type": "main",
             "index": 0
           }

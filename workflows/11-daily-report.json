@@ -16,7 +16,10 @@
       "name": "Daily at 23:55",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -65,7 +68,10 @@
       "name": "Fetch Daily Stats",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, -100],
+      "position": [
+        220,
+        -100
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -91,7 +97,10 @@
       "name": "Fetch Balance",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, 50],
+      "position": [
+        220,
+        50
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -138,7 +147,10 @@
       "name": "Fetch Geo Stats",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, 200],
+      "position": [
+        220,
+        200
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -154,7 +166,10 @@
       "name": "Compile Report Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [500, 0]
+      "position": [
+        500,
+        0
+      ]
     },
     {
       "parameters": {
@@ -177,7 +192,10 @@
       "name": "Generate Report (Claude)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [740, 0],
+      "position": [
+        740,
+        0
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "claude-api-cred",
@@ -193,7 +211,10 @@
       "name": "Prepare Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [960, 0]
+      "position": [
+        960,
+        0
+      ]
     },
     {
       "parameters": {
@@ -205,7 +226,10 @@
       "name": "Save P&L",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1180, -80],
+      "position": [
+        1180,
+        -80
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
@@ -223,13 +247,27 @@
       "name": "Send Report to Telegram",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1180, 80],
+      "position": [
+        1180,
+        80
+      ],
       "credentials": {
         "telegramApi": {
           "id": "telegram-cred",
           "name": "Telegram Bot"
         }
       }
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        150
+      ]
     }
   ],
   "connections": {
@@ -319,6 +357,27 @@
           },
           {
             "node": "Send Report to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Called by Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Fetch Daily Stats",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Balance",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Geo Stats",
             "type": "main",
             "index": 0
           }

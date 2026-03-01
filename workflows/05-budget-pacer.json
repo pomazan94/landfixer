@@ -16,7 +16,10 @@
       "name": "Every 2 Hours",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -53,7 +56,10 @@
       "name": "Fetch Today Spend",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, -50],
+      "position": [
+        220,
+        -50
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -92,7 +98,10 @@
       "name": "Fetch Active Ads",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, 100],
+      "position": [
+        220,
+        100
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -108,7 +117,10 @@
       "name": "Calculate Budget Pacing",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [480, 0]
+      "position": [
+        480,
+        0
+      ]
     },
     {
       "parameters": {
@@ -137,7 +149,10 @@
       "name": "Needs Adjustment?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [700, 0]
+      "position": [
+        700,
+        0
+      ]
     },
     {
       "parameters": {
@@ -154,7 +169,10 @@
       "name": "Update All Bids",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [940, -50],
+      "position": [
+        940,
+        -50
+      ],
       "credentials": {
         "httpHeaderAuth": {
           "id": "geozo-api-cred",
@@ -172,13 +190,27 @@
       "name": "Notify Telegram",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [940, 100],
+      "position": [
+        940,
+        100
+      ],
       "credentials": {
         "telegramApi": {
           "id": "telegram-cred",
           "name": "Telegram Bot"
         }
       }
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        150
+      ]
     }
   ],
   "connections": {
@@ -241,6 +273,22 @@
           },
           {
             "node": "Notify Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Called by Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Fetch Today Spend",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Active Ads",
             "type": "main",
             "index": 0
           }
