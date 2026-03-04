@@ -193,6 +193,40 @@ CREATE TABLE IF NOT EXISTS anomalies (
     resolved_at TIMESTAMP
 );
 
+-- Матрица выплат по GEO (payout * approval = maxCPL)
+CREATE TABLE IF NOT EXISTS geo_payouts (
+    id SERIAL PRIMARY KEY,
+    country_code VARCHAR(5) NOT NULL UNIQUE,
+    country_name VARCHAR(100),
+    geo_id INTEGER,                              -- geozo geo_id из API bids
+    vertical VARCHAR(50) DEFAULT 'crypto',       -- вертикаль (crypto, gambling, etc)
+    avg_payout DECIMAL(10, 2) NOT NULL,          -- средняя выплата за деп ($)
+    avg_approval DECIMAL(6, 4) NOT NULL,         -- средний % апрува (0.055 = 5.5%)
+    max_cpl DECIMAL(10, 2) GENERATED ALWAYS AS (avg_payout * avg_approval) STORED,  -- автоматический breakeven CPL
+    min_bid DECIMAL(10, 4) DEFAULT 0.01,         -- минимальный бид для гео
+    max_bid DECIMAL(10, 4) DEFAULT 0.15,         -- потолок бида для гео
+    is_active BOOLEAN DEFAULT TRUE,
+    notes TEXT,
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Начальные данные по основным гео (crypto вертикаль)
+INSERT INTO geo_payouts (country_code, country_name, geo_id, vertical, avg_payout, avg_approval, min_bid, max_bid) VALUES
+    ('GB', 'United Kingdom',  119, 'crypto', 1400, 0.055, 0.05, 0.15),
+    ('DE', 'Germany',         56,  'crypto', 1200, 0.050, 0.04, 0.12),
+    ('FR', 'France',          73,  'crypto', 1100, 0.045, 0.03, 0.10),
+    ('IT', 'Italy',           105, 'crypto', 1000, 0.050, 0.03, 0.10),
+    ('ES', 'Spain',           199, 'crypto', 1000, 0.045, 0.03, 0.10),
+    ('NL', 'Netherlands',     151, 'crypto', 1300, 0.055, 0.04, 0.12),
+    ('SE', 'Sweden',          204, 'crypto', 1500, 0.060, 0.05, 0.15),
+    ('NO', 'Norway',          160, 'crypto', 1500, 0.060, 0.05, 0.15),
+    ('AT', 'Austria',         14,  'crypto', 1200, 0.050, 0.04, 0.12),
+    ('CH', 'Switzerland',     206, 'crypto', 1600, 0.060, 0.06, 0.18),
+    ('AU', 'Australia',       13,  'crypto', 1500, 0.055, 0.05, 0.15),
+    ('CA', 'Canada',          38,  'crypto', 1400, 0.055, 0.05, 0.15),
+    ('NZ', 'New Zealand',     157, 'crypto', 1400, 0.055, 0.04, 0.12)
+ON CONFLICT (country_code) DO NOTHING;
+
 -- Black/White lists блоков
 CREATE TABLE IF NOT EXISTS block_lists (
     id SERIAL PRIMARY KEY,
@@ -215,3 +249,4 @@ CREATE INDEX IF NOT EXISTS idx_position_tracking_time ON position_tracking(scann
 CREATE INDEX IF NOT EXISTS idx_teasers_status ON teasers(status);
 CREATE INDEX IF NOT EXISTS idx_anomalies_detected ON anomalies(detected_at);
 CREATE INDEX IF NOT EXISTS idx_daily_pnl_date ON daily_pnl(date);
+CREATE INDEX IF NOT EXISTS idx_geo_payouts_cc ON geo_payouts(country_code);
