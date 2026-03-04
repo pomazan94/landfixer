@@ -24,7 +24,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/stats/tmp_with_postbacks",
+        "url": "https://api.geozo.com/v1/advertiser/stats/tmp_with_postbacks",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -91,7 +91,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/all",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -146,7 +146,7 @@
     {
       "parameters": {
         "method": "PUT",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ad_groups/{{ $json.ad_group_id }}",
+        "url": "=https://api.geozo.com/v1/advertiser/ad_groups/{{ $json.ad_group_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -192,7 +192,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID || '' }}",
+        "chatId": "591828204",
         "text": "=🎯 BLOCK OPTIMIZER {{ $now.format('dd.MM.yyyy') }}\n\nAnalyzed: {{ $json.total_analyzed }} blocks\n🟢 Whitelisted: {{ $json.whitelist_count }} blocks\n🔴 Blacklisted: {{ $json.blacklist_count }} blocks\n\nUpdated ad group #{{ $json.ad_group_id }}",
         "additionalFields": {}
       },

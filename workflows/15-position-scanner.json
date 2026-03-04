@@ -86,7 +86,7 @@
               "responseFormat": "text"
             }
           },
-          "proxy": "={{ $env.PROXY_HOST ? 'http://' + $env.PROXY_USER + ':' + $env.PROXY_PASSWORD + '@' + $env.PROXY_HOST + ':' + $env.PROXY_PORT : '' }}",
+          "proxy": "",
           "timeout": 30000
         }
       },

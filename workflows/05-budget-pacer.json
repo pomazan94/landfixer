@@ -24,7 +24,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/stats/tmp_with_postbacks",
+        "url": "https://api.geozo.com/v1/advertiser/stats/tmp_with_postbacks",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -70,7 +70,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/all",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -111,7 +111,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const spendData = $('Fetch Today Spend').first().json;\nconst adsData = $('Fetch Active Ads').first().json;\n\nconst stats = spendData.data || spendData;\nconst ads = adsData.data || adsData;\n\nconst dailyBudget = parseFloat($env.DAILY_BUDGET_LIMIT || '50');\nconst maxCeiling = parseFloat($env.MAX_BID_CEILING || '0.10');\n\n// Calculate total spend today\nlet totalSpend = 0;\nif (Array.isArray(stats)) {\n  stats.forEach(s => { totalSpend += parseFloat(s.money) || 0; });\n} else if (stats.money) {\n  totalSpend = parseFloat(stats.money) || 0;\n}\n\nconst now = new Date();\nconst hoursElapsed = now.getHours() + now.getMinutes() / 60;\nconst hoursRemaining = 24 - hoursElapsed;\nconst remainingBudget = dailyBudget - totalSpend;\n\n// Target spend rate\nconst targetSpendPerHour = hoursRemaining > 0 ? remainingBudget / hoursRemaining : 0;\nconst actualSpendPerHour = hoursElapsed > 0 ? totalSpend / hoursElapsed : 0;\n\nlet action = 'HOLD';\nlet bidAdjustment = 1.0;\nlet reason = '';\n\n// Overspending: spending 20% more than target\nif (actualSpendPerHour > targetSpendPerHour * 1.2 && totalSpend > dailyBudget * 0.3) {\n  action = 'LOWER_ALL';\n  bidAdjustment = 0.90;\n  reason = `Overspending: $${actualSpendPerHour.toFixed(2)}/h vs target $${targetSpendPerHour.toFixed(2)}/h`;\n}\n// Underspending: spending 30% less than target, and we have budget to use\nelse if (actualSpendPerHour < targetSpendPerHour * 0.7 && remainingBudget > dailyBudget * 0.3 && hoursElapsed > 4) {\n  action = 'RAISE_ALL';\n  bidAdjustment = 1.10;\n  reason = `Underspending: $${actualSpendPerHour.toFixed(2)}/h vs target $${targetSpendPerHour.toFixed(2)}/h`;\n}\n// Budget nearly exhausted\nelse if (remainingBudget < dailyBudget * 0.1 && hoursRemaining > 4) {\n  action = 'LOWER_ALL';\n  bidAdjustment = 0.80;\n  reason = `Budget nearly exhausted: $${remainingBudget.toFixed(2)} left for ${hoursRemaining.toFixed(1)}h`;\n}\n\nif (action === 'HOLD') {\n  return [{ json: { action: 'HOLD', reason: 'Budget pacing is on track', totalSpend, dailyBudget, actualSpendPerHour, targetSpendPerHour } }];\n}\n\n// Prepare bid updates for all active ads\nconst bidUpdates = [];\nif (Array.isArray(ads)) {\n  ads.forEach(ad => {\n    const currentBid = parseFloat(ad.one_bid_for_all_geo) || 0;\n    let newBid = currentBid * bidAdjustment;\n    if (newBid > maxCeiling) newBid = maxCeiling;\n    if (newBid < 0.001) newBid = 0.001;\n    bidUpdates.push({\n      ad_id: ad.id,\n      one_bid_for_all_geo: Math.round(newBid * 10000) / 10000\n    });\n  });\n}\n\nreturn [{\n  json: {\n    action: action,\n    reason: reason,\n    bid_adjustment: bidAdjustment,\n    total_spend: Math.round(totalSpend * 100) / 100,\n    daily_budget: dailyBudget,\n    remaining_budget: Math.round(remainingBudget * 100) / 100,\n    actual_rate: Math.round(actualSpendPerHour * 100) / 100,\n    target_rate: Math.round(targetSpendPerHour * 100) / 100,\n    ads_to_update: bidUpdates\n  }\n}];"
+        "jsCode": "const spendData = $('Fetch Today Spend').first().json;\nconst adsData = $('Fetch Active Ads').first().json;\n\nconst stats = spendData.data || spendData;\nconst ads = adsData.data || adsData;\n\nconst dailyBudget = parseFloat(50);\nconst maxCeiling = parseFloat(0.10);\n\n// Calculate total spend today\nlet totalSpend = 0;\nif (Array.isArray(stats)) {\n  stats.forEach(s => { totalSpend += parseFloat(s.money) || 0; });\n} else if (stats.money) {\n  totalSpend = parseFloat(stats.money) || 0;\n}\n\nconst now = new Date();\nconst hoursElapsed = now.getHours() + now.getMinutes() / 60;\nconst hoursRemaining = 24 - hoursElapsed;\nconst remainingBudget = dailyBudget - totalSpend;\n\n// Target spend rate\nconst targetSpendPerHour = hoursRemaining > 0 ? remainingBudget / hoursRemaining : 0;\nconst actualSpendPerHour = hoursElapsed > 0 ? totalSpend / hoursElapsed : 0;\n\nlet action = 'HOLD';\nlet bidAdjustment = 1.0;\nlet reason = '';\n\n// Overspending: spending 20% more than target\nif (actualSpendPerHour > targetSpendPerHour * 1.2 && totalSpend > dailyBudget * 0.3) {\n  action = 'LOWER_ALL';\n  bidAdjustment = 0.90;\n  reason = `Overspending: $${actualSpendPerHour.toFixed(2)}/h vs target $${targetSpendPerHour.toFixed(2)}/h`;\n}\n// Underspending: spending 30% less than target, and we have budget to use\nelse if (actualSpendPerHour < targetSpendPerHour * 0.7 && remainingBudget > dailyBudget * 0.3 && hoursElapsed > 4) {\n  action = 'RAISE_ALL';\n  bidAdjustment = 1.10;\n  reason = `Underspending: $${actualSpendPerHour.toFixed(2)}/h vs target $${targetSpendPerHour.toFixed(2)}/h`;\n}\n// Budget nearly exhausted\nelse if (remainingBudget < dailyBudget * 0.1 && hoursRemaining > 4) {\n  action = 'LOWER_ALL';\n  bidAdjustment = 0.80;\n  reason = `Budget nearly exhausted: $${remainingBudget.toFixed(2)} left for ${hoursRemaining.toFixed(1)}h`;\n}\n\nif (action === 'HOLD') {\n  return [{ json: { action: 'HOLD', reason: 'Budget pacing is on track', totalSpend, dailyBudget, actualSpendPerHour, targetSpendPerHour } }];\n}\n\n// Prepare bid updates for all active ads\nconst bidUpdates = [];\nif (Array.isArray(ads)) {\n  ads.forEach(ad => {\n    const currentBid = parseFloat(ad.one_bid_for_all_geo) || 0;\n    let newBid = currentBid * bidAdjustment;\n    if (newBid > maxCeiling) newBid = maxCeiling;\n    if (newBid < 0.001) newBid = 0.001;\n    bidUpdates.push({\n      ad_id: ad.id,\n      one_bid_for_all_geo: Math.round(newBid * 10000) / 10000\n    });\n  });\n}\n\nreturn [{\n  json: {\n    action: action,\n    reason: reason,\n    bid_adjustment: bidAdjustment,\n    total_spend: Math.round(totalSpend * 100) / 100,\n    daily_budget: dailyBudget,\n    remaining_budget: Math.round(remainingBudget * 100) / 100,\n    actual_rate: Math.round(actualSpendPerHour * 100) / 100,\n    target_rate: Math.round(targetSpendPerHour * 100) / 100,\n    ads_to_update: bidUpdates\n  }\n}];"
       },
       "id": "calculate-pacing",
       "name": "Calculate Budget Pacing",
@@ -157,7 +157,7 @@
     {
       "parameters": {
         "method": "PUT",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/all/bid",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all/bid",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -182,7 +182,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID || '' }}",
+        "chatId": "591828204",
         "text": "=⏱ BUDGET PACER {{ $now.format('dd.MM.yyyy HH:mm') }}\n\n{{ $json.reason }}\n\nSpend: ${{ $json.total_spend }} / ${{ $json.daily_budget }}\nRemaining: ${{ $json.remaining_budget }}\nRate: ${{ $json.actual_rate }}/h (target: ${{ $json.target_rate }}/h)\nAction: {{ $json.action }} ({{ Math.round(($json.bid_adjustment - 1) * 100) }}%)\nAds adjusted: {{ $json.ads_to_update?.length || 0 }}",
         "additionalFields": {}
       },

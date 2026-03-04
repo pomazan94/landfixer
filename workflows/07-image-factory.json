@@ -82,7 +82,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"{{ $env.CLAUDE_MODEL || 'claude-sonnet-4-20250514' }}\",\n  \"max_tokens\": 512,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Опиши промпт для генерации картинки к тизерному объявлению.\\n\\nЗаголовок тизера: {{ $json.generated_titles?.[0] || $json.trend_topic }}\\n\\nТребования к промпту:\\n- На английском языке\\n- Яркая, привлекающая внимание картинка\\n- Фотореалистичный стиль\\n- Подходит для нативной рекламы\\n- Без текста на картинке\\n- Формат: один промпт, 1-2 предложения\\n\\nОтветь ТОЛЬКО промптом, без объяснений.\"\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 512,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Опиши промпт для генерации картинки к тизерному объявлению.\\n\\nЗаголовок тизера: {{ $json.generated_titles?.[0] || $json.trend_topic }}\\n\\nТребования к промпту:\\n- На английском языке\\n- Яркая, привлекающая внимание картинка\\n- Фотореалистичный стиль\\n- Подходит для нативной рекламы\\n- Без текста на картинке\\n- Формат: один промпт, 1-2 предложения\\n\\nОтветь ТОЛЬКО промптом, без объяснений.\"\n    }\n  ]\n}",
         "options": {
           "response": {
             "response": {
@@ -108,7 +108,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const claudeResponse = $input.first().json;\nconst queueItem = $('Has Pending Items?').first().json;\n\nconst imagePrompt = claudeResponse.content?.[0]?.text || 'A striking photorealistic image for native advertising';\n\n// Determine which image gen API to use\nconst imageApi = $env.IMAGE_GEN_API || 'stable-diffusion';\n\nreturn [{\n  json: {\n    queue_id: queueItem.id,\n    image_prompt: imagePrompt.trim(),\n    image_api: imageApi,\n    title: queueItem.generated_titles?.[0] || queueItem.trend_topic\n  }\n}];"
+        "jsCode": "const claudeResponse = $input.first().json;\nconst queueItem = $('Has Pending Items?').first().json;\n\nconst imagePrompt = claudeResponse.content?.[0]?.text || 'A striking photorealistic image for native advertising';\n\n// Determine which image gen API to use\nconst imageApi = 'stable-diffusion';\n\nreturn [{\n  json: {\n    queue_id: queueItem.id,\n    image_prompt: imagePrompt.trim(),\n    image_api: imageApi,\n    title: queueItem.generated_titles?.[0] || queueItem.trend_topic\n  }\n}];"
       },
       "id": "prepare-image-request",
       "name": "Prepare Image Request",
@@ -122,7 +122,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.STABLE_DIFFUSION_API_URL || 'http://localhost:7860' }}/sdapi/v1/txt2img",
+        "url": "http://localhost:7860/sdapi/v1/txt2img",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"prompt\": \"{{ $json.image_prompt }}, high quality, photorealistic, 4k, sharp focus\",\n  \"negative_prompt\": \"text, watermark, logo, blurry, low quality, cartoon, anime\",\n  \"steps\": 30,\n  \"cfg_scale\": 7,\n  \"width\": 1080,\n  \"height\": 1080,\n  \"sampler_name\": \"DPM++ 2M Karras\"\n}",
@@ -147,7 +147,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.STABLE_DIFFUSION_API_URL || 'http://localhost:7860' }}/sdapi/v1/txt2img",
+        "url": "http://localhost:7860/sdapi/v1/txt2img",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={\n  \"prompt\": \"{{ $json.image_prompt }}, high quality, photorealistic, 4k, sharp focus, wide angle\",\n  \"negative_prompt\": \"text, watermark, logo, blurry, low quality, cartoon, anime\",\n  \"steps\": 30,\n  \"cfg_scale\": 7,\n  \"width\": 1920,\n  \"height\": 1080,\n  \"sampler_name\": \"DPM++ 2M Karras\"\n}",

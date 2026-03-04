@@ -14,7 +14,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Input: source campaign info (set manually or via webhook)\n// This workflow clones a profitable campaign to another account\nconst sourceCampaignId = $input.first().json.source_campaign_id || 1;\nconst sourceAdGroupId = $input.first().json.source_ad_group_id || 1;\nconst targetAccountToken = $input.first().json.target_account_token || $env.GEOZO_API_TOKEN;\n\nreturn [{\n  json: {\n    source_campaign_id: sourceCampaignId,\n    source_ad_group_id: sourceAdGroupId,\n    target_token: targetAccountToken\n  }\n}];"
+        "jsCode": "// Input: source campaign info (set manually or via webhook)\n// This workflow clones a profitable campaign to another account\nconst sourceCampaignId = $input.first().json.source_campaign_id || 1;\nconst sourceAdGroupId = $input.first().json.source_ad_group_id || 1;\nconst targetAccountToken = $input.first().json.target_account_token || '';\n\nreturn [{\n  json: {\n    source_campaign_id: sourceCampaignId,\n    source_ad_group_id: sourceAdGroupId,\n    target_token: targetAccountToken\n  }\n}];"
       },
       "id": "setup",
       "name": "Setup Clone Parameters",
@@ -28,7 +28,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/all",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -70,7 +70,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/campaigns",
+        "url": "https://api.geozo.com/v1/advertiser/campaigns",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -116,7 +116,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/campaigns/{{ $json.new_campaign_id }}/ad_groups",
+        "url": "=https://api.geozo.com/v1/advertiser/campaigns/{{ $json.new_campaign_id }}/ad_groups",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -167,7 +167,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"{{ $env.CLAUDE_MODEL || 'claude-sonnet-4-20250514' }}\",\n  \"max_tokens\": 128,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Слегка перефразируй этот тизерный заголовок, сохранив смысл и длину (30-120 символов). Измени 1-2 слова. Ответь ТОЛЬКО новым заголовком:\\n\\n{{ $json.original_title }}\"\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 128,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Слегка перефразируй этот тизерный заголовок, сохранив смысл и длину (30-120 символов). Измени 1-2 слова. Ответь ТОЛЬКО новым заголовком:\\n\\n{{ $json.original_title }}\"\n    }\n  ]\n}",
         "options": {
           "response": {
             "response": {
@@ -194,7 +194,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ad_groups/{{ $json.new_ad_group_id }}/ads/teaser/create",
+        "url": "=https://api.geozo.com/v1/advertiser/ad_groups/{{ $json.new_ad_group_id }}/ads/teaser/create",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

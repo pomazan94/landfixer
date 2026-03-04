@@ -69,7 +69,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/stats/tmp_with_postbacks",
+        "url": "https://api.geozo.com/v1/advertiser/stats/tmp_with_postbacks",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -164,7 +164,7 @@
     {
       "parameters": {
         "method": "PUT",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/all/stop",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all/stop",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -190,12 +190,12 @@
     {
       "parameters": {
         "method": "PUT",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/all/bid",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all/bid",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"ads\": [\n    {\n      \"ad_id\": {{ $json.winner.ad_id }},\n      \"one_bid_for_all_geo\": {{ Math.min(($json.winner.spend / $json.winner.clicks * 1.2), parseFloat($env.MAX_BID_CEILING || '0.10')).toFixed(4) }}\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"ads\": [\n    {\n      \"ad_id\": {{ $json.winner.ad_id }},\n      \"one_bid_for_all_geo\": {{ Math.min(($json.winner.spend / $json.winner.clicks * 1.2), parseFloat(0.10)).toFixed(4) }}\n    }\n  ]\n}",
         "options": {}
       },
       "id": "scale-winner",
@@ -236,7 +236,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID || '' }}",
+        "chatId": "591828204",
         "text": "=🧪 A/B TEST RESULT\n\nTest: {{ $json.test_name }}\n\n🏆 Winner: Ad #{{ $json.winner.ad_id }}\n  CTR: {{ $json.winner.ctr.toFixed(2) }}%\n  ROI: {{ $json.winner.roi.toFixed(1) }}%\n  Clicks: {{ $json.winner.clicks }}\n\n❌ Stopped losers: {{ $json.losers.join(', ') }}\n\nWinner bid raised for scaling.",
         "additionalFields": {}
       },

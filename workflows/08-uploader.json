@@ -76,7 +76,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const item = $input.first().json;\n\n// Extract title from generated_titles JSON array\nlet titles = item.generated_titles;\nif (typeof titles === 'string') {\n  try { titles = JSON.parse(titles); } catch(e) { titles = [titles]; }\n}\nconst title = Array.isArray(titles) ? titles[0] : (titles || item.trend_topic);\n\n// Get the landing URL from environment or use a default\nconst landingUrl = $env.DEFAULT_LANDING_URL || 'https://example.com/landing';\nconst adGroupId = $env.DEFAULT_AD_GROUP_ID || '1';\nconst defaultBid = parseFloat($env.DEFAULT_BID || '0.01');\n\nreturn [{\n  json: {\n    queue_id: item.id,\n    title: title,\n    original_url: landingUrl,\n    ad_group_id: parseInt(adGroupId),\n    bid: defaultBid\n  }\n}];"
+        "jsCode": "const item = $input.first().json;\n\n// Extract title from generated_titles JSON array\nlet titles = item.generated_titles;\nif (typeof titles === 'string') {\n  try { titles = JSON.parse(titles); } catch(e) { titles = [titles]; }\n}\nconst title = Array.isArray(titles) ? titles[0] : (titles || item.trend_topic);\n\n// Get the landing URL from environment or use a default\nconst landingUrl = 'https://example.com/landing';\nconst adGroupId = '1';\nconst defaultBid = parseFloat('0.01');\n\nreturn [{\n  json: {\n    queue_id: item.id,\n    title: title,\n    original_url: landingUrl,\n    ad_group_id: parseInt(adGroupId),\n    bid: defaultBid\n  }\n}];"
       },
       "id": "prepare-upload",
       "name": "Prepare Upload Data",
@@ -90,7 +90,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ad_groups/{{ $json.ad_group_id }}/ads/teaser/create",
+        "url": "=https://api.geozo.com/v1/advertiser/ad_groups/{{ $json.ad_group_id }}/ads/teaser/create",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,

@@ -24,7 +24,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/stats/tmp_with_postbacks",
+        "url": "https://api.geozo.com/v1/advertiser/stats/tmp_with_postbacks",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -82,7 +82,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/balance",
+        "url": "https://api.geozo.com/v1/advertiser/balance",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {
@@ -111,7 +111,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/stats/tmp_with_postbacks",
+        "url": "https://api.geozo.com/v1/advertiser/stats/tmp_with_postbacks",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -179,7 +179,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"{{ $env.CLAUDE_MODEL || 'claude-sonnet-4-20250514' }}\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Составь краткий дневной отчёт медиабайера на основе данных. Используй эмодзи. Выдели ключевые инсайты и рекомендации на завтра.\\n\\nДанные за {{ $json.date }}:\\n- Баланс: ${{ $json.balance }}\\n- Расход: ${{ $json.total_spend }}\\n- Доход: ${{ $json.total_revenue }}\\n- Профит: ${{ $json.total_profit }}\\n- ROI: {{ $json.total_roi }}%\\n- Клики: {{ $json.total_clicks }}\\n- Показы: {{ $json.total_shows }}\\n- Активных объявлений: {{ $json.active_ads }}\\n\\nТоп-5 профитных:\\n{{ $json.top5.map(a => `Ad #${a.ad_id}: ROI ${a.roi.toFixed(1)}%, Profit $${(a.revenue-a.spend).toFixed(2)}`).join('\\n') }}\\n\\nТоп-5 убыточных:\\n{{ $json.worst5.map(a => `Ad #${a.ad_id}: ROI ${a.roi.toFixed(1)}%, Loss $${(a.spend-a.revenue).toFixed(2)}`).join('\\n') }}\\n\\nГео:\\n{{ $json.geo_breakdown.map(g => `${g.country}: ROI ${g.roi}%, Spend $${g.spend.toFixed(2)}`).join('\\n') }}\\n\\nФормат: текст для Telegram (без markdown, максимум 3000 символов).\"\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Составь краткий дневной отчёт медиабайера на основе данных. Используй эмодзи. Выдели ключевые инсайты и рекомендации на завтра.\\n\\nДанные за {{ $json.date }}:\\n- Баланс: ${{ $json.balance }}\\n- Расход: ${{ $json.total_spend }}\\n- Доход: ${{ $json.total_revenue }}\\n- Профит: ${{ $json.total_profit }}\\n- ROI: {{ $json.total_roi }}%\\n- Клики: {{ $json.total_clicks }}\\n- Показы: {{ $json.total_shows }}\\n- Активных объявлений: {{ $json.active_ads }}\\n\\nТоп-5 профитных:\\n{{ $json.top5.map(a => `Ad #${a.ad_id}: ROI ${a.roi.toFixed(1)}%, Profit $${(a.revenue-a.spend).toFixed(2)}`).join('\\n') }}\\n\\nТоп-5 убыточных:\\n{{ $json.worst5.map(a => `Ad #${a.ad_id}: ROI ${a.roi.toFixed(1)}%, Loss $${(a.spend-a.revenue).toFixed(2)}`).join('\\n') }}\\n\\nГео:\\n{{ $json.geo_breakdown.map(g => `${g.country}: ROI ${g.roi}%, Spend $${g.spend.toFixed(2)}`).join('\\n') }}\\n\\nФормат: текст для Telegram (без markdown, максимум 3000 символов).\"\n    }\n  ]\n}",
         "options": {
           "response": {
             "response": {
@@ -239,7 +239,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID || '' }}",
+        "chatId": "591828204",
         "text": "={{ $json.report_text }}",
         "additionalFields": {}
       },

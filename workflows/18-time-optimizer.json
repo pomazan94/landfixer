@@ -24,7 +24,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/stats/tmp_with_postbacks",
+        "url": "https://api.geozo.com/v1/advertiser/stats/tmp_with_postbacks",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -96,7 +96,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"{{ $env.CLAUDE_MODEL || 'claude-sonnet-4-20250514' }}\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Проанализируй статистику тизерной рекламы по дням недели и часам за 30 дней.\\n\\nДанные:\\n{{ $json.summary }}\\n\\nОпредели:\\n1. Лучшие часы по CTR и ROI (когда запускать рекламу)\\n2. Худшие часы (когда лучше выключать)\\n3. Лучшие/худшие дни недели\\n4. Оптимальное расписание (time_targeting)\\n\\nВыведи оптимальное расписание в формате JSON:\\n{\\n  \\\"monday\\\": [8,9,10,11,12,13,18,19,20,21],\\n  \\\"tuesday\\\": [...],\\n  ...\\n}\\nГде массив = активные часы (0-23). Включай только профитные часы.\\n\\nСначала анализ (кратко), затем JSON.\"\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Проанализируй статистику тизерной рекламы по дням недели и часам за 30 дней.\\n\\nДанные:\\n{{ $json.summary }}\\n\\nОпредели:\\n1. Лучшие часы по CTR и ROI (когда запускать рекламу)\\n2. Худшие часы (когда лучше выключать)\\n3. Лучшие/худшие дни недели\\n4. Оптимальное расписание (time_targeting)\\n\\nВыведи оптимальное расписание в формате JSON:\\n{\\n  \\\"monday\\\": [8,9,10,11,12,13,18,19,20,21],\\n  \\\"tuesday\\\": [...],\\n  ...\\n}\\nГде массив = активные часы (0-23). Включай только профитные часы.\\n\\nСначала анализ (кратко), затем JSON.\"\n    }\n  ]\n}",
         "options": {
           "response": {
             "response": {
@@ -136,7 +136,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/all",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -191,7 +191,7 @@
     {
       "parameters": {
         "method": "PUT",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ad_groups/{{ $json.ad_group_id }}",
+        "url": "=https://api.geozo.com/v1/advertiser/ad_groups/{{ $json.ad_group_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -216,7 +216,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID || '' }}",
+        "chatId": "591828204",
         "text": "=⏰ TIME OPTIMIZER\n\nUpdated time targeting for ad group #{{ $json.ad_group_id }}\n\n{{ $json.analysis.substring(0, 1500) }}",
         "additionalFields": {}
       },

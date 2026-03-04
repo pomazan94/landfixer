@@ -24,7 +24,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/all",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -105,7 +105,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"{{ $env.CLAUDE_MODEL || 'claude-sonnet-4-20250514' }}\",\n  \"max_tokens\": 256,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Тизерное объявление было отклонено модерацией.\\n\\nОригинальный заголовок: '{{ $json.title }}'\\nПричина бана: '{{ $json.ban_reason }}'\\n\\nПерефразируй заголовок так, чтобы:\\n1. Сохранить основной смысл и интригу\\n2. Убрать элементы, которые могли вызвать бан\\n3. Сделать более нейтральным, но всё ещё привлекательным\\n4. Длина 30-120 символов\\n\\nОтветь ТОЛЬКО новым заголовком, без объяснений.\"\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 256,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Тизерное объявление было отклонено модерацией.\\n\\nОригинальный заголовок: '{{ $json.title }}'\\nПричина бана: '{{ $json.ban_reason }}'\\n\\nПерефразируй заголовок так, чтобы:\\n1. Сохранить основной смысл и интригу\\n2. Убрать элементы, которые могли вызвать бан\\n3. Сделать более нейтральным, но всё ещё привлекательным\\n4. Длина 30-120 символов\\n\\nОтветь ТОЛЬКО новым заголовком, без объяснений.\"\n    }\n  ]\n}",
         "options": {
           "response": {
             "response": {
@@ -145,7 +145,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/teaser/update/{{ $json.ad_id }}",
+        "url": "=https://api.geozo.com/v1/advertiser/ads/teaser/update/{{ $json.ad_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -178,7 +178,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/remoderate/{{ $json.ad_id }}",
+        "url": "=https://api.geozo.com/v1/advertiser/ads/remoderate/{{ $json.ad_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {}
@@ -221,7 +221,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID || '' }}",
+        "chatId": "591828204",
         "text": "=🔄 REMODERATION\n\nAd #{{ $json.ad_id }}\nBan reason: {{ $json.ban_reason }}\nOld title: {{ $json.old_title }}\nNew title: {{ $json.new_title }}\n\nSent for remoderation.",
         "additionalFields": {}
       },

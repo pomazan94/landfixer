@@ -63,7 +63,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"{{ $env.CLAUDE_MODEL || 'claude-sonnet-4-20250514' }}\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Проанализируй заголовки конкурентов из тизерных сетей и дай рекомендации.\\n\\nЗаголовки конкурентов ({{ $json.total_unique_teasers }} уникальных):\\n{{ $json.competitor_titles.join('\\n') }}\\n\\nОтветь:\\n1. Какие темы и подходы доминируют?\\n2. Какие триггеры используются (страх, любопытство, шок, выгода)?\\n3. Какие паттерны заголовков самые частые?\\n4. Предложи 5 улучшенных заголовков, которые могут выделиться на фоне конкурентов\\n5. Какие темы пока не охвачены конкурентами?\\n\\nКратко, по делу. Формат для Telegram.\"\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Проанализируй заголовки конкурентов из тизерных сетей и дай рекомендации.\\n\\nЗаголовки конкурентов ({{ $json.total_unique_teasers }} уникальных):\\n{{ $json.competitor_titles.join('\\n') }}\\n\\nОтветь:\\n1. Какие темы и подходы доминируют?\\n2. Какие триггеры используются (страх, любопытство, шок, выгода)?\\n3. Какие паттерны заголовков самые частые?\\n4. Предложи 5 улучшенных заголовков, которые могут выделиться на фоне конкурентов\\n5. Какие темы пока не охвачены конкурентами?\\n\\nКратко, по делу. Формат для Telegram.\"\n    }\n  ]\n}",
         "options": {
           "response": {
             "response": {
@@ -102,7 +102,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID || '' }}",
+        "chatId": "591828204",
         "text": "=🕵️ SPY MODULE - Competitor Analysis\n\nAnalyzed {{ $json.competitors_count }} unique competitor teasers\n\n{{ $json.analysis }}",
         "additionalFields": {}
       },
