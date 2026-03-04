@@ -165,7 +165,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO geo_stats (ad_id, country_code, date, shows, clicks, money, postbacks_confirmed_money, roi)\nSELECT \n  {{ $json.ad_id }},\n  d->>'country',\n  CURRENT_DATE,\n  (d->>'clicks')::int,\n  (d->>'clicks')::int,\n  (d->>'spend')::decimal,\n  0,\n  (d->>'roi')::decimal\nFROM jsonb_array_elements('{{ JSON.stringify($json.details) }}'::jsonb) AS d;",
+        "query": "INSERT INTO geo_stats (ad_id, country_code, date, shows, clicks, money, postbacks_confirmed_money, roi) SELECT {{ $json.ad_id }}, d->>'country', CURRENT_DATE, COALESCE((d->>'shows')::int, 0), COALESCE((d->>'clicks')::int, 0), COALESCE((d->>'spend')::decimal, 0), 0, COALESCE((d->>'roi')::decimal, 0) FROM jsonb_array_elements('{{ JSON.stringify($json.details).replace(/'/g, \"''\") }}'::jsonb) AS d;",
         "options": {}
       },
       "id": "log-to-db",
