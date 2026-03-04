@@ -32,7 +32,7 @@
           "parameters": [
             {
               "name": "filters[date_from]",
-              "value": "={{ $now.minus({ days: 1 }).format('yyyy-MM-dd') }}"
+              "value": "={{ $now.minus({ days: 3 }).format('yyyy-MM-dd') }}"
             },
             {
               "name": "filters[date_to]",
@@ -123,7 +123,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const statsItems = $('Fetch Ad Stats').first().json;\nconst adsItems = $('Fetch Active Ads').first().json;\n\nconst statsData = statsItems?.data?.result?.data || statsItems?.data || (Array.isArray(statsItems) ? statsItems : []);\nconst adsData = adsItems?.data?.result?.data || adsItems?.data || (Array.isArray(adsItems) ? adsItems : []);\n\nif (!Array.isArray(statsData) || !Array.isArray(adsData)) {\n  return [{ json: { error: 'Invalid data', actions: [] } }];\n}\n\n// Build ads map for current bids\n// API returns bids as array with geo-specific bids, extract first available bid\nconst adsMap = {};\nadsData.forEach(ad => {\n  let currentBid = 0;\n  if (ad.bids && Array.isArray(ad.bids)) {\n    // Find first bid value in the bids tree\n    const findBid = (node) => {\n      if (node.bid) return Number(node.bid);\n      if (node.children) {\n        const vals = Object.values(node.children);\n        for (const child of vals) {\n          const b = findBid(child);\n          if (b > 0) return b;\n        }\n      }\n      return 0;\n    };\n    for (const b of ad.bids) {\n      const found = findBid(b);\n      if (found > 0) { currentBid = found; break; }\n    }\n  }\n  adsMap[ad.id] = {\n    current_bid: currentBid,\n    ad_group_id: ad.ad_group_id,\n    status_id: ad.status_id\n  };\n});\n\nconst maxCeiling = Number(0.10);\nconst actions = [];\n\nstatsData.forEach(d => {\n  const adId = d.ad_id;\n  const spend = d.money || 0;\n  const revenue = d.postbacks_confirmed_money || 0;\n  const clicks = d.clicks_count || 0;\n  const shows = d.shows_count || 0;\n  const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n  const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n  const currentBid = adsMap[adId]?.current_bid || 0;\n\n  let action = 'HOLD';\n  let bidMultiplier = 1.0;\n  let reason = '';\n\n  // Rule 1: CTR > 2% AND ROI > 0 = golden teaser\n  if (ctr > 2 && roi > 0 && clicks > 10) {\n    action = 'RAISE_BID';\n    bidMultiplier = 1.20;\n    reason = `Golden: CTR ${ctr.toFixed(2)}%, ROI ${roi.toFixed(1)}%`;\n  }\n  // Rule 2: ROI > 50% with enough data\n  else if (roi > 50 && clicks > 20) {\n    action = 'RAISE_BID';\n    bidMultiplier = 1.10;\n    reason = `High ROI ${roi.toFixed(1)}%, ${clicks} clicks`;\n  }\n  // Rule 3: ROI 0-50% = hold\n  else if (roi >= 0 && roi <= 50 && clicks > 20) {\n    action = 'HOLD';\n    reason = `Stable ROI ${roi.toFixed(1)}%`;\n  }\n  // Rule 4: ROI -30% to 0% = lower bid\n  else if (roi >= -30 && roi < 0 && clicks > 30) {\n    action = 'LOWER_BID';\n    bidMultiplier = 0.85;\n    reason = `ROI ${roi.toFixed(1)}%, -15%`;\n  }\n  // Rule 5: ROI < -30% = significant lower\n  else if (roi < -30 && roi >= -50 && clicks > 20) {\n    action = 'LOWER_BID';\n    bidMultiplier = 0.70;\n    reason = `ROI ${roi.toFixed(1)}%, -30%`;\n  }\n  // Rule 6: ROI < -50% AND spent > $3 = STOP\n  else if (roi < -50 && spend > 3) {\n    action = 'STOP';\n    reason = `Critical ROI ${roi.toFixed(1)}%, spent $${spend.toFixed(2)}`;\n  }\n  // Rule 7: Dead teaser (no clicks but many shows)\n  else if (clicks < 5 && shows > 1000) {\n    action = 'STOP';\n    reason = `Dead: ${clicks} clicks / ${shows} shows`;\n  }\n\n  if (action !== 'HOLD') {\n    let newBid = currentBid * bidMultiplier;\n    if (newBid > maxCeiling) newBid = maxCeiling;\n    if (newBid < 0.001) newBid = 0.001;\n\n    actions.push({\n      json: {\n        ad_id: adId,\n        action: action,\n        current_bid: currentBid,\n        new_bid: action === 'STOP' ? currentBid : Math.round(newBid * 10000) / 10000,\n        roi: Math.round(roi * 100) / 100,\n        clicks: clicks,\n        shows: shows,\n        spend: spend,\n        ctr: Math.round(ctr * 10000) / 10000,\n        reason: reason\n      }\n    });\n  }\n});\n\nif (actions.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No bid changes needed' } }];\n}\n\nreturn actions;"
+        "jsCode": "const statsItems = $('Fetch Ad Stats').first().json;\nconst adsItems = $('Fetch Active Ads').first().json;\nconst crmItems = $('Fetch CRM Leads').all().map(i => i.json);\n\nconst statsData = statsItems?.data?.result?.data || statsItems?.data || (Array.isArray(statsItems) ? statsItems : []);\nconst adsData = adsItems?.data?.result?.data || adsItems?.data || (Array.isArray(adsItems) ? adsItems : []);\n\nif (!Array.isArray(statsData) || !Array.isArray(adsData)) {\n  return [{ json: { error: 'Invalid data' } }];\n}\n\n// Build CRM leads map: ad_id -> { total_leads, depositors, crm_revenue }\nconst crmMap = {};\ncrmItems.forEach(row => {\n  const adId = Number(row.ad_id);\n  if (adId) crmMap[adId] = { leads: row.total_leads || 0, deps: row.depositors || 0, rev: Number(row.crm_revenue) || 0 };\n});\n\n// Build ads map for current bids\nconst adsMap = {};\nadsData.forEach(ad => {\n  let currentBid = 0;\n  if (ad.bids && Array.isArray(ad.bids)) {\n    const findBid = (node) => {\n      if (node.bid) return Number(node.bid);\n      if (node.children) { for (const c of Object.values(node.children)) { const b = findBid(c); if (b > 0) return b; } }\n      return 0;\n    };\n    for (const b of ad.bids) { const f = findBid(b); if (f > 0) { currentBid = f; break; } }\n  }\n  adsMap[ad.id] = { current_bid: currentBid, ad_group_id: ad.ad_group_id, status_id: ad.status_id };\n});\n\nconst maxCeiling = 0.15;\nconst minSpendForDecision = 50;\nconst minSpendForStop = 100;\nconst minClicksForDecision = 500;\nconst actions = [];\n\nstatsData.forEach(d => {\n  const adId = d.ad_id;\n  const spend = d.money || 0;\n  const clicks = d.clicks_count || 0;\n  const shows = d.shows_count || 0;\n  const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n  const currentBid = adsMap[adId]?.current_bid || 0;\n\n  // CRM data is the source of truth for conversions\n  const crm = crmMap[adId] || { leads: 0, deps: 0, rev: 0 };\n  const totalLeads = crm.leads;\n  const depositors = crm.deps;\n  const crmRevenue = crm.rev;\n  const roi = spend > 0 ? ((crmRevenue - spend) / spend * 100) : 0;\n  const cr = clicks > 0 ? (totalLeads / clicks * 100) : 0;\n  const depRate = totalLeads > 0 ? (depositors / totalLeads * 100) : 0;\n\n  let action = 'HOLD';\n  let bidMultiplier = 1.0;\n  let reason = '';\n\n  // Rule 1: Has depositors + positive ROI + good CTR = golden teaser\n  if (depositors > 0 && roi > 0 && ctr > 1.5 && clicks > 100) {\n    action = 'RAISE_BID';\n    bidMultiplier = 1.15;\n    reason = `Golden: ${depositors} deps, ${totalLeads} leads, ROI ${roi.toFixed(0)}%, CTR ${ctr.toFixed(2)}%`;\n  }\n  // Rule 2: Has depositors + positive ROI = profitable\n  else if (depositors > 0 && roi > 30 && clicks > 200) {\n    action = 'RAISE_BID';\n    bidMultiplier = 1.10;\n    reason = `Profitable: ${depositors} deps, ROI ${roi.toFixed(0)}%`;\n  }\n  // Rule 3: Has depositors but marginal ROI = hold\n  else if (depositors > 0 && roi >= -20) {\n    action = 'HOLD';\n    reason = `Stable: ${depositors} deps, ${totalLeads} leads, ROI ${roi.toFixed(0)}%`;\n  }\n  // Rule 4: Has leads but no depositors yet, not much spend = hold (wait for approval)\n  else if (totalLeads > 0 && depositors === 0 && spend < minSpendForStop) {\n    action = 'HOLD';\n    reason = `Waiting: ${totalLeads} leads, 0 deps, spent $${spend.toFixed(2)}`;\n  }\n  // Rule 5: Has depositors but deeply negative ROI = lower bid\n  else if (depositors > 0 && roi < -20 && clicks > minClicksForDecision) {\n    action = 'LOWER_BID';\n    bidMultiplier = 0.85;\n    reason = `Low ROI: ${depositors} deps, ROI ${roi.toFixed(0)}%, -15%`;\n  }\n  // Rule 6: Has leads, no depositors, high spend = lower bid\n  else if (totalLeads > 0 && depositors === 0 && spend > minSpendForStop) {\n    action = 'LOWER_BID';\n    bidMultiplier = 0.85;\n    reason = `${totalLeads} leads, 0 deps in 3d, spent $${spend.toFixed(2)}, -15%`;\n  }\n  // Rule 7: ZERO leads + high spend + many clicks = STOP\n  else if (totalLeads === 0 && spend > minSpendForStop && clicks > minClicksForDecision) {\n    action = 'STOP';\n    reason = `0 leads in 3d, spent $${spend.toFixed(2)}, ${clicks} clicks`;\n  }\n  // Rule 8: ZERO leads + moderate spend = lower bid\n  else if (totalLeads === 0 && spend > minSpendForDecision && clicks > 300) {\n    action = 'LOWER_BID';\n    bidMultiplier = 0.85;\n    reason = `0 leads, spent $${spend.toFixed(2)}, ${clicks} clicks, -15%`;\n  }\n  // Rule 9: Dead teaser (very low CTR)\n  else if (clicks < 10 && shows > 5000) {\n    action = 'STOP';\n    reason = `Dead: ${clicks} clicks / ${shows} shows in 3d`;\n  }\n\n  if (action !== 'HOLD') {\n    let newBid = currentBid * bidMultiplier;\n    if (newBid > maxCeiling) newBid = maxCeiling;\n    if (newBid < 0.001) newBid = 0.001;\n\n    actions.push({\n      json: {\n        ad_id: adId,\n        action: action,\n        current_bid: currentBid,\n        new_bid: action === 'STOP' ? currentBid : Math.round(newBid * 10000) / 10000,\n        roi: Math.round(roi * 100) / 100,\n        leads: totalLeads,\n        depositors: depositors,\n        dep_rate: Math.round(depRate * 100) / 100,\n        crm_revenue: crmRevenue,\n        clicks: clicks,\n        shows: shows,\n        spend: spend,\n        ctr: Math.round(ctr * 10000) / 10000,\n        cr: Math.round(cr * 10000) / 10000,\n        reason: reason\n      }\n    });\n  }\n});\n\nif (actions.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No bid changes needed' } }];\n}\n\nreturn actions;"
       },
       "id": "apply-bid-rules",
       "name": "Apply Bid Rules",
@@ -252,7 +252,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst changes = items.filter(i => i.json.action && i.json.action !== 'NONE');\n\nif (changes.length === 0) return [];\n\nconst stops = changes.filter(i => i.json.action === 'STOP');\nconst raises = changes.filter(i => i.json.action === 'RAISE_BID');\nconst lowers = changes.filter(i => i.json.action === 'LOWER_BID');\n\nlet msg = `🤖 SMART BIDDER ${$now.toFormat('dd.MM.yyyy HH:mm')}\\n\\n`;\nmsg += `Total changes: ${changes.length}\\n`;\nmsg += `⬆️ Raised: ${raises.length} | ⬇️ Lowered: ${lowers.length} | 🛑 Stopped: ${stops.length}\\n\\n`;\n\nif (stops.length > 0) {\n  msg += `🛑 STOPPED:\\n`;\n  stops.forEach(s => msg += `  #${s.json.ad_id}: ${s.json.reason}\\n`);\n  msg += `\\n`;\n}\n\nif (raises.length > 0) {\n  msg += `⬆️ BID RAISED:\\n`;\n  raises.slice(0, 5).forEach(r => msg += `  #${r.json.ad_id}: $${r.json.current_bid} → $${r.json.new_bid} (${r.json.reason})\\n`);\n  msg += `\\n`;\n}\n\nif (lowers.length > 0) {\n  msg += `⬇️ BID LOWERED:\\n`;\n  lowers.slice(0, 5).forEach(l => msg += `  #${l.json.ad_id}: $${l.json.current_bid} → $${l.json.new_bid} (${l.json.reason})\\n`);\n}\n\nreturn [{ json: { message: msg } }];"
+        "jsCode": "const items = $input.all();\nconst changes = items.filter(i => i.json.action && i.json.action !== 'NONE');\n\nif (changes.length === 0) return [];\n\nconst stops = changes.filter(i => i.json.action === 'STOP');\nconst raises = changes.filter(i => i.json.action === 'RAISE_BID');\nconst lowers = changes.filter(i => i.json.action === 'LOWER_BID');\n\nlet msg = `SMART BIDDER ${$now.toFormat('dd.MM.yyyy HH:mm')}\\n\\n`;\nmsg += `Total: ${changes.length} | Up: ${raises.length} | Down: ${lowers.length} | Stop: ${stops.length}\\n\\n`;\n\nif (stops.length > 0) {\n  msg += `STOPPED:\\n`;\n  stops.forEach(s => msg += `#${s.json.ad_id}: ${s.json.leads||0}L/${s.json.depositors||0}D $${s.json.spend?.toFixed(2)||0} - ${s.json.reason}\\n`);\n  msg += `\\n`;\n}\n\nif (raises.length > 0) {\n  msg += `BID RAISED:\\n`;\n  raises.slice(0, 10).forEach(r => msg += `#${r.json.ad_id}: $${r.json.current_bid}->${r.json.new_bid} ${r.json.leads||0}L/${r.json.depositors||0}D ROI:${r.json.roi}%\\n`);\n  msg += `\\n`;\n}\n\nif (lowers.length > 0) {\n  msg += `BID LOWERED:\\n`;\n  lowers.slice(0, 10).forEach(l => msg += `#${l.json.ad_id}: $${l.json.current_bid}->${l.json.new_bid} ${l.json.leads||0}L/${l.json.depositors||0}D ROI:${l.json.roi}%\\n`);\n}\n\nreturn [{ json: { message: msg } }];"
       },
       "id": "format-summary",
       "name": "Format Summary",
@@ -285,6 +285,27 @@
       }
     },
     {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT param5 AS ad_id, COUNT(*) AS total_leads, SUM(CASE WHEN status = 'Depositor' THEN 1 ELSE 0 END) AS depositors, ROUND(SUM(CASE WHEN status = 'Depositor' THEN cost ELSE 0 END), 2) AS crm_revenue FROM leads WHERE param5 IS NOT NULL AND param5 != '' AND param5 REGEXP '^[0-9]+$' AND created_at >= DATE_SUB(CURDATE(), INTERVAL 3 DAY) GROUP BY param5",
+        "options": {}
+      },
+      "id": "fetch-crm-leads",
+      "name": "Fetch CRM Leads",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        220,
+        300
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "mysql-crm",
+          "name": "MySQL CRM"
+        }
+      }
+    },
+    {
       "parameters": {},
       "id": "sub-workflow-trigger",
       "name": "Called by Orchestrator",
@@ -309,6 +330,11 @@
             "node": "Fetch Active Ads",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Fetch CRM Leads",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -325,6 +351,17 @@
       ]
     },
     "Fetch Active Ads": {
+      "main": [
+        [
+          {
+            "node": "Apply Bid Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch CRM Leads": {
       "main": [
         [
           {
@@ -417,6 +454,11 @@
           },
           {
             "node": "Fetch Active Ads",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch CRM Leads",
             "type": "main",
             "index": 0
           }
