@@ -164,7 +164,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const data = $input.first().json;\n\nlet message = `💰 BALANCE WATCHDOG ${$now.format('dd.MM.yyyy HH:mm')}\\n\\n`;\nmessage += `Balance: $${data.balance}\\n`;\nmessage += `Spend today: $${data.total_spend_today}\\n`;\nmessage += `Rate: $${data.spend_rate_per_hour}/hour\\n`;\nmessage += `Estimated remaining: ${data.hours_remaining}h\\n\\n`;\n\nif (data.alerts && data.alerts.length > 0) {\n  message += `⚠️ ALERTS:\\n`;\n  data.alerts.forEach(a => {\n    message += `${a.message}\\n`;\n  });\n}\n\nreturn [{ json: { message } }];"
+        "jsCode": "const data = $input.first().json;\n\nlet message = `💰 BALANCE WATCHDOG ${$now.toFormat('dd.MM.yyyy HH:mm')}\\n\\n`;\nmessage += `Balance: $${data.balance}\\n`;\nmessage += `Spend today: $${data.total_spend_today}\\n`;\nmessage += `Rate: $${data.spend_rate_per_hour}/hour\\n`;\nmessage += `Estimated remaining: ${data.hours_remaining}h\\n\\n`;\n\nif (data.alerts && data.alerts.length > 0) {\n  message += `⚠️ ALERTS:\\n`;\n  data.alerts.forEach(a => {\n    message += `${a.message}\\n`;\n  });\n}\n\nreturn [{ json: { message } }];"
       },
       "id": "format-message",
       "name": "Format Alert Message",

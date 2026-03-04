@@ -16,7 +16,10 @@
       "name": "Main Loop (15 min)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 300]
+      "position": [
+        0,
+        300
+      ]
     },
     {
       "parameters": {
@@ -33,7 +36,10 @@
       "name": "Morning Start (06:00)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, -200]
+      "position": [
+        0,
+        -200
+      ]
     },
     {
       "parameters": {
@@ -50,7 +56,10 @@
       "name": "Evening Wrap-up (23:55)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 900]
+      "position": [
+        0,
+        900
+      ]
     },
     {
       "parameters": {
@@ -67,7 +76,10 @@
       "name": "Weekly Monday (03:00)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 1300]
+      "position": [
+        0,
+        1300
+      ]
     },
     {
       "parameters": {
@@ -77,7 +89,10 @@
       "name": "Scheduler Logic",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
@@ -87,7 +102,10 @@
       "name": "Split Into Individual",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [500, 300]
+      "position": [
+        500,
+        300
+      ]
     },
     {
       "parameters": {
@@ -100,7 +118,10 @@
       "name": "Execute Sub-Workflow",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
-      "position": [750, 300]
+      "position": [
+        750,
+        300
+      ]
     },
     {
       "parameters": {
@@ -110,7 +131,10 @@
       "name": "Morning Startup Sequence",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [250, -200]
+      "position": [
+        250,
+        -200
+      ]
     },
     {
       "parameters": {
@@ -123,7 +147,10 @@
       "name": "Execute Morning Workflows",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
-      "position": [500, -200]
+      "position": [
+        500,
+        -200
+      ]
     },
     {
       "parameters": {
@@ -135,7 +162,10 @@
       "name": "Fetch System Metrics",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [750, -200],
+      "position": [
+        750,
+        -200
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
@@ -145,13 +175,16 @@
     },
     {
       "parameters": {
-        "jsCode": "const m = $input.first().json;\n\nlet msg = `🤖 MASTER ORCHESTRATOR - Morning Status\\n`;\nmsg += `${$now.format('dd.MM.yyyy HH:mm')}\\n\\n`;\nmsg += `📊 System: OPERATIONAL\\n`;\nmsg += `📈 Yesterday's recap:\\n`;\nmsg += `  Stats entries: ${m.stats_today || 0}\\n`;\nmsg += `  Balance checks: ${m.balance_checks_today || 0}\\n`;\nmsg += `  Bid changes: ${m.bid_changes_today || 0}\\n`;\nmsg += `  New teasers: ${m.new_teasers_today || 0}\\n`;\nmsg += `  Anomalies: ${m.anomalies_today || 0}\\n`;\nmsg += `  Balance: $${m.last_known_balance || 'N/A'}\\n`;\nmsg += `  Active teasers (7d): ${m.active_teasers_week || 0}\\n\\n`;\nmsg += `⏰ Schedule: All 18 workflows connected\\n`;\nmsg += `✅ Morning startup sequence launched`;\n\nreturn [{ json: { message: msg } }];"
+        "jsCode": "const m = $input.first().json;\n\nlet msg = `🤖 MASTER ORCHESTRATOR - Morning Status\\n`;\nmsg += `${$now.toFormat('dd.MM.yyyy HH:mm')}\\n\\n`;\nmsg += `📊 System: OPERATIONAL\\n`;\nmsg += `📈 Yesterday's recap:\\n`;\nmsg += `  Stats entries: ${m.stats_today || 0}\\n`;\nmsg += `  Balance checks: ${m.balance_checks_today || 0}\\n`;\nmsg += `  Bid changes: ${m.bid_changes_today || 0}\\n`;\nmsg += `  New teasers: ${m.new_teasers_today || 0}\\n`;\nmsg += `  Anomalies: ${m.anomalies_today || 0}\\n`;\nmsg += `  Balance: $${m.last_known_balance || 'N/A'}\\n`;\nmsg += `  Active teasers (7d): ${m.active_teasers_week || 0}\\n\\n`;\nmsg += `⏰ Schedule: All 18 workflows connected\\n`;\nmsg += `✅ Morning startup sequence launched`;\n\nreturn [{ json: { message: msg } }];"
       },
       "id": "format-morning-status",
       "name": "Format Morning Status",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1000, -200]
+      "position": [
+        1000,
+        -200
+      ]
     },
     {
       "parameters": {
@@ -163,7 +196,10 @@
       "name": "Send Morning Status",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1250, -200],
+      "position": [
+        1250,
+        -200
+      ],
       "credentials": {
         "telegramApi": {
           "id": "telegram-cred",
@@ -179,7 +215,10 @@
       "name": "Evening Wrap-up Sequence",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [250, 900]
+      "position": [
+        250,
+        900
+      ]
     },
     {
       "parameters": {
@@ -192,7 +231,10 @@
       "name": "Execute Evening Workflows",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
-      "position": [500, 900]
+      "position": [
+        500,
+        900
+      ]
     },
     {
       "parameters": {
@@ -202,7 +244,10 @@
       "name": "Weekly Optimization Sequence",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [250, 1300]
+      "position": [
+        250,
+        1300
+      ]
     },
     {
       "parameters": {
@@ -215,7 +260,10 @@
       "name": "Execute Weekly Workflows",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
-      "position": [500, 1300]
+      "position": [
+        500,
+        1300
+      ]
     },
     {
       "parameters": {
@@ -227,7 +275,10 @@
       "name": "Notify Weekly Start",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [750, 1300],
+      "position": [
+        750,
+        1300
+      ],
       "credentials": {
         "telegramApi": {
           "id": "telegram-cred",
@@ -237,13 +288,16 @@
     },
     {
       "parameters": {
-        "jsCode": "// Log execution to track orchestrator activity\nconst workflow = $json.workflow || 'unknown';\nconst reason = $json.reason || 'scheduled';\n\nreturn [{ json: {\n  log: `[${$now.format('HH:mm:ss')}] Triggered: ${workflow} (${reason})`,\n  workflow: workflow,\n  status: 'triggered'\n} }];"
+        "jsCode": "// Log execution to track orchestrator activity\nconst workflow = $json.workflow || 'unknown';\nconst reason = $json.reason || 'scheduled';\n\nreturn [{ json: {\n  log: `[${$now.toFormat('HH:mm:ss')}] Triggered: ${workflow} (${reason})`,\n  workflow: workflow,\n  status: 'triggered'\n} }];"
       },
       "id": "log-execution",
       "name": "Log Execution",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1000, 300]
+      "position": [
+        1000,
+        300
+      ]
     }
   ],
   "connections": {
