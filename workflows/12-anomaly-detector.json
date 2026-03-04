@@ -16,10 +16,15 @@
       "name": "Every Hour",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [
-        0,
-        0
-      ]
+      "position": [0, 0]
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [0, 150]
     },
     {
       "parameters": {
@@ -31,29 +36,20 @@
       "name": "Fetch Stats Comparison",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [
-        220,
-        0
-      ],
+      "position": [250, 75],
       "credentials": {
-        "postgres": {
-          "id": "postgres-cred",
-          "name": "PostgreSQL"
-        }
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
       }
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst anomalies = [];\nconst DEVIATION_THRESHOLD = 2; // 2 standard deviations\n\nitems.forEach(item => {\n  const d = item.json;\n  if (!d.ad_id) return;\n\n  // CTR anomaly - sudden drop\n  if (d.std_ctr_7d > 0 && d.avg_ctr_7d > 0) {\n    const ctrDeviation = (d.today_ctr - d.avg_ctr_7d) / d.std_ctr_7d;\n    if (ctrDeviation < -DEVIATION_THRESHOLD) {\n      anomalies.push({\n        ad_id: d.ad_id,\n        type: 'CTR_DROP',\n        severity: 'warning',\n        description: `CTR dropped sharply: ${d.today_ctr?.toFixed(4)}% vs avg ${d.avg_ctr_7d?.toFixed(4)}%`,\n        metric: 'ctr',\n        expected: d.avg_ctr_7d,\n        actual: d.today_ctr,\n        deviation: Math.round(ctrDeviation * 100) / 100\n      });\n    }\n    // CTR anomaly - viral spike\n    if (ctrDeviation > DEVIATION_THRESHOLD) {\n      anomalies.push({\n        ad_id: d.ad_id,\n        type: 'CTR_SPIKE',\n        severity: 'positive',\n        description: `CTR spiked! ${d.today_ctr?.toFixed(4)}% vs avg ${d.avg_ctr_7d?.toFixed(4)}% - consider scaling`,\n        metric: 'ctr',\n        expected: d.avg_ctr_7d,\n        actual: d.today_ctr,\n        deviation: Math.round(ctrDeviation * 100) / 100\n      });\n    }\n  }\n\n  // CPC anomaly - someone overbidding\n  if (d.std_cpc_7d > 0 && d.avg_cpc_7d > 0) {\n    const cpcDeviation = (d.today_cpc - d.avg_cpc_7d) / d.std_cpc_7d;\n    if (cpcDeviation > DEVIATION_THRESHOLD) {\n      anomalies.push({\n        ad_id: d.ad_id,\n        type: 'CPC_SPIKE',\n        severity: 'warning',\n        description: `CPC spiked: $${d.today_cpc?.toFixed(4)} vs avg $${d.avg_cpc_7d?.toFixed(4)} - competition increased?`,\n        metric: 'cpc',\n        expected: d.avg_cpc_7d,\n        actual: d.today_cpc,\n        deviation: Math.round(cpcDeviation * 100) / 100\n      });\n    }\n  }\n\n  // Zero shows - block might be down\n  if (d.today_shows === 0 && d.avg_clicks_7d > 5) {\n    anomalies.push({\n      ad_id: d.ad_id,\n      type: 'ZERO_SHOWS',\n      severity: 'critical',\n      description: `No shows today but avg ${d.avg_clicks_7d?.toFixed(0)} clicks/day - block down?`,\n      metric: 'shows',\n      expected: d.avg_clicks_7d,\n      actual: 0,\n      deviation: -100\n    });\n  }\n\n  // Bot traffic: many clicks but zero conversions\n  if (d.today_clicks > 20 && d.today_conversions === 0 && d.avg_conversions_7d > 1) {\n    anomalies.push({\n      ad_id: d.ad_id,\n      type: 'BOT_TRAFFIC',\n      severity: 'critical',\n      description: `${d.today_clicks} clicks but 0 conversions (avg ${d.avg_conversions_7d?.toFixed(1)}/day) - possible bot traffic`,\n      metric: 'conversions',\n      expected: d.avg_conversions_7d,\n      actual: 0,\n      deviation: -100\n    });\n  }\n});\n\nif (anomalies.length === 0) {\n  return []; // No anomalies detected\n}\n\nreturn anomalies.map(a => ({ json: a }));"
+        "jsCode": "// ============================================\n// ANOMALY DETECTOR v2 - With state machine integration\n// ============================================\n// Now pauses teasers with critical anomalies via state machine.\n// BOT_TRAFFIC insight: high bot % = can pay less (signal for lower bids).\n\nconst items = $input.all();\nconst anomalies = [];\nconst DEVIATION_THRESHOLD = 2;\n\nitems.forEach(item => {\n  const d = item.json;\n  if (!d.ad_id) return;\n\n  // CTR anomaly - sudden drop\n  if (d.std_ctr_7d > 0 && d.avg_ctr_7d > 0) {\n    const ctrDeviation = (d.today_ctr - d.avg_ctr_7d) / d.std_ctr_7d;\n    if (ctrDeviation < -DEVIATION_THRESHOLD) {\n      anomalies.push({\n        ad_id: d.ad_id,\n        type: 'CTR_DROP',\n        severity: 'warning',\n        description: `CTR dropped: ${d.today_ctr?.toFixed(4)}% vs avg ${d.avg_ctr_7d?.toFixed(4)}%`,\n        metric: 'ctr',\n        expected: d.avg_ctr_7d,\n        actual: d.today_ctr,\n        deviation: Math.round(ctrDeviation * 100) / 100,\n        should_pause: false\n      });\n    }\n    if (ctrDeviation > DEVIATION_THRESHOLD) {\n      anomalies.push({\n        ad_id: d.ad_id,\n        type: 'CTR_SPIKE',\n        severity: 'positive',\n        description: `CTR spiked! ${d.today_ctr?.toFixed(4)}% vs avg ${d.avg_ctr_7d?.toFixed(4)}% - consider scaling`,\n        metric: 'ctr',\n        expected: d.avg_ctr_7d,\n        actual: d.today_ctr,\n        deviation: Math.round(ctrDeviation * 100) / 100,\n        should_pause: false\n      });\n    }\n  }\n\n  // CPC anomaly - competition spike\n  if (d.std_cpc_7d > 0 && d.avg_cpc_7d > 0) {\n    const cpcDeviation = (d.today_cpc - d.avg_cpc_7d) / d.std_cpc_7d;\n    if (cpcDeviation > DEVIATION_THRESHOLD) {\n      anomalies.push({\n        ad_id: d.ad_id,\n        type: 'CPC_SPIKE',\n        severity: 'warning',\n        description: `CPC spiked: $${d.today_cpc?.toFixed(4)} vs avg $${d.avg_cpc_7d?.toFixed(4)} - competition increased?`,\n        metric: 'cpc',\n        expected: d.avg_cpc_7d,\n        actual: d.today_cpc,\n        deviation: Math.round(cpcDeviation * 100) / 100,\n        should_pause: false\n      });\n    }\n  }\n\n  // Zero shows - block might be down\n  if (d.today_shows === 0 && d.avg_clicks_7d > 5) {\n    anomalies.push({\n      ad_id: d.ad_id,\n      type: 'ZERO_SHOWS',\n      severity: 'critical',\n      description: `No shows today but avg ${d.avg_clicks_7d?.toFixed(0)} clicks/day - block down?`,\n      metric: 'shows',\n      expected: d.avg_clicks_7d,\n      actual: 0,\n      deviation: -100,\n      should_pause: false  // Don't pause, might be temporary\n    });\n  }\n\n  // Bot traffic: many clicks but zero conversions with significant spend\n  if (d.today_clicks > 20 && d.today_conversions === 0 && d.avg_conversions_7d > 1) {\n    const botSeverity = d.today_spend > 30 ? 'critical' : 'warning';\n    anomalies.push({\n      ad_id: d.ad_id,\n      type: 'BOT_TRAFFIC',\n      severity: botSeverity,\n      description: `${d.today_clicks} clicks, 0 conversions (avg ${d.avg_conversions_7d?.toFixed(1)}/day), $${d.today_spend?.toFixed(2)} spent - bot traffic`,\n      metric: 'conversions',\n      expected: d.avg_conversions_7d,\n      actual: 0,\n      deviation: -100,\n      should_pause: botSeverity === 'critical'  // PAUSE if critical bot traffic\n    });\n  }\n\n  // Clicks without shows ratio (click fraud)\n  if (d.today_shows > 0 && d.today_clicks > 0) {\n    const clickRate = d.today_clicks / d.today_shows * 100;\n    if (clickRate > 10 && d.today_clicks > 30) {\n      anomalies.push({\n        ad_id: d.ad_id,\n        type: 'CLICK_FRAUD',\n        severity: 'critical',\n        description: `Suspicious CTR ${clickRate.toFixed(1)}% (${d.today_clicks} clicks / ${d.today_shows} shows) - possible click fraud`,\n        metric: 'ctr',\n        expected: d.avg_ctr_7d || 0.5,\n        actual: clickRate,\n        deviation: 999,\n        should_pause: true  // PAUSE - definite fraud\n      });\n    }\n  }\n});\n\nif (anomalies.length === 0) return [];\n\nreturn anomalies.map(a => ({ json: a }));"
       },
       "id": "detect-anomalies",
-      "name": "Detect Anomalies",
+      "name": "Detect Anomalies v2",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        480,
-        0
-      ]
+      "position": [500, 75]
     },
     {
       "parameters": {
@@ -65,29 +61,78 @@
       "name": "Save Anomalies",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [
-        700,
-        -80
-      ],
+      "position": [750, -50],
       "credentials": {
-        "postgres": {
-          "id": "postgres-cred",
-          "name": "PostgreSQL"
-        }
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
       }
     },
     {
       "parameters": {
-        "jsCode": "const anomalies = $input.all().map(i => i.json);\n\nconst critical = anomalies.filter(a => a.severity === 'critical');\nconst warnings = anomalies.filter(a => a.severity === 'warning');\nconst positive = anomalies.filter(a => a.severity === 'positive');\n\nlet msg = `🔍 ANOMALY DETECTOR ${$now.toFormat('dd.MM.yyyy HH:mm')}\\n\\n`;\nmsg += `Found ${anomalies.length} anomalies\\n\\n`;\n\nif (critical.length > 0) {\n  msg += `🔴 CRITICAL:\\n`;\n  critical.forEach(a => msg += `  Ad #${a.ad_id}: ${a.description}\\n`);\n  msg += `\\n`;\n}\nif (warnings.length > 0) {\n  msg += `🟡 WARNINGS:\\n`;\n  warnings.forEach(a => msg += `  Ad #${a.ad_id}: ${a.description}\\n`);\n  msg += `\\n`;\n}\nif (positive.length > 0) {\n  msg += `🟢 OPPORTUNITIES:\\n`;\n  positive.forEach(a => msg += `  Ad #${a.ad_id}: ${a.description}\\n`);\n}\n\nreturn [{ json: { message: msg } }];"
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "should-pause",
+              "leftValue": "={{ $json.should_pause }}",
+              "rightValue": "true",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "should-pause",
+      "name": "Should Pause Teaser?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [750, 100]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all/stop",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ids\": {{ JSON.stringify([$json.ad_id]) }}\n}",
+        "options": {}
+      },
+      "id": "pause-anomaly-ad",
+      "name": "Pause Anomaly Ad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1000, 0],
+      "credentials": {
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE teasers SET\n  state = 'paused_anomaly',\n  state_changed_at = NOW(),\n  state_reason = '{{ $json.type }}: {{ $json.description.replace(/'/g, \"''\").slice(0, 150) }}',\n  updated_at = NOW()\nWHERE ad_id = {{ $json.ad_id }};\n\nINSERT INTO teaser_state_log (ad_id, old_state, new_state, reason, triggered_by, metadata)\nVALUES (\n  {{ $json.ad_id }},\n  'active',\n  'paused_anomaly',\n  '{{ $json.type }}: {{ $json.description.replace(/'/g, \"''\").slice(0, 150) }}',\n  'anomaly_detector',\n  '{\"anomaly_type\": \"{{ $json.type }}\", \"severity\": \"{{ $json.severity }}\"}'\n);",
+        "options": {}
+      },
+      "id": "update-state",
+      "name": "Update Teaser State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1250, 0],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const anomalies = $input.all().map(i => i.json);\n\nconst critical = anomalies.filter(a => a.severity === 'critical');\nconst warnings = anomalies.filter(a => a.severity === 'warning');\nconst positive = anomalies.filter(a => a.severity === 'positive');\nconst paused = anomalies.filter(a => a.should_pause);\n\nlet msg = `ANOMALY DETECTOR v2 ${$now.toFormat('dd.MM.yyyy HH:mm')}\\n\\n`;\nmsg += `Found ${anomalies.length} anomalies`;\nif (paused.length > 0) msg += ` | ${paused.length} teasers PAUSED`;\nmsg += `\\n\\n`;\n\nif (paused.length > 0) {\n  msg += `PAUSED (anomaly):\\n`;\n  paused.forEach(a => msg += `  #${a.ad_id}: ${a.description}\\n`);\n  msg += `\\n`;\n}\n\nif (critical.length > 0) {\n  msg += `CRITICAL:\\n`;\n  critical.filter(a => !a.should_pause).forEach(a => msg += `  #${a.ad_id}: ${a.description}\\n`);\n  msg += `\\n`;\n}\nif (warnings.length > 0) {\n  msg += `WARNINGS:\\n`;\n  warnings.forEach(a => msg += `  #${a.ad_id}: ${a.description}\\n`);\n  msg += `\\n`;\n}\nif (positive.length > 0) {\n  msg += `OPPORTUNITIES:\\n`;\n  positive.forEach(a => msg += `  #${a.ad_id}: ${a.description}\\n`);\n}\n\nreturn [{ json: { message: msg } }];"
       },
       "id": "format-message",
       "name": "Format Alert",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        700,
-        80
-      ]
+      "position": [750, 300]
     },
     {
       "parameters": {
@@ -99,89 +144,40 @@
       "name": "Send Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [
-        920,
-        80
-      ],
+      "position": [1000, 300],
       "credentials": {
-        "telegramApi": {
-          "id": "telegram-cred",
-          "name": "Telegram Bot"
-        }
+        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
       }
-    },
-    {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [
-        0,
-        150
-      ]
     }
   ],
   "connections": {
     "Every Hour": {
-      "main": [
-        [
-          {
-            "node": "Fetch Stats Comparison",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch Stats Comparison": {
-      "main": [
-        [
-          {
-            "node": "Detect Anomalies",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Detect Anomalies": {
-      "main": [
-        [
-          {
-            "node": "Save Anomalies",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Format Alert",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Format Alert": {
-      "main": [
-        [
-          {
-            "node": "Send Alert",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Fetch Stats Comparison", "type": "main", "index": 0 } ]]
     },
     "Called by Orchestrator": {
+      "main": [[ { "node": "Fetch Stats Comparison", "type": "main", "index": 0 } ]]
+    },
+    "Fetch Stats Comparison": {
+      "main": [[ { "node": "Detect Anomalies v2", "type": "main", "index": 0 } ]]
+    },
+    "Detect Anomalies v2": {
+      "main": [[
+        { "node": "Save Anomalies", "type": "main", "index": 0 },
+        { "node": "Should Pause Teaser?", "type": "main", "index": 0 },
+        { "node": "Format Alert", "type": "main", "index": 0 }
+      ]]
+    },
+    "Should Pause Teaser?": {
       "main": [
-        [
-          {
-            "node": "Fetch Stats Comparison",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [ { "node": "Pause Anomaly Ad", "type": "main", "index": 0 } ],
+        []
       ]
+    },
+    "Pause Anomaly Ad": {
+      "main": [[ { "node": "Update Teaser State", "type": "main", "index": 0 } ]]
+    },
+    "Format Alert": {
+      "main": [[ { "node": "Send Alert", "type": "main", "index": 0 } ]]
     }
   },
   "settings": {
@@ -191,11 +187,9 @@
   },
   "staticData": null,
   "tags": [
-    {
-      "name": "reporting",
-      "id": "tag-reporting"
-    }
+    { "name": "reporting", "id": "tag-reporting" },
+    { "name": "safety", "id": "tag-safety" }
   ],
   "pinData": {},
-  "versionId": "1"
+  "versionId": "2"
 }

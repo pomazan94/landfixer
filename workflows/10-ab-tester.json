@@ -16,10 +16,7 @@
       "name": "Every 4 Hours",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [
-        0,
-        0
-      ]
+      "position": [0, 0]
     },
     {
       "parameters": {},
@@ -27,44 +24,40 @@
       "name": "Manual Start (Create Test)",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [
-        0,
-        200
-      ]
+      "position": [0, 200]
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [0, 350]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT * FROM ab_tests WHERE status = 'running' ORDER BY started_at DESC LIMIT 5;",
+        "query": "SELECT t.*, EXTRACT(EPOCH FROM (NOW() - t.started_at)) / 3600 AS hours_running\nFROM ab_tests t\nWHERE t.status = 'running'\nORDER BY t.started_at DESC\nLIMIT 5;",
         "options": {}
       },
       "id": "fetch-active-tests",
       "name": "Fetch Active Tests",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [
-        220,
-        0
-      ],
+      "position": [250, 100],
       "credentials": {
-        "postgres": {
-          "id": "postgres-cred",
-          "name": "PostgreSQL"
-        }
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
       }
     },
     {
       "parameters": {
-        "jsCode": "const tests = $input.all();\n\nif (tests.length === 0 || !tests[0].json.id) {\n  return []; // No active tests\n}\n\nreturn tests.map(t => ({ json: t.json }));"
+        "jsCode": "const tests = $input.all();\nif (tests.length === 0 || !tests[0].json.id) return [];\nreturn tests.map(t => ({ json: t.json }));"
       },
       "id": "check-tests",
       "name": "Check Active Tests",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        440,
-        0
-      ]
+      "position": [480, 100]
     },
     {
       "parameters": {
@@ -75,88 +68,66 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            {
-              "name": "filters[date_from]",
-              "value": "={{ $now.minus({ days: 3 }).format('yyyy-MM-dd') }}"
-            },
-            {
-              "name": "filters[date_to]",
-              "value": "={{ $now.format('yyyy-MM-dd') }}"
-            },
-            {
-              "name": "groups[0]",
-              "value": "ad_id"
-            },
-            {
-              "name": "order_by[0][column]",
-              "value": "money"
-            },
-            {
-              "name": "order_by[0][direction]",
-              "value": "desc"
-            },
-            {
-              "name": "count",
-              "value": "500"
-            }
+            { "name": "filters[date_from]", "value": "={{ $now.minus({ days: 7 }).format('yyyy-MM-dd') }}" },
+            { "name": "filters[date_to]", "value": "={{ $now.format('yyyy-MM-dd') }}" },
+            { "name": "groups[0]", "value": "ad_id" },
+            { "name": "order_by[0][column]", "value": "money" },
+            { "name": "order_by[0][direction]", "value": "desc" },
+            { "name": "count", "value": "500" }
           ]
         },
         "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
+          "response": { "response": { "responseFormat": "json" } }
         }
       },
       "id": "fetch-test-stats",
       "name": "Fetch Stats for Test Ads",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        660,
-        0
-      ],
+      "position": [700, 0],
       "credentials": {
-        "httpHeaderAuth": {
-          "id": "o0swcMSqweTNOUhw",
-          "name": "Geozo"
-        }
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT param5 AS ad_id, COUNT(*) AS total_leads,\n       SUM(CASE WHEN status = 'Depositor' THEN 1 ELSE 0 END) AS depositors,\n       ROUND(SUM(CASE WHEN status = 'Depositor' THEN cost ELSE 0 END), 2) AS crm_revenue\nFROM leads\nWHERE param5 IS NOT NULL AND param5 != '' AND param5 REGEXP '^[0-9]+$'\n  AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)\nGROUP BY param5",
+        "options": {}
+      },
+      "id": "fetch-crm-leads",
+      "name": "Fetch CRM Leads",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [700, 200],
+      "credentials": {
+        "mySql": { "id": "mysql-crm", "name": "MySQL CRM" }
       }
     },
     {
       "parameters": {
-        "jsCode": "const testData = $('Check Active Tests').first().json;\nconst statsRaw = $input.first().json;\nconst stats = statsRaw?.data?.result?.data || statsRaw?.data || (Array.isArray(statsRaw) ? statsRaw : []);\n\nif (!Array.isArray(stats) || !testData.variants) {\n  return [{ json: { action: 'SKIP', reason: 'No data' } }];\n}\n\n// Parse variants from the test\nlet variants = testData.variants;\nif (typeof variants === 'string') {\n  try { variants = JSON.parse(variants); } catch(e) { variants = []; }\n}\n\nconst variantAdIds = variants.map(v => v.ad_id);\nconst minClicks = 50; // Minimum clicks for statistical significance\n\n// Get stats for test variant ads\nconst variantStats = stats\n  .filter(s => variantAdIds.includes(s.ad_id))\n  .map(s => {\n    const spend = s.money || 0;\n    const revenue = s.postbacks_confirmed_money || 0;\n    const clicks = s.clicks_count || 0;\n    const shows = s.shows_count || 0;\n    const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n    const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n    return {\n      ad_id: s.ad_id,\n      clicks, shows, spend, revenue, ctr, roi,\n      has_enough_data: clicks >= minClicks\n    };\n  });\n\n// Check if enough data collected\nconst allHaveData = variantStats.every(v => v.has_enough_data);\n\nif (!allHaveData) {\n  return [{ json: {\n    action: 'WAITING',\n    test_id: testData.id,\n    reason: 'Not enough clicks yet',\n    variants: variantStats\n  }}];\n}\n\n// Find winner by CTR (primary) and ROI (secondary)\nconst sorted = [...variantStats].sort((a, b) => {\n  if (b.roi !== a.roi) return b.roi - a.roi;\n  return b.ctr - a.ctr;\n});\n\nconst winner = sorted[0];\nconst losers = sorted.slice(1);\n\nreturn [{\n  json: {\n    action: 'DECIDE',\n    test_id: testData.id,\n    test_name: testData.test_name,\n    winner: winner,\n    losers: losers.map(l => l.ad_id),\n    all_variants: sorted\n  }\n}];"
+        "jsCode": "// ============================================\n// A/B TESTER v2 - Statistical significance + budget limits + gradual rollout\n// ============================================\n\nconst testData = $('Check Active Tests').first().json;\nconst statsRaw = $('Fetch Stats for Test Ads').first().json;\nconst crmItems = $('Fetch CRM Leads').all().map(i => i.json);\nconst stats = statsRaw?.data?.result?.data || statsRaw?.data || (Array.isArray(statsRaw) ? statsRaw : []);\n\nif (!Array.isArray(stats) || !testData.variants) {\n  return [{ json: { action: 'SKIP', reason: 'No data' } }];\n}\n\nlet variants = testData.variants;\nif (typeof variants === 'string') {\n  try { variants = JSON.parse(variants); } catch(e) { variants = []; }\n}\n\nconst hoursRunning = Number(testData.hours_running) || 0;\nconst variantAdIds = variants.map(v => v.ad_id);\n\n// --- CONFIG ---\nconst MIN_CLICKS_PER_VARIANT = 200;  // Minimum for significance (not 50!)\nconst MIN_LEADS_PER_VARIANT = 5;\nconst MIN_HOURS = 48;          // At least 48h (cover different days/hours)\nconst MAX_HOURS = 168;         // 7 days timeout\nconst TEST_BUDGET_MULTIPLIER = 10;  // maxCPL * 10 per variant\nconst CONFIDENCE_LEVEL = 1.96; // 95% confidence (z-score)\n\n// CRM map\nconst crmMap = {};\ncrmItems.forEach(c => {\n  const adId = Number(c.ad_id);\n  if (adId) crmMap[adId] = {\n    leads: Number(c.total_leads) || 0,\n    deps: Number(c.depositors) || 0,\n    rev: Number(c.crm_revenue) || 0\n  };\n});\n\n// Get stats for test variants\nconst variantStats = stats\n  .filter(s => variantAdIds.includes(s.ad_id))\n  .map(s => {\n    const adId = s.ad_id;\n    const spend = Number(s.money) || 0;\n    const clicks = Number(s.clicks_count) || 0;\n    const shows = Number(s.shows_count) || 0;\n    const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n    const crm = crmMap[adId] || { leads: 0, deps: 0, rev: 0 };\n    const cpl = crm.leads > 0 ? spend / crm.leads : (spend > 0 ? Infinity : 0);\n    const roi = spend > 0 ? ((crm.rev - spend) / spend * 100) : 0;\n    return {\n      ad_id: adId,\n      clicks, shows, spend,\n      ctr, roi, cpl,\n      leads: crm.leads,\n      deps: crm.deps,\n      revenue: crm.rev,\n      cr: clicks > 0 ? (crm.leads / clicks * 100) : 0,  // Conversion rate\n      has_enough_clicks: clicks >= MIN_CLICKS_PER_VARIANT,\n      has_enough_leads: crm.leads >= MIN_LEADS_PER_VARIANT\n    };\n  });\n\n// Check timeout\nif (hoursRunning > MAX_HOURS) {\n  // Force decide with whatever data we have\n  const sorted = [...variantStats].sort((a, b) => {\n    if (a.cpl !== Infinity && b.cpl !== Infinity && a.cpl !== b.cpl) return a.cpl - b.cpl;\n    return b.ctr - a.ctr;\n  });\n  return [{\n    json: {\n      action: 'FORCE_DECIDE',\n      test_id: testData.id,\n      test_name: testData.test_name,\n      reason: `Timeout: ${hoursRunning.toFixed(0)}h > ${MAX_HOURS}h max`,\n      winner: sorted[0] || null,\n      losers: sorted.slice(1).map(l => l.ad_id),\n      all_variants: sorted,\n      gradual_rollout: true\n    }\n  }];\n}\n\n// Check if minimum time has passed\nif (hoursRunning < MIN_HOURS) {\n  return [{ json: {\n    action: 'WAITING',\n    test_id: testData.id,\n    reason: `Need ${MIN_HOURS}h min, only ${hoursRunning.toFixed(1)}h elapsed`,\n    variants: variantStats\n  }}];\n}\n\n// Check data sufficiency\nconst allHaveClicks = variantStats.every(v => v.has_enough_clicks);\nconst anyHaveLeads = variantStats.some(v => v.has_enough_leads);\n\nif (!allHaveClicks && !anyHaveLeads) {\n  return [{ json: {\n    action: 'WAITING',\n    test_id: testData.id,\n    reason: `Not enough data: need ${MIN_CLICKS_PER_VARIANT} clicks or ${MIN_LEADS_PER_VARIANT} leads per variant`,\n    variants: variantStats\n  }}];\n}\n\n// --- STATISTICAL SIGNIFICANCE TEST (Z-test for proportions) ---\n// Compare each pair of variants on conversion rate (CR)\nlet isSignificant = false;\nlet significanceNote = '';\n\nif (variantStats.length >= 2 && variantStats[0].clicks > 0 && variantStats[1].clicks > 0) {\n  const v1 = variantStats[0];\n  const v2 = variantStats[1];\n  \n  const p1 = v1.cr / 100; // Convert % to proportion\n  const p2 = v2.cr / 100;\n  const n1 = v1.clicks;\n  const n2 = v2.clicks;\n  \n  if (n1 > 0 && n2 > 0) {\n    const pCombined = (p1 * n1 + p2 * n2) / (n1 + n2);\n    const denominator = Math.sqrt(pCombined * (1 - pCombined) * (1/n1 + 1/n2));\n    \n    if (denominator > 0) {\n      const zScore = Math.abs(p1 - p2) / denominator;\n      isSignificant = zScore >= CONFIDENCE_LEVEL;\n      significanceNote = `Z-score: ${zScore.toFixed(2)} (need ${CONFIDENCE_LEVEL} for 95% confidence) - ${isSignificant ? 'SIGNIFICANT' : 'NOT significant'}`;\n    }\n  }\n}\n\n// If not statistically significant and we have time, keep testing\nif (!isSignificant && hoursRunning < MAX_HOURS * 0.8) {\n  return [{ json: {\n    action: 'WAITING',\n    test_id: testData.id,\n    reason: `Not statistically significant yet. ${significanceNote}`,\n    variants: variantStats\n  }}];\n}\n\n// --- DECIDE WINNER ---\n// Priority: CPL (lower=better) > CR (higher=better) > CTR (higher=better)\nconst sorted = [...variantStats].sort((a, b) => {\n  // First: compare by CPL (lower is better), Infinity = worst\n  if (a.leads > 0 && b.leads > 0) {\n    if (Math.abs(a.cpl - b.cpl) > 5) return a.cpl - b.cpl;\n  } else if (a.leads > 0) return -1;\n  else if (b.leads > 0) return 1;\n  \n  // Second: CR\n  if (Math.abs(a.cr - b.cr) > 0.1) return b.cr - a.cr;\n  \n  // Third: CTR\n  return b.ctr - a.ctr;\n});\n\nconst winner = sorted[0];\nconst losers = sorted.slice(1);\n\nreturn [{\n  json: {\n    action: 'DECIDE',\n    test_id: testData.id,\n    test_name: testData.test_name,\n    winner: winner,\n    losers: losers.map(l => l.ad_id),\n    all_variants: sorted,\n    significance: significanceNote,\n    is_significant: isSignificant,\n    hours_running: Math.round(hoursRunning),\n    gradual_rollout: true  // Always do gradual rollout\n  }\n}];"
       },
       "id": "analyze-results",
-      "name": "Analyze Test Results",
+      "name": "Analyze Test Results v2",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        880,
-        0
-      ]
+      "position": [1000, 100]
     },
     {
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
           "conditions": [
             {
               "id": "is-decide",
               "leftValue": "={{ $json.action }}",
               "rightValue": "DECIDE",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
+              "operator": { "type": "string", "operation": "equals" }
             }
           ],
-          "combinator": "and"
+          "combinator": "or"
         },
         "options": {}
       },
@@ -164,10 +135,7 @@
       "name": "Ready to Decide?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [
-        1100,
-        0
-      ]
+      "position": [1250, 100]
     },
     {
       "parameters": {
@@ -184,223 +152,82 @@
       "name": "Stop Loser Ads",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        1320,
-        -50
-      ],
+      "position": [1500, -50],
       "credentials": {
-        "httpHeaderAuth": {
-          "id": "o0swcMSqweTNOUhw",
-          "name": "Geozo"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "method": "PUT",
-        "url": "https://api.geozo.com/v1/advertiser/ads/all/bid",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "contentType": "form-urlencoded",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "ids[]",
-              "value": "={{ $json.winner.ad_id }}"
-            },
-            {
-              "name": "one_bid_for_all_geo",
-              "value": "={{ Math.min(($json.winner.spend / $json.winner.clicks * 1.2), 0.10).toFixed(4) }}"
-            }
-          ]
-        },
-        "options": {}
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
       },
-      "id": "scale-winner",
-      "name": "Scale Winner (Raise Bid)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1320,
-        100
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "o0swcMSqweTNOUhw",
-          "name": "Geozo"
-        }
-      }
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE ab_tests SET\n  status = 'completed',\n  winner_ad_id = {{ $json.winner.ad_id }},\n  finished_at = NOW()\nWHERE id = {{ $json.test_id }};",
+        "query": "-- Mark test completed with winner\nUPDATE ab_tests SET\n  status = 'completed',\n  winner_ad_id = {{ $json.winner.ad_id }},\n  finished_at = NOW()\nWHERE id = {{ $json.test_id }};\n\n-- Mark winner teaser as 'scaling' (gradual rollout, NOT immediate bid bump)\nUPDATE teasers SET\n  state = 'scaling',\n  state_changed_at = NOW(),\n  state_reason = 'A/B test winner, gradual rollout phase',\n  updated_at = NOW()\nWHERE ad_id = {{ $json.winner.ad_id }};\n\n-- Mark losers as stopped\nUPDATE teasers SET\n  state = 'stopped',\n  state_changed_at = NOW(),\n  state_reason = 'A/B test loser',\n  updated_at = NOW()\nWHERE ad_id IN ({{ $json.losers.join(',') || '0' }});\n\n-- Log state transitions\nINSERT INTO teaser_state_log (ad_id, old_state, new_state, reason, triggered_by)\nVALUES (\n  {{ $json.winner.ad_id }},\n  'testing',\n  'scaling',\n  'A/B test winner ({{ $json.significance || \"no significance data\" }})',\n  'ab_tester'\n);",
         "options": {}
       },
       "id": "update-test-status",
-      "name": "Mark Test Completed",
+      "name": "Mark Test + Update States",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [
-        1540,
-        0
-      ],
+      "position": [1500, 100],
       "credentials": {
-        "postgres": {
-          "id": "postgres-cred",
-          "name": "PostgreSQL"
-        }
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
       }
     },
     {
       "parameters": {
         "chatId": "591828204",
-        "text": "=\ud83e\uddea A/B TEST RESULT\n\nTest: {{ $json.test_name }}\n\n\ud83c\udfc6 Winner: Ad #{{ $json.winner.ad_id }}\n  CTR: {{ $json.winner.ctr.toFixed(2) }}%\n  ROI: {{ $json.winner.roi.toFixed(1) }}%\n  Clicks: {{ $json.winner.clicks }}\n\n\u274c Stopped losers: {{ $json.losers.join(', ') }}\n\nWinner bid raised for scaling.",
+        "text": "=A/B TEST RESULT {{ $now.toFormat('dd.MM.yyyy HH:mm') }}\n\nTest: {{ $json.test_name }} ({{ $json.hours_running }}h)\n{{ $json.significance || '' }}\n\nWINNER: Ad #{{ $json.winner.ad_id }}\n  CPL: ${{ $json.winner.cpl === Infinity ? 'no leads' : $json.winner.cpl.toFixed(0) }}\n  CR: {{ $json.winner.cr.toFixed(2) }}%\n  CTR: {{ $json.winner.ctr.toFixed(2) }}%\n  Leads: {{ $json.winner.leads }} | Deps: {{ $json.winner.deps }}\n  Spend: ${{ $json.winner.spend.toFixed(2) }}\n\nStopped losers: {{ $json.losers.join(', ') }}\n\nGradual rollout: Winner stays at CURRENT bid.\nSmart Bidder will scale +5% every 24h if CPL stays good.\nState: testing -> scaling",
         "additionalFields": {}
       },
       "id": "notify-result",
       "name": "Notify Test Result",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [
-        1540,
-        150
-      ],
+      "position": [1750, 100],
       "credentials": {
-        "telegramApi": {
-          "id": "telegram-cred",
-          "name": "Telegram Bot"
-        }
+        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
       }
-    },
-    {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [
-        0,
-        350
-      ]
     }
   ],
   "connections": {
     "Every 4 Hours": {
-      "main": [
-        [
-          {
-            "node": "Fetch Active Tests",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Fetch Active Tests", "type": "main", "index": 0 } ]]
+    },
+    "Manual Start (Create Test)": {
+      "main": [[ { "node": "Fetch Active Tests", "type": "main", "index": 0 } ]]
+    },
+    "Called by Orchestrator": {
+      "main": [[ { "node": "Fetch Active Tests", "type": "main", "index": 0 } ]]
     },
     "Fetch Active Tests": {
-      "main": [
-        [
-          {
-            "node": "Check Active Tests",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Check Active Tests", "type": "main", "index": 0 } ]]
     },
     "Check Active Tests": {
-      "main": [
-        [
-          {
-            "node": "Fetch Stats for Test Ads",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[
+        { "node": "Fetch Stats for Test Ads", "type": "main", "index": 0 },
+        { "node": "Fetch CRM Leads", "type": "main", "index": 0 }
+      ]]
     },
     "Fetch Stats for Test Ads": {
-      "main": [
-        [
-          {
-            "node": "Analyze Test Results",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Analyze Test Results v2", "type": "main", "index": 0 } ]]
     },
-    "Analyze Test Results": {
-      "main": [
-        [
-          {
-            "node": "Ready to Decide?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Fetch CRM Leads": {
+      "main": [[ { "node": "Analyze Test Results v2", "type": "main", "index": 0 } ]]
+    },
+    "Analyze Test Results v2": {
+      "main": [[ { "node": "Ready to Decide?", "type": "main", "index": 0 } ]]
     },
     "Ready to Decide?": {
       "main": [
         [
-          {
-            "node": "Stop Loser Ads",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Scale Winner (Raise Bid)",
-            "type": "main",
-            "index": 0
-          }
-        ]
+          { "node": "Stop Loser Ads", "type": "main", "index": 0 },
+          { "node": "Mark Test + Update States", "type": "main", "index": 0 }
+        ],
+        []
       ]
     },
-    "Stop Loser Ads": {
-      "main": [
-        [
-          {
-            "node": "Mark Test Completed",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Scale Winner (Raise Bid)": {
-      "main": [
-        [
-          {
-            "node": "Mark Test Completed",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Mark Test Completed": {
-      "main": [
-        [
-          {
-            "node": "Notify Test Result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Called by Orchestrator": {
-      "main": [
-        [
-          {
-            "node": "Fetch Active Tests",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Mark Test + Update States": {
+      "main": [[ { "node": "Notify Test Result", "type": "main", "index": 0 } ]]
     }
   },
   "settings": {
@@ -410,11 +237,8 @@
   },
   "staticData": null,
   "tags": [
-    {
-      "name": "testing",
-      "id": "tag-testing"
-    }
+    { "name": "testing", "id": "tag-testing" }
   ],
   "pinData": {},
-  "versionId": "1"
+  "versionId": "2"
 }
