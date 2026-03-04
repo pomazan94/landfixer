@@ -28,7 +28,6 @@ CREATE TABLE IF NOT EXISTS ad_stats (
     id SERIAL PRIMARY KEY,
     ad_id INTEGER NOT NULL,
     date DATE NOT NULL,
-    hour INTEGER,
     shows INTEGER DEFAULT 0,
     confirmed_shows INTEGER DEFAULT 0,
     clicks INTEGER DEFAULT 0,
@@ -40,7 +39,7 @@ CREATE TABLE IF NOT EXISTS ad_stats (
     roi DECIMAL(10, 2) DEFAULT 0,
     profit DECIMAL(12, 4) DEFAULT 0,
     collected_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(ad_id, date, hour)
+    UNIQUE(ad_id, date)
 );
 
 -- Статистика по гео
