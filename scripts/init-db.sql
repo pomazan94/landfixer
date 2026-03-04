@@ -238,6 +238,96 @@ CREATE TABLE IF NOT EXISTS block_lists (
     added_at TIMESTAMP DEFAULT NOW()
 );
 
+-- ============================================
+-- STATE MACHINE: расширение таблицы teasers
+-- ============================================
+
+-- Состояния жизненного цикла тизера:
+--   created -> pending_moderation -> active -> testing/scaling/optimizing
+--   active -> paused_low_ctr / paused_high_cpl / paused_budget / paused_anomaly
+--   paused_* -> recovery_queue -> active / stopped
+--   stopped -> dead (финал)
+--   banned -> remoderation -> pending_moderation / dead
+
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS state VARCHAR(30) DEFAULT 'created';
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS state_changed_at TIMESTAMP DEFAULT NOW();
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS state_reason TEXT;
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS pause_count INTEGER DEFAULT 0;
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS recovery_attempts INTEGER DEFAULT 0;
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS last_bid_change_at TIMESTAMP;
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS bid_changes_today INTEGER DEFAULT 0;
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS bid_changes_reset_date DATE DEFAULT CURRENT_DATE;
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS cumulative_bid_change_today DECIMAL(8,4) DEFAULT 1.0;
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS escalation_level INTEGER DEFAULT 0;
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS escalation_failures INTEGER DEFAULT 0;
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS warmup_phase INTEGER DEFAULT 0;
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS total_spend_lifetime DECIMAL(12,4) DEFAULT 0;
+
+-- Аудит-лог переходов состояний тизеров
+CREATE TABLE IF NOT EXISTS teaser_state_log (
+    id SERIAL PRIMARY KEY,
+    teaser_id INTEGER REFERENCES teasers(id),
+    ad_id INTEGER,
+    old_state VARCHAR(30),
+    new_state VARCHAR(30),
+    reason TEXT,
+    triggered_by VARCHAR(50),  -- 'smart_bidder', 'budget_pacer', 'emergency_controller', 'anomaly_detector', 'manual'
+    metadata JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Ожидания от изменений ставок (feedback loop)
+CREATE TABLE IF NOT EXISTS bid_expectations (
+    id SERIAL PRIMARY KEY,
+    ad_id INTEGER NOT NULL,
+    bid_history_id INTEGER REFERENCES bid_history(id),
+    old_bid DECIMAL(10,4),
+    new_bid DECIMAL(10,4),
+    action VARCHAR(20),
+    expected_metric VARCHAR(20),   -- 'cpl', 'ctr', 'position'
+    expected_direction VARCHAR(10), -- 'up', 'down'
+    baseline_value DECIMAL(12,4),
+    measurement_window_hours INTEGER DEFAULT 4,
+    outcome VARCHAR(20),           -- 'success', 'failure', 'neutral', 'insufficient_data'
+    actual_value DECIMAL(12,4),
+    checked BOOLEAN DEFAULT FALSE,
+    checked_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Distributed lock для координации workflows (Smart Bidder vs Budget Pacer)
+CREATE TABLE IF NOT EXISTS workflow_locks (
+    lock_name VARCHAR(100) PRIMARY KEY,
+    locked_by VARCHAR(100) NOT NULL,
+    locked_at TIMESTAMP DEFAULT NOW(),
+    expires_at TIMESTAMP NOT NULL
+);
+
+-- Emergency controller state
+CREATE TABLE IF NOT EXISTS emergency_state (
+    id SERIAL PRIMARY KEY,
+    is_active BOOLEAN DEFAULT FALSE,
+    trigger_reason TEXT,
+    triggered_by VARCHAR(50),
+    activated_at TIMESTAMP DEFAULT NOW(),
+    deactivated_at TIMESTAMP,
+    auto_deactivate_at TIMESTAMP  -- NULL = requires manual deactivation
+);
+
+-- Rollback snapshots для отката ставок
+CREATE TABLE IF NOT EXISTS bid_rollback_snapshots (
+    id SERIAL PRIMARY KEY,
+    ad_id INTEGER NOT NULL,
+    bid_history_id INTEGER REFERENCES bid_history(id),
+    snapshot_bid DECIMAL(10,4) NOT NULL,
+    snapshot_cpl DECIMAL(12,4),
+    snapshot_ctr DECIMAL(8,4),
+    rollback_threshold_hours INTEGER DEFAULT 2,
+    rollback_triggered BOOLEAN DEFAULT FALSE,
+    checked_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Индексы для быстрых запросов
 CREATE INDEX IF NOT EXISTS idx_ad_stats_ad_date ON ad_stats(ad_id, date);
 CREATE INDEX IF NOT EXISTS idx_ad_stats_date ON ad_stats(date);
@@ -245,8 +335,17 @@ CREATE INDEX IF NOT EXISTS idx_geo_stats_date ON geo_stats(date);
 CREATE INDEX IF NOT EXISTS idx_block_stats_date ON block_stats(date);
 CREATE INDEX IF NOT EXISTS idx_balance_history_time ON balance_history(collected_at);
 CREATE INDEX IF NOT EXISTS idx_bid_history_ad ON bid_history(ad_id);
+CREATE INDEX IF NOT EXISTS idx_bid_history_changed ON bid_history(changed_at);
 CREATE INDEX IF NOT EXISTS idx_position_tracking_time ON position_tracking(scanned_at);
 CREATE INDEX IF NOT EXISTS idx_teasers_status ON teasers(status);
+CREATE INDEX IF NOT EXISTS idx_teasers_state ON teasers(state);
+CREATE INDEX IF NOT EXISTS idx_teasers_state_changed ON teasers(state_changed_at);
 CREATE INDEX IF NOT EXISTS idx_anomalies_detected ON anomalies(detected_at);
 CREATE INDEX IF NOT EXISTS idx_daily_pnl_date ON daily_pnl(date);
 CREATE INDEX IF NOT EXISTS idx_geo_payouts_cc ON geo_payouts(country_code);
+CREATE INDEX IF NOT EXISTS idx_teaser_state_log_ad ON teaser_state_log(ad_id);
+CREATE INDEX IF NOT EXISTS idx_teaser_state_log_time ON teaser_state_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_bid_expectations_ad ON bid_expectations(ad_id);
+CREATE INDEX IF NOT EXISTS idx_bid_expectations_unchecked ON bid_expectations(checked, created_at);
+CREATE INDEX IF NOT EXISTS idx_bid_rollback_unchecked ON bid_rollback_snapshots(rollback_triggered, created_at);
+CREATE INDEX IF NOT EXISTS idx_emergency_state_active ON emergency_state(is_active);

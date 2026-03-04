@@ -16,10 +16,67 @@
       "name": "Every 30 Minutes",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [
-        0,
-        0
-      ]
+      "position": [0, 0]
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [0, 150]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Check if emergency or conservative mode is active\nSELECT \n  (SELECT is_active FROM emergency_state WHERE is_active = TRUE ORDER BY activated_at DESC LIMIT 1) AS emergency_active,\n  (SELECT locked_by FROM workflow_locks WHERE lock_name = 'conservative_mode' AND expires_at > NOW()) AS conservative_mode,\n  (SELECT locked_by FROM workflow_locks WHERE lock_name = 'bid_change' AND expires_at > NOW()) AS bid_lock_holder;",
+        "options": {}
+      },
+      "id": "check-locks",
+      "name": "Check Locks & Emergency",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 75],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "not-emergency",
+              "leftValue": "={{ $json.emergency_active }}",
+              "rightValue": "true",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "emergency-gate",
+      "name": "Emergency Active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 75]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Acquire distributed lock for bid changes (5 min TTL)\nINSERT INTO workflow_locks (lock_name, locked_by, locked_at, expires_at)\nVALUES ('bid_change', 'smart_bidder', NOW(), NOW() + INTERVAL '5 minutes')\nON CONFLICT (lock_name) DO UPDATE \n  SET locked_by = 'smart_bidder', locked_at = NOW(), expires_at = NOW() + INTERVAL '5 minutes'\n  WHERE workflow_locks.expires_at < NOW() OR workflow_locks.locked_by = 'smart_bidder';\n\nSELECT locked_by FROM workflow_locks WHERE lock_name = 'bid_change' AND locked_by = 'smart_bidder';",
+        "options": {}
+      },
+      "id": "acquire-lock",
+      "name": "Acquire Bid Lock",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [700, 0],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
     },
     {
       "parameters": {
@@ -30,54 +87,27 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            {
-              "name": "filters[date_from]",
-              "value": "={{ $now.minus({ days: 3 }).format('yyyy-MM-dd') }}"
-            },
-            {
-              "name": "filters[date_to]",
-              "value": "={{ $now.format('yyyy-MM-dd') }}"
-            },
-            {
-              "name": "groups[0]",
-              "value": "ad_id"
-            },
-            {
-              "name": "order_by[0][column]",
-              "value": "money"
-            },
-            {
-              "name": "order_by[0][direction]",
-              "value": "desc"
-            },
-            {
-              "name": "count",
-              "value": "500"
-            }
+            { "name": "filters[date_from]", "value": "={{ $now.minus({ days: 3 }).format('yyyy-MM-dd') }}" },
+            { "name": "filters[date_to]", "value": "={{ $now.format('yyyy-MM-dd') }}" },
+            { "name": "groups[0]", "value": "ad_id" },
+            { "name": "order_by[0][column]", "value": "money" },
+            { "name": "order_by[0][direction]", "value": "desc" },
+            { "name": "count", "value": "500" }
           ]
         },
         "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
+          "response": { "response": { "responseFormat": "json" } }
         }
       },
       "id": "fetch-stats",
       "name": "Fetch Ad Stats",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        220,
-        0
-      ],
+      "position": [700, 150],
       "credentials": {
-        "httpHeaderAuth": {
-          "id": "o0swcMSqweTNOUhw",
-          "name": "Geozo"
-        }
-      }
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -88,69 +118,119 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            {
-              "name": "filters[status_id_in][]",
-              "value": "5"
-            },
-            {
-              "name": "count",
-              "value": "500"
-            }
+            { "name": "filters[status_id_in][]", "value": "5" },
+            { "name": "count", "value": "500" }
           ]
         },
         "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
+          "response": { "response": { "responseFormat": "json" } }
         }
       },
       "id": "fetch-active-ads",
       "name": "Fetch Active Ads",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        220,
-        150
-      ],
+      "position": [700, 300],
       "credentials": {
-        "httpHeaderAuth": {
-          "id": "o0swcMSqweTNOUhw",
-          "name": "Geozo"
-        }
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT param5 AS ad_id, COUNT(*) AS total_leads, SUM(CASE WHEN status = 'Depositor' THEN 1 ELSE 0 END) AS depositors, ROUND(SUM(CASE WHEN status = 'Depositor' THEN cost ELSE 0 END), 2) AS crm_revenue FROM leads WHERE param5 IS NOT NULL AND param5 != '' AND param5 REGEXP '^[0-9]+$' AND created_at >= DATE_SUB(CURDATE(), INTERVAL 3 DAY) GROUP BY param5",
+        "options": {}
+      },
+      "id": "fetch-crm-leads",
+      "name": "Fetch CRM Leads",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [700, 450],
+      "credentials": {
+        "mySql": { "id": "mysql-crm", "name": "MySQL CRM" }
       }
     },
     {
       "parameters": {
-        "jsCode": "const statsItems = $('Fetch Ad Stats').first().json;\nconst adsItems = $('Fetch Active Ads').first().json;\nconst crmItems = $('Fetch CRM Leads').all().map(i => i.json);\nconst posItems = $('Fetch Positions').all().map(i => i.json);\nconst geoPayoutItems = $('Fetch Geo Payouts').all().map(i => i.json);\n\nconst statsData = statsItems?.data?.result?.data || statsItems?.data || (Array.isArray(statsItems) ? statsItems : []);\nconst adsData = adsItems?.data?.result?.data || adsItems?.data || (Array.isArray(adsItems) ? adsItems : []);\n\nif (!Array.isArray(statsData) || !Array.isArray(adsData)) {\n  return [{ json: { error: 'Invalid data' } }];\n}\n\n// Geo payouts map: country_code -> { avg_payout, avg_approval, max_cpl, min_bid, max_bid }\nconst geoMap = {};\nconst DEFAULT_PAYOUT = { avg_payout: 1350, avg_approval: 0.055, max_cpl: 74.25, min_bid: 0.01, max_bid: 0.15 };\ngeoPayoutItems.forEach(row => {\n  if (row.country_code) {\n    geoMap[row.country_code] = {\n      avg_payout: Number(row.avg_payout) || DEFAULT_PAYOUT.avg_payout,\n      avg_approval: Number(row.avg_approval) || DEFAULT_PAYOUT.avg_approval,\n      max_cpl: Number(row.max_cpl) || DEFAULT_PAYOUT.max_cpl,\n      min_bid: Number(row.min_bid) || DEFAULT_PAYOUT.min_bid,\n      max_bid: Number(row.max_bid) || DEFAULT_PAYOUT.max_bid\n    };\n  }\n});\n\n// CRM map: ad_id -> { leads, deps, rev }\nconst crmMap = {};\ncrmItems.forEach(row => {\n  const adId = Number(row.ad_id);\n  if (adId) crmMap[adId] = { leads: row.total_leads || 0, deps: row.depositors || 0, rev: Number(row.crm_revenue) || 0 };\n});\n\n// Position map: ad_id -> { avg, best }\nconst posMap = {};\nposItems.forEach(row => {\n  const adId = Number(row.ad_id);\n  if (adId) posMap[adId] = { avg: Number(row.avg_position) || 99, best: Number(row.best_position) || 99 };\n});\n\n// Ads map: current bids + extract GEO from bids structure\nconst adsMap = {};\nadsData.forEach(ad => {\n  let currentBid = 0;\n  const geos = [];\n  if (ad.bids && Array.isArray(ad.bids)) {\n    const extractBidsAndGeos = (node) => {\n      if (node.bid) {\n        currentBid = currentBid || Number(node.bid);\n      }\n      if (node.type === 'countries' && node.id) {\n        geos.push(node.id);\n        if (node.bid) currentBid = currentBid || Number(node.bid);\n      }\n      if (node.children) {\n        if (Array.isArray(node.children)) {\n          node.children.forEach(c => extractBidsAndGeos(c));\n        } else {\n          Object.values(node.children).forEach(c => extractBidsAndGeos(c));\n        }\n      }\n    };\n    ad.bids.forEach(b => extractBidsAndGeos(b));\n  }\n  adsMap[ad.id] = {\n    current_bid: currentBid,\n    ad_group_id: ad.ad_group_id,\n    status_id: ad.status_id,\n    geos: geos\n  };\n});\n\nconst minSpendForDecision = 50;\nconst minSpendForStop = 150;\nconst minClicksForStop = 500;\nconst actions = [];\n\nstatsData.forEach(d => {\n  const adId = d.ad_id;\n  const spend = d.money || 0;\n  const clicks = d.clicks_count || 0;\n  const shows = d.shows_count || 0;\n  const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n  const adInfo = adsMap[adId] || { current_bid: 0, geos: [] };\n  const currentBid = adInfo.current_bid;\n\n  // Determine GEO payout for this ad\n  const primaryGeo = adInfo.geos.length > 0 ? adInfo.geos[0] : null;\n  const geoPayout = primaryGeo && geoMap[primaryGeo] ? geoMap[primaryGeo] : DEFAULT_PAYOUT;\n  const maxCPL = geoPayout.max_cpl;\n  const maxCeiling = geoPayout.max_bid;\n  const minFloor = geoPayout.min_bid;\n\n  const crm = crmMap[adId] || { leads: 0, deps: 0, rev: 0 };\n  const totalLeads = crm.leads;\n  const depositors = crm.deps;\n  const cpl = totalLeads > 0 ? (spend / totalLeads) : (spend > 0 ? Infinity : 0);\n  const depRate = totalLeads > 0 ? (depositors / totalLeads * 100) : 0;\n\n  const pos = posMap[adId] || { avg: 99, best: 99 };\n  const avgPos = pos.avg;\n  const isTopPos = avgPos <= 2;\n  const isGoodPos = avgPos <= 5;\n\n  let action = 'HOLD';\n  let bidMultiplier = 1.0;\n  let reason = '';\n\n  if (totalLeads > 0) {\n    if (cpl <= maxCPL * 0.5 && totalLeads >= 3 && !isTopPos) {\n      action = 'RAISE_BID';\n      bidMultiplier = 1.15;\n      reason = `${primaryGeo||'?'} Cheap CPL $${cpl.toFixed(0)} (max $${maxCPL.toFixed(0)}), ${totalLeads}L/${depositors}D, pos ${avgPos}, +15%`;\n    }\n    else if (cpl <= maxCPL * 0.5 && totalLeads >= 3 && isTopPos) {\n      action = 'HOLD';\n      reason = `${primaryGeo||'?'} Cheap CPL $${cpl.toFixed(0)} but top pos ${avgPos}`;\n    }\n    else if (cpl <= maxCPL * 0.75 && totalLeads >= 2 && !isGoodPos) {\n      action = 'RAISE_BID';\n      bidMultiplier = 1.10;\n      reason = `${primaryGeo||'?'} Good CPL $${cpl.toFixed(0)} (max $${maxCPL.toFixed(0)}), ${totalLeads}L/${depositors}D, pos ${avgPos}, +10%`;\n    }\n    else if (cpl <= maxCPL) {\n      action = 'HOLD';\n      reason = `${primaryGeo||'?'} OK CPL $${cpl.toFixed(0)}, ${totalLeads}L/${depositors}D, pos ${avgPos}`;\n    }\n    else if (cpl > maxCPL && cpl <= maxCPL * 1.5) {\n      action = 'LOWER_BID';\n      bidMultiplier = 0.90;\n      reason = `${primaryGeo||'?'} High CPL $${cpl.toFixed(0)} (max $${maxCPL.toFixed(0)}), ${totalLeads}L/${depositors}D, -10%`;\n    }\n    else if (cpl > maxCPL * 1.5) {\n      action = 'LOWER_BID';\n      bidMultiplier = 0.80;\n      reason = `${primaryGeo||'?'} Expensive CPL $${cpl.toFixed(0)} (max $${maxCPL.toFixed(0)}), ${totalLeads}L/${depositors}D, -20%`;\n    }\n  }\n  else {\n    if (spend < minSpendForDecision) {\n      action = 'HOLD';\n      reason = `${primaryGeo||'?'} 0L, $${spend.toFixed(2)} spent, waiting`;\n    }\n    else if (spend >= minSpendForDecision && spend < minSpendForStop) {\n      action = 'LOWER_BID';\n      bidMultiplier = 0.85;\n      reason = `${primaryGeo||'?'} 0L in 3d, $${spend.toFixed(2)}, ${clicks}cl, -15%`;\n    }\n    else if (spend >= minSpendForStop && clicks >= minClicksForStop) {\n      action = 'STOP';\n      reason = `${primaryGeo||'?'} 0L in 3d, $${spend.toFixed(2)}, ${clicks}cl`;\n    }\n    else if (clicks < 10 && shows > 5000) {\n      action = 'STOP';\n      reason = `${primaryGeo||'?'} Dead: ${clicks}cl / ${shows}sh in 3d`;\n    }\n  }\n\n  if (action !== 'HOLD') {\n    let newBid = currentBid * bidMultiplier;\n    if (newBid > maxCeiling) newBid = maxCeiling;\n    if (newBid < minFloor) newBid = minFloor;\n\n    actions.push({\n      json: {\n        ad_id: adId,\n        action: action,\n        current_bid: currentBid,\n        new_bid: action === 'STOP' ? currentBid : Math.round(newBid * 10000) / 10000,\n        geo: primaryGeo || 'unknown',\n        cpl: cpl === Infinity ? -1 : Math.round(cpl * 100) / 100,\n        max_cpl: Math.round(maxCPL * 100) / 100,\n        geo_payout: Math.round(geoPayout.avg_payout),\n        geo_approval: geoPayout.avg_approval,\n        leads: totalLeads,\n        depositors: depositors,\n        dep_rate: Math.round(depRate * 100) / 100,\n        avg_position: avgPos,\n        clicks: clicks,\n        shows: shows,\n        spend: Math.round(spend * 100) / 100,\n        ctr: Math.round(ctr * 10000) / 10000,\n        reason: reason\n      }\n    });\n  }\n});\n\nif (actions.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No bid changes needed' } }];\n}\n\nreturn actions;"
+        "operation": "executeQuery",
+        "query": "SELECT ad_id, ROUND(AVG(position), 1) AS avg_position, MIN(position) AS best_position, COUNT(*) AS scans FROM position_tracking WHERE scanned_at >= NOW() - INTERVAL '24 hours' AND ad_id IS NOT NULL GROUP BY ad_id",
+        "options": {}
+      },
+      "id": "fetch-positions",
+      "name": "Fetch Positions",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [700, 600],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT country_code, country_name, geo_id, avg_payout, avg_approval, max_cpl, min_bid, max_bid FROM geo_payouts WHERE is_active = TRUE",
+        "options": {}
+      },
+      "id": "fetch-geo-payouts",
+      "name": "Fetch Geo Payouts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [700, 750],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT ad_id, old_bid, new_bid, rule_applied, changed_at FROM bid_history WHERE changed_at >= NOW() - INTERVAL '24 hours' ORDER BY ad_id, changed_at DESC",
+        "options": {}
+      },
+      "id": "fetch-bid-history",
+      "name": "Fetch Recent Bid History",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [700, 900],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT ad_id, state, state_changed_at, warmup_phase, escalation_level, escalation_failures, bid_changes_today, bid_changes_reset_date, cumulative_bid_change_today, last_bid_change_at FROM teasers WHERE state NOT IN ('dead', 'stopped', 'banned')",
+        "options": {}
+      },
+      "id": "fetch-teaser-states",
+      "name": "Fetch Teaser States",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [700, 1050],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// SMART BIDDER v2.0 - BULLET-PROOF EDITION\n// ============================================\n// Features:\n// 1. Distributed lock check\n// 2. State machine awareness\n// 3. Escalation levels (0-4)\n// 4. Rate limiting (max 3 changes/day, cooldown 2h)\n// 5. Time-of-day patterns (evening=cheap, morning=expensive)\n// 6. Warmup with MAX bid (not min)\n// 7. Rollback snapshots\n// 8. Conservative mode support\n// 9. Per-teaser spend limits (maxCPL * 10-12)\n// 10. API response verification\n\nconst lockData = $('Check Locks & Emergency').first().json;\nconst statsItems = $('Fetch Ad Stats').first().json;\nconst adsItems = $('Fetch Active Ads').first().json;\nconst crmItems = $('Fetch CRM Leads').all().map(i => i.json);\nconst posItems = $('Fetch Positions').all().map(i => i.json);\nconst geoPayoutItems = $('Fetch Geo Payouts').all().map(i => i.json);\nconst bidHistoryItems = $('Fetch Recent Bid History').all().map(i => i.json);\nconst teaserStateItems = $('Fetch Teaser States').all().map(i => i.json);\n\n// --- CONSERVATIVE MODE CHECK ---\nconst isConservative = !!lockData?.conservative_mode;\n\n// --- PARSE DATA ---\nconst statsData = statsItems?.data?.result?.data || statsItems?.data || (Array.isArray(statsItems) ? statsItems : []);\nconst adsData = adsItems?.data?.result?.data || adsItems?.data || (Array.isArray(adsItems) ? adsItems : []);\n\n// Validate data\nif (!Array.isArray(statsData) || !Array.isArray(adsData)) {\n  return [{ json: { error: 'Invalid data from API', action: 'ABORT' } }];\n}\n\n// Empty stats = possible API issue, don't make decisions\nif (statsData.length === 0 && adsData.length > 0) {\n  return [{ json: { error: 'Empty stats but active ads exist - possible API issue', action: 'ABORT' } }];\n}\n\n// --- MAPS ---\n\n// Geo payouts\nconst geoMap = {};\nconst DEFAULT_PAYOUT = { avg_payout: 1350, avg_approval: 0.055, max_cpl: 74.25, min_bid: 0.01, max_bid: 0.15 };\ngeoPayoutItems.forEach(row => {\n  if (row.country_code) {\n    geoMap[row.country_code] = {\n      avg_payout: Number(row.avg_payout) || DEFAULT_PAYOUT.avg_payout,\n      avg_approval: Number(row.avg_approval) || DEFAULT_PAYOUT.avg_approval,\n      max_cpl: Number(row.max_cpl) || DEFAULT_PAYOUT.max_cpl,\n      min_bid: Number(row.min_bid) || DEFAULT_PAYOUT.min_bid,\n      max_bid: Number(row.max_bid) || DEFAULT_PAYOUT.max_bid\n    };\n  }\n});\n\n// CRM\nconst crmMap = {};\ncrmItems.forEach(row => {\n  const adId = Number(row.ad_id);\n  if (adId) crmMap[adId] = { leads: row.total_leads || 0, deps: row.depositors || 0, rev: Number(row.crm_revenue) || 0 };\n});\n\n// Positions\nconst posMap = {};\nposItems.forEach(row => {\n  const adId = Number(row.ad_id);\n  if (adId) posMap[adId] = { avg: Number(row.avg_position) || 99, best: Number(row.best_position) || 99 };\n});\n\n// Bid history: ad_id -> [changes sorted newest first]\nconst bidHistoryMap = {};\nbidHistoryItems.forEach(row => {\n  const adId = Number(row.ad_id);\n  if (!bidHistoryMap[adId]) bidHistoryMap[adId] = [];\n  bidHistoryMap[adId].push(row);\n});\n\n// Teaser states: ad_id -> state info\nconst stateMap = {};\nteaserStateItems.forEach(row => {\n  const adId = Number(row.ad_id);\n  if (adId) stateMap[adId] = row;\n});\n\n// Ads map\nconst adsMap = {};\nadsData.forEach(ad => {\n  let currentBid = 0;\n  const geos = [];\n  if (ad.bids && Array.isArray(ad.bids)) {\n    const extractBidsAndGeos = (node) => {\n      if (node.bid) currentBid = currentBid || Number(node.bid);\n      if (node.type === 'countries' && node.id) {\n        geos.push(node.id);\n        if (node.bid) currentBid = currentBid || Number(node.bid);\n      }\n      if (node.children) {\n        const children = Array.isArray(node.children) ? node.children : Object.values(node.children);\n        children.forEach(c => extractBidsAndGeos(c));\n      }\n    };\n    ad.bids.forEach(b => extractBidsAndGeos(b));\n  }\n  adsMap[ad.id] = { current_bid: currentBid, ad_group_id: ad.ad_group_id, status_id: ad.status_id, geos };\n});\n\n// --- TIME-OF-DAY MULTIPLIER ---\n// After 19:00 auction is 3-4x cheaper -> can be more aggressive with bids\n// After 08:00 auction gets expensive -> be more conservative\nconst now = new Date();\nconst hour = now.getHours();\n\nlet timeMultiplier = 1.0;\nlet timePeriod = 'day';\nif (hour >= 19 || hour < 2) {\n  // Evening/night: auction is cheap, can raise bids more aggressively\n  timeMultiplier = 1.5;  // 50% more aggressive on raises\n  timePeriod = 'evening_cheap';\n} else if (hour >= 2 && hour < 8) {\n  // Deep night: very low traffic\n  timeMultiplier = 0.7;\n  timePeriod = 'night_low';\n} else if (hour >= 8 && hour < 12) {\n  // Morning: auction gets expensive\n  timeMultiplier = 0.8;\n  timePeriod = 'morning_expensive';\n} else {\n  // Afternoon: normal\n  timeMultiplier = 1.0;\n  timePeriod = 'afternoon_normal';\n}\n\n// --- RATE LIMITING CONFIG ---\nconst MAX_BID_CHANGES_PER_DAY = 3;\nconst MIN_COOLDOWN_HOURS = 2;  // Minimum time between changes for same ad\nconst MAX_CUMULATIVE_CHANGE_DOWN = 0.5;  // Max 50% cumulative decrease per day\nconst MAX_CUMULATIVE_CHANGE_UP = 2.0;    // Max 2x cumulative increase per day\n\n// --- SPEND THRESHOLDS (4x from original as per user feedback) ---\nconst minSpendForDecision = 200;   // was $50 -> now $200\nconst minSpendForStop = 600;       // was $150 -> now $600\nconst minClicksForStop = 500;\n\n// --- ESCALATION LEVELS ---\n// Level 0: Observation (spend < threshold)\n// Level 1: Soft correction (-8%, cooldown 2h)\n// Level 2: Moderate correction (-15%, cooldown 4h)\n// Level 3: Aggressive correction (-25%, to min_bid)\n// Level 4: STOP teaser\n\nconst getEscalationAction = (level, cpl, maxCPL, spend, leads, failedAttempts, isConservativeMode) => {\n  // In conservative mode, only allow HOLD and LOWER actions\n  if (spend < minSpendForDecision && leads === 0) {\n    return { level: 0, action: 'HOLD', multiplier: 1.0, cooldown: 0, reason: 'observation' };\n  }\n\n  if (leads > 0 && cpl <= maxCPL) {\n    if (isConservativeMode) {\n      return { level: 0, action: 'HOLD', multiplier: 1.0, cooldown: 0, reason: 'conservative_mode_hold' };\n    }\n    return null; // Will be handled by the profitable logic below\n  }\n\n  // No leads or CPL > maxCPL -> escalation\n  if (leads === 0 && spend >= minSpendForStop && failedAttempts >= 3) {\n    return { level: 4, action: 'STOP', multiplier: 0, cooldown: 0, reason: 'escalation_L4_stop' };\n  }\n  if (leads > 0 && cpl > maxCPL * 2.0 || failedAttempts >= 3) {\n    return { level: 3, action: 'LOWER_BID', multiplier: 0.75, cooldown: 6, reason: 'escalation_L3_aggressive' };\n  }\n  if (leads > 0 && cpl > maxCPL * 1.3 || failedAttempts >= 2) {\n    return { level: 2, action: 'LOWER_BID', multiplier: 0.85, cooldown: 4, reason: 'escalation_L2_moderate' };\n  }\n  if (leads > 0 && cpl > maxCPL) {\n    return { level: 1, action: 'LOWER_BID', multiplier: 0.92, cooldown: 2, reason: 'escalation_L1_soft' };\n  }\n  // No leads, below stop threshold\n  if (leads === 0 && spend >= minSpendForDecision) {\n    return { level: 2, action: 'LOWER_BID', multiplier: 0.85, cooldown: 2, reason: 'no_leads_lower' };\n  }\n  return { level: 0, action: 'HOLD', multiplier: 1.0, cooldown: 0, reason: 'default_hold' };\n};\n\n// --- WARMUP LOGIC ---\n// New teasers start with MAX bid to get into auction fast\n// Phase 0: brand new (0 spend) -> set max_bid for geo\n// Phase 1: $0-100 spent -> hold at max_bid, collect CTR data\n// Phase 2: $100-300 spent -> if CTR good + leads coming, hold. If bad CTR -> lower\n// Phase 3: $300+ -> full optimization mode\nconst getWarmupAction = (spend, clicks, shows, leads, ctr, currentBid, maxBid, minBid) => {\n  if (spend < 10) {\n    // Phase 0: Set to max bid for geo to get into auction\n    if (currentBid < maxBid * 0.9) {\n      return { action: 'RAISE_BID', newBid: maxBid, reason: 'warmup_phase0_max_bid', phase: 0 };\n    }\n    return { action: 'HOLD', newBid: currentBid, reason: 'warmup_phase0_already_max', phase: 0 };\n  }\n  if (spend < 100) {\n    // Phase 1: Collect data at max bid\n    if (clicks < 10 && shows > 3000) {\n      // Dead creative, terrible CTR even at max bid\n      return { action: 'STOP', newBid: currentBid, reason: 'warmup_dead_creative', phase: 1 };\n    }\n    return { action: 'HOLD', newBid: currentBid, reason: 'warmup_phase1_collecting', phase: 1 };\n  }\n  if (spend < 300) {\n    // Phase 2: Evaluate\n    if (leads > 0) {\n      return null; // Good, switch to full optimization\n    }\n    if (ctr < 0.1 && shows > 5000) {\n      return { action: 'STOP', newBid: currentBid, reason: 'warmup_low_ctr', phase: 2 };\n    }\n    return { action: 'HOLD', newBid: currentBid, reason: 'warmup_phase2_evaluating', phase: 2 };\n  }\n  // Phase 3+: full optimization\n  return null;\n};\n\n// --- MAIN LOOP ---\nconst actions = [];\n\nstatsData.forEach(d => {\n  const adId = d.ad_id;\n  const spend = Number(d.money) || 0;\n  const clicks = Number(d.clicks_count) || 0;\n  const shows = Number(d.shows_count) || 0;\n  const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n  const adInfo = adsMap[adId] || { current_bid: 0, geos: [] };\n  const currentBid = adInfo.current_bid;\n\n  if (currentBid === 0) return; // Skip ads without bid data\n\n  // Geo payout\n  const primaryGeo = adInfo.geos.length > 0 ? adInfo.geos[0] : null;\n  const geoPayout = primaryGeo && geoMap[primaryGeo] ? geoMap[primaryGeo] : DEFAULT_PAYOUT;\n  const maxCPL = geoPayout.max_cpl;\n  const maxCeiling = geoPayout.max_bid;\n  const minFloor = geoPayout.min_bid;\n\n  // CRM\n  const crm = crmMap[adId] || { leads: 0, deps: 0, rev: 0 };\n  const totalLeads = crm.leads;\n  const depositors = crm.deps;\n  const cpl = totalLeads > 0 ? (spend / totalLeads) : (spend > 0 ? Infinity : 0);\n  const depRate = totalLeads > 0 ? (depositors / totalLeads * 100) : 0;\n\n  // Position\n  const pos = posMap[adId] || { avg: 99, best: 99 };\n  const avgPos = pos.avg;\n  const isTopPos = avgPos <= 2;\n  const isGoodPos = avgPos <= 5;\n\n  // Teaser state\n  const teaserState = stateMap[adId] || {};\n  const escalationFailures = Number(teaserState.escalation_failures) || 0;\n\n  // --- RATE LIMITING ---\n  const recentChanges = bidHistoryMap[adId] || [];\n  const lastChange = recentChanges[0];\n  const hoursSinceLastChange = lastChange\n    ? (Date.now() - new Date(lastChange.changed_at).getTime()) / (1000 * 60 * 60)\n    : 999;\n\n  // Count today's changes\n  const today = new Date().toISOString().slice(0, 10);\n  const todayChanges = recentChanges.filter(c => c.changed_at && c.changed_at.toString().slice(0, 10) === today);\n  const changesCount = todayChanges.length;\n\n  // Cumulative bid change today\n  let cumulativeChange = 1.0;\n  todayChanges.forEach(c => {\n    if (c.old_bid > 0) cumulativeChange *= (Number(c.new_bid) / Number(c.old_bid));\n  });\n\n  let action = 'HOLD';\n  let newBid = currentBid;\n  let reason = '';\n  let escalationLevel = 0;\n  let warmupPhase = -1;  // -1 = not in warmup\n  let createRollback = false;\n\n  // --- WARMUP CHECK (new teasers) ---\n  const warmupResult = getWarmupAction(spend, clicks, shows, totalLeads, ctr, currentBid, maxCeiling, minFloor);\n  if (warmupResult) {\n    action = warmupResult.action;\n    newBid = warmupResult.newBid;\n    reason = `${primaryGeo||'?'} ${warmupResult.reason}: $${spend.toFixed(0)} spent, ${clicks}cl, ${totalLeads}L`;\n    warmupPhase = warmupResult.phase;\n  } else {\n    // --- FULL OPTIMIZATION MODE ---\n\n    // Check escalation first\n    const escResult = getEscalationAction(\n      teaserState.escalation_level || 0, cpl, maxCPL, spend, totalLeads, escalationFailures, isConservative\n    );\n\n    if (escResult && escResult.action !== 'HOLD' && escResult.action !== null) {\n      // Rate limit check\n      if (hoursSinceLastChange < escResult.cooldown) {\n        action = 'HOLD';\n        reason = `${primaryGeo||'?'} Cooldown: ${hoursSinceLastChange.toFixed(1)}h < ${escResult.cooldown}h min`;\n      } else if (changesCount >= MAX_BID_CHANGES_PER_DAY && escResult.action !== 'STOP') {\n        action = 'HOLD';\n        reason = `${primaryGeo||'?'} Rate limit: ${changesCount}/${MAX_BID_CHANGES_PER_DAY} changes today`;\n      } else if (cumulativeChange < MAX_CUMULATIVE_CHANGE_DOWN && escResult.multiplier < 1.0) {\n        action = 'HOLD';\n        reason = `${primaryGeo||'?'} Cumulative limit: already ${((1-cumulativeChange)*100).toFixed(0)}% down today`;\n      } else {\n        action = escResult.action;\n        escalationLevel = escResult.level;\n        if (action === 'LOWER_BID') {\n          newBid = currentBid * escResult.multiplier;\n          reason = `${primaryGeo||'?'} L${escResult.level} ${escResult.reason}: CPL $${cpl === Infinity ? 'inf' : cpl.toFixed(0)} max:$${maxCPL.toFixed(0)} ${totalLeads}L/${depositors}D -${((1-escResult.multiplier)*100).toFixed(0)}%`;\n          createRollback = true;\n        } else if (action === 'STOP') {\n          reason = `${primaryGeo||'?'} L${escResult.level} ${escResult.reason}: $${spend.toFixed(0)} spent, ${totalLeads}L, ${clicks}cl`;\n        }\n      }\n    } else {\n      // Profitable logic (leads exist and CPL <= maxCPL)\n      if (totalLeads > 0) {\n        if (isConservative) {\n          action = 'HOLD';\n          reason = `${primaryGeo||'?'} Conservative mode: CPL $${cpl.toFixed(0)}, ${totalLeads}L/${depositors}D`;\n        } else if (cpl <= maxCPL * 0.5 && totalLeads >= 3 && !isTopPos) {\n          // Very profitable + not top position -> raise\n          if (changesCount < MAX_BID_CHANGES_PER_DAY && hoursSinceLastChange >= MIN_COOLDOWN_HOURS) {\n            action = 'RAISE_BID';\n            const raiseMultiplier = 1.15 * timeMultiplier; // Time-adjusted\n            newBid = currentBid * Math.min(raiseMultiplier, 1.30); // Cap at +30%\n            reason = `${primaryGeo||'?'} Profitable CPL $${cpl.toFixed(0)} (max $${maxCPL.toFixed(0)}), ${totalLeads}L/${depositors}D, pos ${avgPos}, +${((Math.min(raiseMultiplier,1.30)-1)*100).toFixed(0)}% [${timePeriod}]`;\n            createRollback = true;\n          } else {\n            action = 'HOLD';\n            reason = `${primaryGeo||'?'} Profitable but rate limited (${changesCount} changes, ${hoursSinceLastChange.toFixed(1)}h ago)`;\n          }\n        } else if (cpl <= maxCPL * 0.5 && totalLeads >= 3 && isTopPos) {\n          action = 'HOLD';\n          reason = `${primaryGeo||'?'} Profitable CPL $${cpl.toFixed(0)} at top pos ${avgPos}`;\n        } else if (cpl <= maxCPL * 0.75 && totalLeads >= 2 && !isGoodPos) {\n          if (changesCount < MAX_BID_CHANGES_PER_DAY && hoursSinceLastChange >= MIN_COOLDOWN_HOURS) {\n            action = 'RAISE_BID';\n            const raiseMultiplier = 1.10 * timeMultiplier;\n            newBid = currentBid * Math.min(raiseMultiplier, 1.20);\n            reason = `${primaryGeo||'?'} Good CPL $${cpl.toFixed(0)} (max $${maxCPL.toFixed(0)}), ${totalLeads}L/${depositors}D, pos ${avgPos}, +${((Math.min(raiseMultiplier,1.20)-1)*100).toFixed(0)}% [${timePeriod}]`;\n            createRollback = true;\n          } else {\n            action = 'HOLD';\n            reason = `${primaryGeo||'?'} Good CPL but rate limited`;\n          }\n        } else if (cpl <= maxCPL) {\n          action = 'HOLD';\n          reason = `${primaryGeo||'?'} OK CPL $${cpl.toFixed(0)}, ${totalLeads}L/${depositors}D, pos ${avgPos}`;\n        }\n        // CPL > maxCPL handled by escalation above\n      } else {\n        // 0 leads handled by escalation above\n        if (spend < minSpendForDecision) {\n          action = 'HOLD';\n          reason = `${primaryGeo||'?'} 0L, $${spend.toFixed(2)} spent (need $${minSpendForDecision}), waiting`;\n        }\n        // Dead creative check\n        if (clicks < 10 && shows > 5000) {\n          action = 'STOP';\n          reason = `${primaryGeo||'?'} Dead creative: ${clicks}cl / ${shows}sh in 3d`;\n        }\n      }\n    }\n  }\n\n  // --- APPLY CEILINGS/FLOORS ---\n  if (action !== 'HOLD' && action !== 'STOP') {\n    if (newBid > maxCeiling) newBid = maxCeiling;\n    if (newBid < minFloor) newBid = minFloor;\n    newBid = Math.round(newBid * 10000) / 10000;\n\n    // Don't emit change if bid is effectively the same\n    if (Math.abs(newBid - currentBid) < 0.0001) {\n      action = 'HOLD';\n      reason += ' (bid unchanged after ceiling/floor)';\n    }\n  }\n\n  // --- OUTPUT ---\n  if (action !== 'HOLD') {\n    actions.push({\n      json: {\n        ad_id: adId,\n        action: action,\n        current_bid: currentBid,\n        new_bid: action === 'STOP' ? currentBid : newBid,\n        geo: primaryGeo || 'unknown',\n        cpl: cpl === Infinity ? -1 : Math.round(cpl * 100) / 100,\n        max_cpl: Math.round(maxCPL * 100) / 100,\n        geo_payout: Math.round(geoPayout.avg_payout),\n        geo_approval: geoPayout.avg_approval,\n        leads: totalLeads,\n        depositors: depositors,\n        dep_rate: Math.round(depRate * 100) / 100,\n        avg_position: avgPos,\n        clicks: clicks,\n        shows: shows,\n        spend: Math.round(spend * 100) / 100,\n        ctr: Math.round(ctr * 10000) / 10000,\n        reason: reason,\n        escalation_level: escalationLevel,\n        warmup_phase: warmupPhase,\n        time_period: timePeriod,\n        time_multiplier: timeMultiplier,\n        create_rollback: createRollback,\n        changes_today: changesCount,\n        cumulative_change: Math.round(cumulativeChange * 1000) / 1000\n      }\n    });\n  }\n});\n\nif (actions.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No bid changes needed', time_period: timePeriod } }];\n}\n\nreturn actions;"
       },
       "id": "apply-bid-rules",
-      "name": "Apply Bid Rules",
+      "name": "Apply Bid Rules v2",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        480,
-        0
-      ]
+      "position": [1000, 400]
     },
     {
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
           "conditions": [
             {
               "id": "is-stop",
               "leftValue": "={{ $json.action }}",
               "rightValue": "STOP",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
+              "operator": { "type": "string", "operation": "equals" }
             }
           ],
           "combinator": "and"
@@ -161,10 +241,7 @@
       "name": "Stop or Bid Change?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [
-        700,
-        0
-      ]
+      "position": [1250, 300]
     },
     {
       "parameters": {
@@ -181,16 +258,11 @@
       "name": "Stop Ad",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        940,
-        -100
-      ],
+      "position": [1500, 200],
       "credentials": {
-        "httpHeaderAuth": {
-          "id": "o0swcMSqweTNOUhw",
-          "name": "Geozo"
-        }
-      }
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -202,14 +274,8 @@
         "contentType": "form-urlencoded",
         "bodyParameters": {
           "parameters": [
-            {
-              "name": "ids[]",
-              "value": "={{ $json.ad_id }}"
-            },
-            {
-              "name": "one_bid_for_all_geo",
-              "value": "={{ $json.new_bid }}"
-            }
+            { "name": "ids[]", "value": "={{ $json.ad_id }}" },
+            { "name": "one_bid_for_all_geo", "value": "={{ $json.new_bid }}" }
           ]
         },
         "options": {}
@@ -218,50 +284,71 @@
       "name": "Update Bid",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        940,
-        100
-      ],
+      "position": [1500, 450],
       "credentials": {
-        "httpHeaderAuth": {
-          "id": "o0swcMSqweTNOUhw",
-          "name": "Geozo"
-        }
-      }
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Verify API response and prepare logging data\nconst input = $input.first().json;\nconst originalAction = $('Stop or Bid Change?').first().json;\n\n// Check if API returned error\nconst statusCode = input?.statusCode || input?.code || 200;\nconst isError = statusCode >= 400 || input?.error || input?.message?.includes('error');\n\nreturn [{\n  json: {\n    ...originalAction,\n    api_success: !isError,\n    api_status: statusCode,\n    api_response: isError ? JSON.stringify(input).slice(0, 200) : 'ok'\n  }\n}];"
+      },
+      "id": "verify-response",
+      "name": "Verify API Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1750, 350]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO bid_history (ad_id, old_bid, new_bid, reason, rule_applied, roi_at_change, clicks_at_change)\nVALUES (\n  {{ $json.ad_id }},\n  {{ $json.current_bid }},\n  {{ $json.new_bid || $json.current_bid }},\n  '{{ $json.reason.replace(/'/g, \"''\") }}',\n  '{{ $json.action }}',\n  {{ $json.cpl || 0 }},\n  {{ $json.clicks }}\n);",
+        "query": "-- Log bid change\nINSERT INTO bid_history (ad_id, old_bid, new_bid, reason, rule_applied, roi_at_change, clicks_at_change)\nVALUES (\n  {{ $json.ad_id }},\n  {{ $json.current_bid }},\n  {{ $json.new_bid || $json.current_bid }},\n  '{{ $json.reason.replace(/'/g, \"''\") }}',\n  '{{ $json.action }}_L{{ $json.escalation_level || 0 }}',\n  {{ $json.cpl || 0 }},\n  {{ $json.clicks }}\n);\n\n-- Update teaser state\nUPDATE teasers SET\n  last_bid_change_at = NOW(),\n  bid_changes_today = CASE WHEN bid_changes_reset_date = CURRENT_DATE THEN bid_changes_today + 1 ELSE 1 END,\n  bid_changes_reset_date = CURRENT_DATE,\n  escalation_level = {{ $json.escalation_level || 0 }},\n  warmup_phase = {{ $json.warmup_phase >= 0 ? $json.warmup_phase : 'warmup_phase' }},\n  state = CASE\n    WHEN '{{ $json.action }}' = 'STOP' THEN 'stopped'\n    WHEN {{ $json.warmup_phase || -1 }} >= 0 THEN 'testing'\n    WHEN {{ $json.escalation_level || 0 }} >= 3 THEN 'paused_high_cpl'\n    ELSE state\n  END,\n  state_changed_at = CASE\n    WHEN '{{ $json.action }}' = 'STOP' THEN NOW()\n    WHEN {{ $json.escalation_level || 0 }} >= 3 THEN NOW()\n    ELSE state_changed_at\n  END,\n  state_reason = '{{ $json.reason.replace(/'/g, \"''\").slice(0, 200) }}',\n  updated_at = NOW()\nWHERE ad_id = {{ $json.ad_id }};",
         "options": {}
       },
       "id": "log-change",
-      "name": "Log Bid Change",
+      "name": "Log Bid Change + State",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [
-        1160,
-        0
-      ],
+      "position": [2000, 250],
       "credentials": {
-        "postgres": {
-          "id": "postgres-cred",
-          "name": "PostgreSQL"
-        }
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
       }
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst changes = items.filter(i => i.json.action && i.json.action !== 'NONE');\n\nif (changes.length === 0) return [];\n\nconst stops = changes.filter(i => i.json.action === 'STOP');\nconst raises = changes.filter(i => i.json.action === 'RAISE_BID');\nconst lowers = changes.filter(i => i.json.action === 'LOWER_BID');\n\nlet msg = `SMART BIDDER ${$now.toFormat('dd.MM.yyyy HH:mm')}\\n`;\nmsg += `Total: ${changes.length} | Up: ${raises.length} | Down: ${lowers.length} | Stop: ${stops.length}\\n\\n`;\n\nif (stops.length > 0) {\n  msg += `STOPPED:\\n`;\n  stops.forEach(s => {\n    const cplStr = s.json.cpl > 0 ? `CPL:$${s.json.cpl}` : 'no leads';\n    msg += `${s.json.geo} #${s.json.ad_id}: ${s.json.leads||0}L/${s.json.depositors||0}D ${cplStr} max:$${s.json.max_cpl} $${s.json.spend}spent\\n`;\n  });\n  msg += `\\n`;\n}\n\nif (raises.length > 0) {\n  msg += `BID UP:\\n`;\n  raises.slice(0, 10).forEach(r => {\n    msg += `${r.json.geo} #${r.json.ad_id}: $${r.json.current_bid}->${r.json.new_bid} ${r.json.leads||0}L/${r.json.depositors||0}D CPL:$${r.json.cpl} max:$${r.json.max_cpl}\\n`;\n  });\n  msg += `\\n`;\n}\n\nif (lowers.length > 0) {\n  msg += `BID DOWN:\\n`;\n  lowers.slice(0, 10).forEach(l => {\n    const cplStr = l.json.cpl > 0 ? `CPL:$${l.json.cpl}` : 'no leads';\n    msg += `${l.json.geo} #${l.json.ad_id}: $${l.json.current_bid}->${l.json.new_bid} ${l.json.leads||0}L/${l.json.depositors||0}D ${cplStr} max:$${l.json.max_cpl}\\n`;\n  });\n}\n\nreturn [{ json: { message: msg } }];"
+        "jsCode": "// Create rollback snapshot if needed\nconst item = $input.first().json;\nif (!item.create_rollback) return [];\n\nreturn [{ json: {\n  ad_id: item.ad_id,\n  snapshot_bid: item.current_bid,\n  snapshot_cpl: item.cpl === -1 ? null : item.cpl,\n  snapshot_ctr: item.ctr\n} }];"
+      },
+      "id": "check-rollback",
+      "name": "Need Rollback Snapshot?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 450]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bid_rollback_snapshots (ad_id, snapshot_bid, snapshot_cpl, snapshot_ctr)\nVALUES (\n  {{ $json.ad_id }},\n  {{ $json.snapshot_bid }},\n  {{ $json.snapshot_cpl || 'NULL' }},\n  {{ $json.snapshot_ctr || 'NULL' }}\n);",
+        "options": {}
+      },
+      "id": "save-rollback",
+      "name": "Save Rollback Snapshot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2250, 450],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst changes = items.filter(i => i.json.action && i.json.action !== 'NONE' && i.json.action !== 'ABORT');\n\nif (changes.length === 0) return [];\n\nconst stops = changes.filter(i => i.json.action === 'STOP');\nconst raises = changes.filter(i => i.json.action === 'RAISE_BID');\nconst lowers = changes.filter(i => i.json.action === 'LOWER_BID');\nconst warmups = changes.filter(i => i.json.warmup_phase >= 0);\n\nconst timePeriod = changes[0]?.json?.time_period || 'unknown';\n\nlet msg = `SMART BIDDER v2 ${$now.toFormat('dd.MM.yyyy HH:mm')} [${timePeriod}]\\n`;\nmsg += `Total: ${changes.length} | Up: ${raises.length} | Down: ${lowers.length} | Stop: ${stops.length} | Warmup: ${warmups.length}\\n\\n`;\n\nif (stops.length > 0) {\n  msg += `STOPPED:\\n`;\n  stops.forEach(s => {\n    const cplStr = s.json.cpl > 0 ? `CPL:$${s.json.cpl}` : 'no leads';\n    msg += `  ${s.json.geo} #${s.json.ad_id}: L${s.json.escalation_level} ${s.json.leads||0}L/${s.json.depositors||0}D ${cplStr} $${s.json.spend}spent\\n`;\n  });\n  msg += `\\n`;\n}\n\nif (raises.length > 0) {\n  msg += `BID UP:\\n`;\n  raises.slice(0, 10).forEach(r => {\n    msg += `  ${r.json.geo} #${r.json.ad_id}: $${r.json.current_bid}->${r.json.new_bid} ${r.json.leads||0}L/${r.json.depositors||0}D CPL:$${r.json.cpl} [${r.json.changes_today}/${MAX_BID_CHANGES_PER_DAY || 3}]\\n`;\n  });\n  msg += `\\n`;\n}\n\nif (lowers.length > 0) {\n  msg += `BID DOWN:\\n`;\n  lowers.slice(0, 10).forEach(l => {\n    const cplStr = l.json.cpl > 0 ? `CPL:$${l.json.cpl}` : 'no leads';\n    msg += `  ${l.json.geo} #${l.json.ad_id}: L${l.json.escalation_level} $${l.json.current_bid}->${l.json.new_bid} ${l.json.leads||0}L/${l.json.depositors||0}D ${cplStr} [${l.json.changes_today}/${MAX_BID_CHANGES_PER_DAY || 3}]\\n`;\n  });\n  msg += `\\n`;\n}\n\nif (warmups.length > 0) {\n  msg += `WARMUP:\\n`;\n  warmups.slice(0, 5).forEach(w => {\n    msg += `  ${w.json.geo} #${w.json.ad_id}: phase ${w.json.warmup_phase} $${w.json.current_bid}->${w.json.new_bid} ${w.json.reason}\\n`;\n  });\n}\n\nreturn [{ json: { message: msg } }];"
       },
       "id": "format-summary",
       "name": "Format Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1160,
-        200
-      ]
+      "position": [1250, 650]
     },
     {
       "parameters": {
@@ -273,281 +360,114 @@
       "name": "Send Summary to Telegram",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [
-        1380,
-        200
-      ],
+      "position": [1500, 650],
       "credentials": {
-        "telegramApi": {
-          "id": "telegram-cred",
-          "name": "Telegram Bot"
-        }
+        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
       }
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT param5 AS ad_id, COUNT(*) AS total_leads, SUM(CASE WHEN status = 'Depositor' THEN 1 ELSE 0 END) AS depositors, ROUND(SUM(CASE WHEN status = 'Depositor' THEN cost ELSE 0 END), 2) AS crm_revenue FROM leads WHERE param5 IS NOT NULL AND param5 != '' AND param5 REGEXP '^[0-9]+$' AND created_at >= DATE_SUB(CURDATE(), INTERVAL 3 DAY) GROUP BY param5",
+        "query": "-- Release the bid change lock\nDELETE FROM workflow_locks WHERE lock_name = 'bid_change' AND locked_by = 'smart_bidder';",
         "options": {}
       },
-      "id": "fetch-crm-leads",
-      "name": "Fetch CRM Leads",
-      "type": "n8n-nodes-base.mySql",
-      "typeVersion": 2.4,
-      "position": [
-        220,
-        300
-      ],
-      "credentials": {
-        "mySql": {
-          "id": "mysql-crm",
-          "name": "MySQL CRM"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT ad_id, ROUND(AVG(position), 1) AS avg_position, MIN(position) AS best_position, COUNT(*) AS scans FROM position_tracking WHERE scanned_at >= NOW() - INTERVAL '24 hours' AND ad_id IS NOT NULL GROUP BY ad_id",
-        "options": {}
-      },
-      "id": "fetch-positions",
-      "name": "Fetch Positions",
+      "id": "release-lock",
+      "name": "Release Lock",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [
-        220,
-        450
-      ],
+      "position": [2250, 250],
       "credentials": {
-        "postgres": {
-          "id": "postgres-cred",
-          "name": "PostgreSQL"
-        }
-      }
-    },
-    {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [
-        0,
-        150
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT country_code, country_name, geo_id, avg_payout, avg_approval, max_cpl, min_bid, max_bid FROM geo_payouts WHERE is_active = TRUE",
-        "options": {}
-      },
-      "id": "fetch-geo-payouts",
-      "name": "Fetch Geo Payouts",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.5,
-      "position": [
-        220,
-        600
-      ],
-      "credentials": {
-        "postgres": {
-          "id": "postgres-cred",
-          "name": "PostgreSQL"
-        }
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
       }
     }
   ],
   "connections": {
     "Every 30 Minutes": {
+      "main": [[
+        { "node": "Check Locks & Emergency", "type": "main", "index": 0 }
+      ]]
+    },
+    "Called by Orchestrator": {
+      "main": [[
+        { "node": "Check Locks & Emergency", "type": "main", "index": 0 }
+      ]]
+    },
+    "Check Locks & Emergency": {
+      "main": [[
+        { "node": "Emergency Active?", "type": "main", "index": 0 }
+      ]]
+    },
+    "Emergency Active?": {
       "main": [
+        [],
         [
-          {
-            "node": "Fetch Ad Stats",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Active Ads",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch CRM Leads",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Positions",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Geo Payouts",
-            "type": "main",
-            "index": 0
-          }
+          { "node": "Acquire Bid Lock", "type": "main", "index": 0 },
+          { "node": "Fetch Ad Stats", "type": "main", "index": 0 },
+          { "node": "Fetch Active Ads", "type": "main", "index": 0 },
+          { "node": "Fetch CRM Leads", "type": "main", "index": 0 },
+          { "node": "Fetch Positions", "type": "main", "index": 0 },
+          { "node": "Fetch Geo Payouts", "type": "main", "index": 0 },
+          { "node": "Fetch Recent Bid History", "type": "main", "index": 0 },
+          { "node": "Fetch Teaser States", "type": "main", "index": 0 }
         ]
       ]
     },
-    "Fetch Geo Payouts": {
-      "main": [
-        [
-          {
-            "node": "Apply Bid Rules",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Acquire Bid Lock": {
+      "main": [[ { "node": "Apply Bid Rules v2", "type": "main", "index": 0 } ]]
     },
     "Fetch Ad Stats": {
-      "main": [
-        [
-          {
-            "node": "Apply Bid Rules",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Apply Bid Rules v2", "type": "main", "index": 0 } ]]
     },
     "Fetch Active Ads": {
-      "main": [
-        [
-          {
-            "node": "Apply Bid Rules",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Apply Bid Rules v2", "type": "main", "index": 0 } ]]
     },
     "Fetch CRM Leads": {
-      "main": [
-        [
-          {
-            "node": "Apply Bid Rules",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Apply Bid Rules v2", "type": "main", "index": 0 } ]]
     },
     "Fetch Positions": {
-      "main": [
-        [
-          {
-            "node": "Apply Bid Rules",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Apply Bid Rules v2", "type": "main", "index": 0 } ]]
     },
-    "Apply Bid Rules": {
-      "main": [
-        [
-          {
-            "node": "Stop or Bid Change?",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Format Summary",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Fetch Geo Payouts": {
+      "main": [[ { "node": "Apply Bid Rules v2", "type": "main", "index": 0 } ]]
+    },
+    "Fetch Recent Bid History": {
+      "main": [[ { "node": "Apply Bid Rules v2", "type": "main", "index": 0 } ]]
+    },
+    "Fetch Teaser States": {
+      "main": [[ { "node": "Apply Bid Rules v2", "type": "main", "index": 0 } ]]
+    },
+    "Apply Bid Rules v2": {
+      "main": [[
+        { "node": "Stop or Bid Change?", "type": "main", "index": 0 },
+        { "node": "Format Summary", "type": "main", "index": 0 }
+      ]]
     },
     "Stop or Bid Change?": {
       "main": [
-        [
-          {
-            "node": "Stop Ad",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Update Bid",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Stop Ad", "type": "main", "index": 0 }],
+        [{ "node": "Update Bid", "type": "main", "index": 0 }]
       ]
     },
     "Stop Ad": {
-      "main": [
-        [
-          {
-            "node": "Log Bid Change",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Verify API Response", "type": "main", "index": 0 } ]]
     },
     "Update Bid": {
-      "main": [
-        [
-          {
-            "node": "Log Bid Change",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Verify API Response", "type": "main", "index": 0 } ]]
     },
-    "Log Bid Change": {
-      "main": [
-        []
-      ]
+    "Verify API Response": {
+      "main": [[
+        { "node": "Log Bid Change + State", "type": "main", "index": 0 },
+        { "node": "Need Rollback Snapshot?", "type": "main", "index": 0 }
+      ]]
+    },
+    "Log Bid Change + State": {
+      "main": [[ { "node": "Release Lock", "type": "main", "index": 0 } ]]
+    },
+    "Need Rollback Snapshot?": {
+      "main": [[ { "node": "Save Rollback Snapshot", "type": "main", "index": 0 } ]]
     },
     "Format Summary": {
-      "main": [
-        [
-          {
-            "node": "Send Summary to Telegram",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Called by Orchestrator": {
-      "main": [
-        [
-          {
-            "node": "Fetch Ad Stats",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Active Ads",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch CRM Leads",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Positions",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Geo Payouts",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Send Summary to Telegram", "type": "main", "index": 0 } ]]
     }
   },
   "settings": {
@@ -557,15 +477,9 @@
   },
   "staticData": null,
   "tags": [
-    {
-      "name": "optimizer",
-      "id": "tag-optimizer"
-    },
-    {
-      "name": "mvp",
-      "id": "tag-mvp"
-    }
+    { "name": "optimizer", "id": "tag-optimizer" },
+    { "name": "mvp", "id": "tag-mvp" }
   ],
   "pinData": {},
-  "versionId": "1"
+  "versionId": "2"
 }

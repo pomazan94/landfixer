@@ -1,0 +1,369 @@
+{
+  "name": "22 - Emergency Controller",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [0, 150]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.geozo.com/v1/advertiser/stats/tmp_with_postbacks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "filters[date_from]", "value": "={{ $now.format('yyyy-MM-dd') }}" },
+            { "name": "filters[date_to]", "value": "={{ $now.format('yyyy-MM-dd') }}" },
+            { "name": "count", "value": "1" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "id": "fetch-today-total",
+      "name": "Fetch Today Total Spend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, 0],
+      "credentials": {
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT balance, spend_rate_per_hour, hours_remaining FROM balance_history ORDER BY collected_at DESC LIMIT 1",
+        "options": {}
+      },
+      "id": "fetch-balance",
+      "name": "Fetch Latest Balance",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 150],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT is_active, trigger_reason, activated_at FROM emergency_state WHERE is_active = TRUE ORDER BY activated_at DESC LIMIT 1",
+        "options": {}
+      },
+      "id": "fetch-emergency-state",
+      "name": "Fetch Emergency State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 300],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) as bid_changes_last_hour FROM bid_history WHERE changed_at >= NOW() - INTERVAL '1 hour'",
+        "options": {}
+      },
+      "id": "fetch-bid-activity",
+      "name": "Fetch Bid Activity",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 450],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*) as active_anomalies FROM anomalies WHERE resolved = FALSE AND detected_at >= NOW() - INTERVAL '2 hours' AND severity = 'critical'",
+        "options": {}
+      },
+      "id": "fetch-anomalies",
+      "name": "Fetch Active Anomalies",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 600],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// EMERGENCY CONTROLLER - Circuit Breaker Logic\n// ============================================\n// Checks multiple safety conditions every 15 min.\n// If ANY critical condition triggers -> EMERGENCY STOP ALL ADS.\n// If warning condition triggers -> conservative mode (lower bids).\n\nconst spendData = $('Fetch Today Total Spend').first().json;\nconst balanceData = $('Fetch Latest Balance').first().json;\nconst emergencyData = $('Fetch Emergency State').first().json;\nconst bidActivity = $('Fetch Bid Activity').first().json;\nconst anomalyData = $('Fetch Active Anomalies').first().json;\n\n// --- CONFIG ---\nconst DAILY_BUDGET = 200;           // $200/day (4x from previous $50)\nconst MIN_BALANCE_CRITICAL = 5;     // $5 = EMERGENCY\nconst MIN_BALANCE_WARNING = 20;     // $20 = warning\nconst MAX_BID_CHANGES_PER_HOUR = 30;\nconst CRITICAL_ANOMALY_THRESHOLD = 3;\n\n// --- Parse data ---\nconst stats = spendData?.data?.result?.data || spendData?.data || [];\nlet totalSpendToday = 0;\nif (Array.isArray(stats)) {\n  stats.forEach(s => { totalSpendToday += Number(s.money) || 0; });\n} else if (stats?.money) {\n  totalSpendToday = Number(stats.money) || 0;\n}\n\nconst balance = Number(balanceData?.balance) || 999;\nconst spendRate = Number(balanceData?.spend_rate_per_hour) || 0;\nconst hoursRemaining = Number(balanceData?.hours_remaining) || 999;\nconst isAlreadyEmergency = emergencyData?.is_active === true;\nconst bidChangesLastHour = Number(bidActivity?.bid_changes_last_hour) || 0;\nconst activeAnomalies = Number(anomalyData?.active_anomalies) || 0;\n\nconst now = new Date();\nconst hour = now.getHours();\nconst hoursElapsed = hour + now.getMinutes() / 60;\nconst budgetUsedPct = (totalSpendToday / DAILY_BUDGET) * 100;\n\nconst alerts = [];\nlet emergencyAction = 'NONE';    // NONE, EMERGENCY_STOP, CONSERVATIVE_MODE, LOWER_ALL\nlet emergencyReason = '';\n\n// --- LEVEL 6: EMERGENCY STOP ---\n\n// Balance critically low\nif (balance < MIN_BALANCE_CRITICAL) {\n  emergencyAction = 'EMERGENCY_STOP';\n  emergencyReason = `CRITICAL: Balance $${balance.toFixed(2)} < $${MIN_BALANCE_CRITICAL}`;\n  alerts.push({ severity: 'critical', msg: emergencyReason });\n}\n\n// Spend rate is 3x daily budget pace\nif (spendRate > 0 && hoursElapsed > 1) {\n  const expectedRatePerHour = DAILY_BUDGET / 24;\n  if (spendRate > expectedRatePerHour * 3) {\n    emergencyAction = 'EMERGENCY_STOP';\n    emergencyReason = `CRITICAL: Spend rate $${spendRate.toFixed(2)}/h is 3x target $${expectedRatePerHour.toFixed(2)}/h`;\n    alerts.push({ severity: 'critical', msg: emergencyReason });\n  }\n}\n\n// Already spent 95% of daily budget with >4h remaining\nif (budgetUsedPct >= 95 && (24 - hoursElapsed) > 4) {\n  emergencyAction = 'EMERGENCY_STOP';\n  emergencyReason = `CRITICAL: ${budgetUsedPct.toFixed(0)}% budget used ($${totalSpendToday.toFixed(2)}/$${DAILY_BUDGET}) with ${(24-hoursElapsed).toFixed(1)}h remaining`;\n  alerts.push({ severity: 'critical', msg: emergencyReason });\n}\n\n// Too many critical anomalies\nif (activeAnomalies >= CRITICAL_ANOMALY_THRESHOLD) {\n  emergencyAction = 'EMERGENCY_STOP';\n  emergencyReason = `CRITICAL: ${activeAnomalies} unresolved critical anomalies`;\n  alerts.push({ severity: 'critical', msg: emergencyReason });\n}\n\n// --- LEVEL 4-5: CONSERVATIVE MODE ---\nif (emergencyAction === 'NONE') {\n  // 80% budget used -> conservative (only lower bids allowed)\n  if (budgetUsedPct >= 80 && (24 - hoursElapsed) > 4) {\n    emergencyAction = 'CONSERVATIVE_MODE';\n    emergencyReason = `WARNING: ${budgetUsedPct.toFixed(0)}% budget used, switching to conservative mode`;\n    alerts.push({ severity: 'warning', msg: emergencyReason });\n  }\n  // Balance warning\n  if (balance < MIN_BALANCE_WARNING) {\n    emergencyAction = 'CONSERVATIVE_MODE';\n    emergencyReason = `WARNING: Balance $${balance.toFixed(2)} < $${MIN_BALANCE_WARNING}`;\n    alerts.push({ severity: 'warning', msg: emergencyReason });\n  }\n  // Less than 4 hours of balance remaining\n  if (hoursRemaining < 4 && hoursRemaining > 0) {\n    emergencyAction = 'LOWER_ALL';\n    emergencyReason = `WARNING: Only ${hoursRemaining.toFixed(1)}h of balance remaining at current rate`;\n    alerts.push({ severity: 'warning', msg: emergencyReason });\n  }\n  // Suspicious bid activity (possible bug)\n  if (bidChangesLastHour > MAX_BID_CHANGES_PER_HOUR) {\n    emergencyAction = 'CONSERVATIVE_MODE';\n    emergencyReason = `WARNING: ${bidChangesLastHour} bid changes in last hour (max: ${MAX_BID_CHANGES_PER_HOUR})`;\n    alerts.push({ severity: 'warning', msg: emergencyReason });\n  }\n}\n\n// --- OUTPUT ---\nreturn [{\n  json: {\n    action: emergencyAction,\n    reason: emergencyReason,\n    is_already_emergency: isAlreadyEmergency,\n    balance: Math.round(balance * 100) / 100,\n    total_spend_today: Math.round(totalSpendToday * 100) / 100,\n    daily_budget: DAILY_BUDGET,\n    budget_used_pct: Math.round(budgetUsedPct * 10) / 10,\n    spend_rate_per_hour: Math.round(spendRate * 100) / 100,\n    hours_remaining: Math.round(hoursRemaining * 10) / 10,\n    bid_changes_last_hour: bidChangesLastHour,\n    active_anomalies: activeAnomalies,\n    alerts: alerts,\n    checked_at: $now.toISO()\n  }\n}];"
+      },
+      "id": "circuit-breaker-logic",
+      "name": "Circuit Breaker Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [550, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "is-emergency",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "EMERGENCY_STOP",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "is-emergency",
+      "name": "Emergency Stop?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "needs-action",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "NONE",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "needs-action",
+      "name": "Needs Action?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 350]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "filters[status_id_in][]", "value": "5" },
+            { "name": "count", "value": "500" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "id": "fetch-active-for-stop",
+      "name": "Fetch Active Ads for STOP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 0],
+      "credentials": {
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all active ad IDs for emergency stop\nconst adsData = $('Fetch Active Ads for STOP').first().json;\nconst ads = adsData?.data?.result?.data || adsData?.data || (Array.isArray(adsData) ? adsData : []);\n\nif (!Array.isArray(ads) || ads.length === 0) {\n  return [{ json: { ad_ids: [], count: 0 } }];\n}\n\nconst adIds = ads.map(a => a.id).filter(Boolean);\n\n// Batch into groups of 50 for API\nconst BATCH_SIZE = 50;\nconst batches = [];\nfor (let i = 0; i < adIds.length; i += BATCH_SIZE) {\n  batches.push(adIds.slice(i, i + BATCH_SIZE));\n}\n\nreturn batches.map(batch => ({\n  json: {\n    ad_ids: batch,\n    ids_string: JSON.stringify(batch),\n    count: batch.length,\n    total: adIds.length\n  }\n}));"
+      },
+      "id": "prepare-stop-batches",
+      "name": "Prepare Stop Batches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 0]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all/stop",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ids\": {{ $json.ids_string }}\n}",
+        "options": {}
+      },
+      "id": "emergency-stop-all",
+      "name": "EMERGENCY: Stop All Ads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1550, 0],
+      "credentials": {
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO emergency_state (is_active, trigger_reason, triggered_by, activated_at)\nVALUES (TRUE, '{{ $('Circuit Breaker Logic').first().json.reason.replace(/'/g, \"''\") }}', 'emergency_controller', NOW())\nON CONFLICT DO NOTHING;",
+        "options": {}
+      },
+      "id": "log-emergency",
+      "name": "Log Emergency State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1550, 150],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "591828204",
+        "text": "=🚨🚨🚨 EMERGENCY STOP 🚨🚨🚨\n\n{{ $('Circuit Breaker Logic').first().json.reason }}\n\nBalance: ${{ $('Circuit Breaker Logic').first().json.balance }}\nSpend today: ${{ $('Circuit Breaker Logic').first().json.total_spend_today }} / ${{ $('Circuit Breaker Logic').first().json.daily_budget }}\nSpend rate: ${{ $('Circuit Breaker Logic').first().json.spend_rate_per_hour }}/h\nAds stopped: {{ $json.total || $json.count || 'all' }}\n\n⚠️ ALL ADS PAUSED. Manual intervention required to resume.",
+        "additionalFields": {}
+      },
+      "id": "notify-emergency",
+      "name": "CRITICAL Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1800, 0],
+      "credentials": {
+        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "591828204",
+        "text": "=⚠️ EMERGENCY CONTROLLER WARNING\n\n{{ $json.reason }}\n\nBalance: ${{ $json.balance }}\nSpend: ${{ $json.total_spend_today }} / ${{ $json.daily_budget }} ({{ $json.budget_used_pct }}%)\nRate: ${{ $json.spend_rate_per_hour }}/h\nHours left: {{ $json.hours_remaining }}h\nBid changes/h: {{ $json.bid_changes_last_hour }}\nAnomalies: {{ $json.active_anomalies }}\n\nMode: {{ $json.action }}",
+        "additionalFields": {}
+      },
+      "id": "notify-warning",
+      "name": "Warning Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1050, 400],
+      "credentials": {
+        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO workflow_locks (lock_name, locked_by, expires_at)\nVALUES ('conservative_mode', 'emergency_controller', NOW() + INTERVAL '30 minutes')\nON CONFLICT (lock_name) DO UPDATE SET locked_by = 'emergency_controller', locked_at = NOW(), expires_at = NOW() + INTERVAL '30 minutes';",
+        "options": {}
+      },
+      "id": "set-conservative-lock",
+      "name": "Set Conservative Lock",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1050, 550],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [[
+        { "node": "Fetch Today Total Spend", "type": "main", "index": 0 },
+        { "node": "Fetch Latest Balance", "type": "main", "index": 0 },
+        { "node": "Fetch Emergency State", "type": "main", "index": 0 },
+        { "node": "Fetch Bid Activity", "type": "main", "index": 0 },
+        { "node": "Fetch Active Anomalies", "type": "main", "index": 0 }
+      ]]
+    },
+    "Called by Orchestrator": {
+      "main": [[
+        { "node": "Fetch Today Total Spend", "type": "main", "index": 0 },
+        { "node": "Fetch Latest Balance", "type": "main", "index": 0 },
+        { "node": "Fetch Emergency State", "type": "main", "index": 0 },
+        { "node": "Fetch Bid Activity", "type": "main", "index": 0 },
+        { "node": "Fetch Active Anomalies", "type": "main", "index": 0 }
+      ]]
+    },
+    "Fetch Today Total Spend": {
+      "main": [[ { "node": "Circuit Breaker Logic", "type": "main", "index": 0 } ]]
+    },
+    "Fetch Latest Balance": {
+      "main": [[ { "node": "Circuit Breaker Logic", "type": "main", "index": 0 } ]]
+    },
+    "Fetch Emergency State": {
+      "main": [[ { "node": "Circuit Breaker Logic", "type": "main", "index": 0 } ]]
+    },
+    "Fetch Bid Activity": {
+      "main": [[ { "node": "Circuit Breaker Logic", "type": "main", "index": 0 } ]]
+    },
+    "Fetch Active Anomalies": {
+      "main": [[ { "node": "Circuit Breaker Logic", "type": "main", "index": 0 } ]]
+    },
+    "Circuit Breaker Logic": {
+      "main": [[
+        { "node": "Emergency Stop?", "type": "main", "index": 0 },
+        { "node": "Needs Action?", "type": "main", "index": 0 }
+      ]]
+    },
+    "Emergency Stop?": {
+      "main": [
+        [
+          { "node": "Fetch Active Ads for STOP", "type": "main", "index": 0 },
+          { "node": "Log Emergency State", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    },
+    "Fetch Active Ads for STOP": {
+      "main": [[ { "node": "Prepare Stop Batches", "type": "main", "index": 0 } ]]
+    },
+    "Prepare Stop Batches": {
+      "main": [[ { "node": "EMERGENCY: Stop All Ads", "type": "main", "index": 0 } ]]
+    },
+    "EMERGENCY: Stop All Ads": {
+      "main": [[ { "node": "CRITICAL Alert", "type": "main", "index": 0 } ]]
+    },
+    "Needs Action?": {
+      "main": [
+        [
+          { "node": "Warning Alert", "type": "main", "index": 0 },
+          { "node": "Set Conservative Lock", "type": "main", "index": 0 }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "safety", "id": "tag-safety" },
+    { "name": "system", "id": "tag-system" }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}
