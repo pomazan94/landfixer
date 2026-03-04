@@ -43,10 +43,6 @@
               "value": "ad_id"
             },
             {
-              "name": "groups[1]",
-              "value": "hour"
-            },
-            {
               "name": "order_by[0][column]",
               "value": "money"
             },
@@ -55,7 +51,7 @@
               "value": "desc"
             },
             {
-              "name": "per_page",
+              "name": "count",
               "value": "500"
             }
           ]
@@ -78,14 +74,14 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst statsData = items[0].json.data || items[0].json;\n\nif (!Array.isArray(statsData)) {\n  return [{ json: { error: 'No stats data received', raw: items[0].json } }];\n}\n\nconst results = statsData.map(d => {\n  const spend = parseFloat(d.money) || 0;\n  const revenue = parseFloat(d.postbacks_confirmed_money) || 0;\n  const clicks = parseInt(d.clicks_count) || 0;\n  const shows = parseInt(d.shows_count) || 0;\n  const confirmedShows = parseInt(d.confirmed_shows_count) || 0;\n  const postbacks = parseInt(d.postbacks_count) || 0;\n\n  const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n  const profit = revenue - spend;\n  const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n  const cpc = clicks > 0 ? (spend / clicks) : 0;\n\n  let status = 'HOLD';\n  let alertLevel = null;\n\n  if (roi > 100) {\n    status = 'PROFIT_HIGH';\n    alertLevel = 'green';\n  } else if (roi > 50) {\n    status = 'PROFIT';\n    alertLevel = 'green';\n  } else if (roi > 0) {\n    status = 'MARGINAL';\n  } else if (roi > -30) {\n    status = 'LOSING';\n    alertLevel = 'yellow';\n  } else if (roi > -50) {\n    status = 'BURNING';\n    alertLevel = 'orange';\n  } else if (spend > 3) {\n    status = 'CRITICAL';\n    alertLevel = 'red';\n  }\n\n  return {\n    json: {\n      ad_id: d.ad_id,\n      date: d.date || $now.format('yyyy-MM-dd'),\n      hour: d.hour || null,\n      shows: shows,\n      confirmed_shows: confirmedShows,\n      clicks: clicks,\n      money: Math.round(spend * 10000) / 10000,\n      postbacks_count: postbacks,\n      postbacks_confirmed_money: Math.round(revenue * 10000) / 10000,\n      ctr: Math.round(ctr * 10000) / 10000,\n      cpc: Math.round(cpc * 10000) / 10000,\n      roi: Math.round(roi * 100) / 100,\n      profit: Math.round(profit * 10000) / 10000,\n      status: status,\n      alertLevel: alertLevel\n    }\n  };\n});\n\nreturn results;"
+        "jsCode": "const raw = $input.first().json;\nconst statsData = raw?.data?.result?.data || raw?.data || (Array.isArray(raw) ? raw : []);\n\nif (!Array.isArray(statsData)) {\n  return [{ json: { error: 'No stats data received', raw: raw } }];\n}\n\nconst results = statsData.map(d => {\n  const spend = parseFloat(d.money) || 0;\n  const revenue = parseFloat(d.postbacks_confirmed_money) || 0;\n  const clicks = parseInt(d.clicks_count) || 0;\n  const shows = parseInt(d.shows_count) || 0;\n  const confirmedShows = parseInt(d.confirmed_shows_count) || 0;\n  const postbacks = parseInt(d.postbacks_count) || 0;\n\n  const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n  const profit = revenue - spend;\n  const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n  const cpc = clicks > 0 ? (spend / clicks) : 0;\n\n  let status = 'HOLD';\n  let alertLevel = null;\n\n  if (roi > 100) {\n    status = 'PROFIT_HIGH';\n    alertLevel = 'green';\n  } else if (roi > 50) {\n    status = 'PROFIT';\n    alertLevel = 'green';\n  } else if (roi > 0) {\n    status = 'MARGINAL';\n  } else if (roi > -30) {\n    status = 'LOSING';\n    alertLevel = 'yellow';\n  } else if (roi > -50) {\n    status = 'BURNING';\n    alertLevel = 'orange';\n  } else if (spend > 3) {\n    status = 'CRITICAL';\n    alertLevel = 'red';\n  }\n\n  return {\n    json: {\n      ad_id: d.ad_id,\n      date: d.date || $now.format('yyyy-MM-dd'),\n      shows: shows,\n      confirmed_shows: confirmedShows,\n      clicks: clicks,\n      money: Math.round(spend * 10000) / 10000,\n      postbacks_count: postbacks,\n      postbacks_confirmed_money: Math.round(revenue * 10000) / 10000,\n      ctr: Math.round(ctr * 10000) / 10000,\n      cpc: Math.round(cpc * 10000) / 10000,\n      roi: Math.round(roi * 100) / 100,\n      profit: Math.round(profit * 10000) / 10000,\n      status: status,\n      alertLevel: alertLevel\n    }\n  };\n});\n\nreturn results;"
       },
       "id": "calculate-metrics",
       "name": "Calculate ROI & Metrics",
@@ -99,7 +95,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO ad_stats (ad_id, date, hour, shows, confirmed_shows, clicks, money, postbacks_count, postbacks_confirmed_money, ctr, cpc, roi, profit)\nVALUES (\n  {{ $json.ad_id }},\n  '{{ $json.date }}',\n  {{ $json.hour || 'NULL' }},\n  {{ $json.shows }},\n  {{ $json.confirmed_shows }},\n  {{ $json.clicks }},\n  {{ $json.money }},\n  {{ $json.postbacks_count }},\n  {{ $json.postbacks_confirmed_money }},\n  {{ $json.ctr }},\n  {{ $json.cpc }},\n  {{ $json.roi }},\n  {{ $json.profit }}\n)\nON CONFLICT (ad_id, date, hour)\nDO UPDATE SET\n  shows = EXCLUDED.shows,\n  confirmed_shows = EXCLUDED.confirmed_shows,\n  clicks = EXCLUDED.clicks,\n  money = EXCLUDED.money,\n  postbacks_count = EXCLUDED.postbacks_count,\n  postbacks_confirmed_money = EXCLUDED.postbacks_confirmed_money,\n  ctr = EXCLUDED.ctr,\n  cpc = EXCLUDED.cpc,\n  roi = EXCLUDED.roi,\n  profit = EXCLUDED.profit,\n  collected_at = NOW();",
+        "query": "INSERT INTO ad_stats (ad_id, date, shows, confirmed_shows, clicks, money, postbacks_count, postbacks_confirmed_money, ctr, cpc, roi, profit)\nVALUES (\n  {{ $json.ad_id }},\n  '{{ $json.date }}',\n  {{ $json.shows }},\n  {{ $json.confirmed_shows }},\n  {{ $json.clicks }},\n  {{ $json.money }},\n  {{ $json.postbacks_count }},\n  {{ $json.postbacks_confirmed_money }},\n  {{ $json.ctr }},\n  {{ $json.cpc }},\n  {{ $json.roi }},\n  {{ $json.profit }}\n)\nON CONFLICT (ad_id, date)\nDO UPDATE SET\n  shows = EXCLUDED.shows,\n  confirmed_shows = EXCLUDED.confirmed_shows,\n  clicks = EXCLUDED.clicks,\n  money = EXCLUDED.money,\n  postbacks_count = EXCLUDED.postbacks_count,\n  postbacks_confirmed_money = EXCLUDED.postbacks_confirmed_money,\n  ctr = EXCLUDED.ctr,\n  cpc = EXCLUDED.cpc,\n  roi = EXCLUDED.roi,\n  profit = EXCLUDED.profit,\n  collected_at = NOW();",
         "options": {}
       },
       "id": "save-to-db",
@@ -151,7 +147,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst alerts = items.filter(i => i.json.alertLevel);\n\nif (alerts.length === 0) return [];\n\nconst redAlerts = alerts.filter(i => i.json.alertLevel === 'red');\nconst greenAlerts = alerts.filter(i => i.json.alertLevel === 'green');\nconst yellowAlerts = alerts.filter(i => i.json.alertLevel === 'yellow' || i.json.alertLevel === 'orange');\n\nlet message = `📊 GEOZO STATS ALERT ${$now.format('dd.MM.yyyy HH:mm')}\\n\\n`;\n\nif (redAlerts.length > 0) {\n  message += `🔴 CRITICAL (ROI < -50%, spend > $3):\\n`;\n  redAlerts.slice(0, 5).forEach(a => {\n    message += `  Ad #${a.json.ad_id}: ROI ${a.json.roi}%, Spend $${a.json.money}, Profit $${a.json.profit}\\n`;\n  });\n  message += `\\n`;\n}\n\nif (yellowAlerts.length > 0) {\n  message += `🟡 WARNING (Losing money):\\n`;\n  yellowAlerts.slice(0, 5).forEach(a => {\n    message += `  Ad #${a.json.ad_id}: ROI ${a.json.roi}%, Spend $${a.json.money}\\n`;\n  });\n  message += `\\n`;\n}\n\nif (greenAlerts.length > 0) {\n  message += `🟢 PROFIT:\\n`;\n  greenAlerts.slice(0, 5).forEach(a => {\n    message += `  Ad #${a.json.ad_id}: ROI ${a.json.roi}%, Profit $${a.json.profit}\\n`;\n  });\n}\n\nmessage += `\\n📈 Total ads analyzed: ${items.length}`;\nmessage += `\\n🔴 Critical: ${redAlerts.length} | 🟡 Warning: ${yellowAlerts.length} | 🟢 Profit: ${greenAlerts.length}`;\n\nreturn [{ json: { message } }];"
+        "jsCode": "const items = $input.all();\nconst alerts = items.filter(i => i.json.alertLevel);\n\nif (alerts.length === 0) return [];\n\nconst redAlerts = alerts.filter(i => i.json.alertLevel === 'red');\nconst greenAlerts = alerts.filter(i => i.json.alertLevel === 'green');\nconst yellowAlerts = alerts.filter(i => i.json.alertLevel === 'yellow' || i.json.alertLevel === 'orange');\n\nlet message = `\ud83d\udcca GEOZO STATS ALERT ${$now.format('dd.MM.yyyy HH:mm')}\\n\\n`;\n\nif (redAlerts.length > 0) {\n  message += `\ud83d\udd34 CRITICAL (ROI < -50%, spend > $3):\\n`;\n  redAlerts.slice(0, 5).forEach(a => {\n    message += `  Ad #${a.json.ad_id}: ROI ${a.json.roi}%, Spend $${a.json.money}, Profit $${a.json.profit}\\n`;\n  });\n  message += `\\n`;\n}\n\nif (yellowAlerts.length > 0) {\n  message += `\ud83d\udfe1 WARNING (Losing money):\\n`;\n  yellowAlerts.slice(0, 5).forEach(a => {\n    message += `  Ad #${a.json.ad_id}: ROI ${a.json.roi}%, Spend $${a.json.money}\\n`;\n  });\n  message += `\\n`;\n}\n\nif (greenAlerts.length > 0) {\n  message += `\ud83d\udfe2 PROFIT:\\n`;\n  greenAlerts.slice(0, 5).forEach(a => {\n    message += `  Ad #${a.json.ad_id}: ROI ${a.json.roi}%, Profit $${a.json.profit}\\n`;\n  });\n}\n\nmessage += `\\n\ud83d\udcc8 Total ads analyzed: ${items.length}`;\nmessage += `\\n\ud83d\udd34 Critical: ${redAlerts.length} | \ud83d\udfe1 Warning: ${yellowAlerts.length} | \ud83d\udfe2 Profit: ${greenAlerts.length}`;\n\nreturn [{ json: { message } }];"
       },
       "id": "format-alert",
       "name": "Format Alert Message",

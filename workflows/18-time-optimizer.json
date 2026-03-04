@@ -43,11 +43,15 @@
               "value": "date"
             },
             {
-              "name": "groups[1]",
-              "value": "hour"
+              "name": "order_by[0][column]",
+              "value": "money"
             },
             {
-              "name": "per_page",
+              "name": "order_by[0][direction]",
+              "value": "desc"
+            },
+            {
+              "name": "count",
               "value": "1000"
             }
           ]
@@ -70,14 +74,14 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "const statsRaw = $input.first().json;\nconst stats = statsRaw.data || statsRaw;\n\nif (!Array.isArray(stats)) {\n  return [{ json: { error: 'No time stats data' } }];\n}\n\n// Aggregate by day-of-week and hour\nconst dayHourMap = {}; // { dayOfWeek: { hour: { clicks, shows, money, revenue } } }\nconst dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];\n\nstats.forEach(s => {\n  if (!s.date || s.hour === undefined) return;\n  const date = new Date(s.date);\n  const dayOfWeek = dayNames[date.getDay()];\n  const hour = parseInt(s.hour);\n\n  if (!dayHourMap[dayOfWeek]) dayHourMap[dayOfWeek] = {};\n  if (!dayHourMap[dayOfWeek][hour]) {\n    dayHourMap[dayOfWeek][hour] = { clicks: 0, shows: 0, money: 0, revenue: 0, count: 0 };\n  }\n\n  dayHourMap[dayOfWeek][hour].clicks += parseInt(s.clicks_count) || 0;\n  dayHourMap[dayOfWeek][hour].shows += parseInt(s.shows_count) || 0;\n  dayHourMap[dayOfWeek][hour].money += parseFloat(s.money) || 0;\n  dayHourMap[dayOfWeek][hour].revenue += parseFloat(s.postbacks_confirmed_money) || 0;\n  dayHourMap[dayOfWeek][hour].count += 1;\n});\n\n// Format summary for Claude\nlet summary = '';\nfor (const day of dayNames) {\n  if (!dayHourMap[day]) continue;\n  summary += `\\n${day.toUpperCase()}:\\n`;\n  for (let h = 0; h < 24; h++) {\n    const d = dayHourMap[day][h];\n    if (!d) continue;\n    const roi = d.money > 0 ? ((d.revenue - d.money) / d.money * 100) : 0;\n    const ctr = d.shows > 0 ? (d.clicks / d.shows * 100) : 0;\n    summary += `  ${String(h).padStart(2, '0')}:00 - CTR: ${ctr.toFixed(2)}%, ROI: ${roi.toFixed(0)}%, Clicks: ${d.clicks}, Spend: $${d.money.toFixed(2)}\\n`;\n  }\n}\n\nreturn [{ json: { summary, dayHourMap } }];"
+        "jsCode": "const statsRaw = $input.first().json;\nconst stats = statsRaw?.data?.result?.data || statsRaw?.data || (Array.isArray(statsRaw) ? statsRaw : []);\n\nif (!Array.isArray(stats)) {\n  return [{ json: { error: 'No time stats data' } }];\n}\n\n// Aggregate by day-of-week and hour\nconst dayHourMap = {}; // { dayOfWeek: { hour: { clicks, shows, money, revenue } } }\nconst dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];\n\nstats.forEach(s => {\n  if (!s.date || s.hour === undefined) return;\n  const date = new Date(s.date);\n  const dayOfWeek = dayNames[date.getDay()];\n  const hour = parseInt(s.hour);\n\n  if (!dayHourMap[dayOfWeek]) dayHourMap[dayOfWeek] = {};\n  if (!dayHourMap[dayOfWeek][hour]) {\n    dayHourMap[dayOfWeek][hour] = { clicks: 0, shows: 0, money: 0, revenue: 0, count: 0 };\n  }\n\n  dayHourMap[dayOfWeek][hour].clicks += parseInt(s.clicks_count) || 0;\n  dayHourMap[dayOfWeek][hour].shows += parseInt(s.shows_count) || 0;\n  dayHourMap[dayOfWeek][hour].money += parseFloat(s.money) || 0;\n  dayHourMap[dayOfWeek][hour].revenue += parseFloat(s.postbacks_confirmed_money) || 0;\n  dayHourMap[dayOfWeek][hour].count += 1;\n});\n\n// Format summary for Claude\nlet summary = '';\nfor (const day of dayNames) {\n  if (!dayHourMap[day]) continue;\n  summary += `\\n${day.toUpperCase()}:\\n`;\n  for (let h = 0; h < 24; h++) {\n    const d = dayHourMap[day][h];\n    if (!d) continue;\n    const roi = d.money > 0 ? ((d.revenue - d.money) / d.money * 100) : 0;\n    const ctr = d.shows > 0 ? (d.clicks / d.shows * 100) : 0;\n    summary += `  ${String(h).padStart(2, '0')}:00 - CTR: ${ctr.toFixed(2)}%, ROI: ${roi.toFixed(0)}%, Clicks: ${d.clicks}, Spend: $${d.money.toFixed(2)}\\n`;\n  }\n}\n\nreturn [{ json: { summary, dayHourMap } }];"
       },
       "id": "aggregate-time-data",
       "name": "Aggregate Time Data",
@@ -96,7 +100,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Проанализируй статистику тизерной рекламы по дням недели и часам за 30 дней.\\n\\nДанные:\\n{{ $json.summary }}\\n\\nОпредели:\\n1. Лучшие часы по CTR и ROI (когда запускать рекламу)\\n2. Худшие часы (когда лучше выключать)\\n3. Лучшие/худшие дни недели\\n4. Оптимальное расписание (time_targeting)\\n\\nВыведи оптимальное расписание в формате JSON:\\n{\\n  \\\"monday\\\": [8,9,10,11,12,13,18,19,20,21],\\n  \\\"tuesday\\\": [...],\\n  ...\\n}\\nГде массив = активные часы (0-23). Включай только профитные часы.\\n\\nСначала анализ (кратко), затем JSON.\"\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"\u041f\u0440\u043e\u0430\u043d\u0430\u043b\u0438\u0437\u0438\u0440\u0443\u0439 \u0441\u0442\u0430\u0442\u0438\u0441\u0442\u0438\u043a\u0443 \u0442\u0438\u0437\u0435\u0440\u043d\u043e\u0439 \u0440\u0435\u043a\u043b\u0430\u043c\u044b \u043f\u043e \u0434\u043d\u044f\u043c \u043d\u0435\u0434\u0435\u043b\u0438 \u0438 \u0447\u0430\u0441\u0430\u043c \u0437\u0430 30 \u0434\u043d\u0435\u0439.\\n\\n\u0414\u0430\u043d\u043d\u044b\u0435:\\n{{ $json.summary }}\\n\\n\u041e\u043f\u0440\u0435\u0434\u0435\u043b\u0438:\\n1. \u041b\u0443\u0447\u0448\u0438\u0435 \u0447\u0430\u0441\u044b \u043f\u043e CTR \u0438 ROI (\u043a\u043e\u0433\u0434\u0430 \u0437\u0430\u043f\u0443\u0441\u043a\u0430\u0442\u044c \u0440\u0435\u043a\u043b\u0430\u043c\u0443)\\n2. \u0425\u0443\u0434\u0448\u0438\u0435 \u0447\u0430\u0441\u044b (\u043a\u043e\u0433\u0434\u0430 \u043b\u0443\u0447\u0448\u0435 \u0432\u044b\u043a\u043b\u044e\u0447\u0430\u0442\u044c)\\n3. \u041b\u0443\u0447\u0448\u0438\u0435/\u0445\u0443\u0434\u0448\u0438\u0435 \u0434\u043d\u0438 \u043d\u0435\u0434\u0435\u043b\u0438\\n4. \u041e\u043f\u0442\u0438\u043c\u0430\u043b\u044c\u043d\u043e\u0435 \u0440\u0430\u0441\u043f\u0438\u0441\u0430\u043d\u0438\u0435 (time_targeting)\\n\\n\u0412\u044b\u0432\u0435\u0434\u0438 \u043e\u043f\u0442\u0438\u043c\u0430\u043b\u044c\u043d\u043e\u0435 \u0440\u0430\u0441\u043f\u0438\u0441\u0430\u043d\u0438\u0435 \u0432 \u0444\u043e\u0440\u043c\u0430\u0442\u0435 JSON:\\n{\\n  \\\"monday\\\": [8,9,10,11,12,13,18,19,20,21],\\n  \\\"tuesday\\\": [...],\\n  ...\\n}\\n\u0413\u0434\u0435 \u043c\u0430\u0441\u0441\u0438\u0432 = \u0430\u043a\u0442\u0438\u0432\u043d\u044b\u0435 \u0447\u0430\u0441\u044b (0-23). \u0412\u043a\u043b\u044e\u0447\u0430\u0439 \u0442\u043e\u043b\u044c\u043a\u043e \u043f\u0440\u043e\u0444\u0438\u0442\u043d\u044b\u0435 \u0447\u0430\u0441\u044b.\\n\\n\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u0430\u043d\u0430\u043b\u0438\u0437 (\u043a\u0440\u0430\u0442\u043a\u043e), \u0437\u0430\u0442\u0435\u043c JSON.\"\n    }\n  ]\n}",
         "options": {
           "response": {
             "response": {
@@ -147,7 +151,7 @@
               "value": "1"
             },
             {
-              "name": "per_page",
+              "name": "count",
               "value": "100"
             }
           ]
@@ -170,14 +174,14 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "const schedule = $('Parse Schedule').first().json;\nconst adsRaw = $('Fetch Ad Groups').first().json;\nconst ads = adsRaw.data || adsRaw;\n\nconst adGroupIds = [...new Set((Array.isArray(ads) ? ads : []).map(a => a.ad_group_id).filter(Boolean))];\n\nreturn adGroupIds.map(agId => ({\n  json: {\n    ad_group_id: agId,\n    time_targeting: schedule.time_targeting,\n    analysis: schedule.analysis\n  }\n}));"
+        "jsCode": "const schedule = $('Parse Schedule').first().json;\nconst adsRaw = $('Fetch Ad Groups').first().json;\nconst ads = adsRaw?.data?.result?.data || adsRaw?.data || (Array.isArray(adsRaw) ? adsRaw : []);\n\nconst adGroupIds = [...new Set((Array.isArray(ads) ? ads : []).map(a => a.ad_group_id).filter(Boolean))];\n\nreturn adGroupIds.map(agId => ({\n  json: {\n    ad_group_id: agId,\n    time_targeting: schedule.time_targeting,\n    analysis: schedule.analysis\n  }\n}));"
       },
       "id": "prepare-updates",
       "name": "Prepare Updates",
@@ -209,15 +213,15 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
     {
       "parameters": {
         "chatId": "591828204",
-        "text": "=⏰ TIME OPTIMIZER\n\nUpdated time targeting for ad group #{{ $json.ad_group_id }}\n\n{{ $json.analysis.substring(0, 1500) }}",
+        "text": "=\u23f0 TIME OPTIMIZER\n\nUpdated time targeting for ad group #{{ $json.ad_group_id }}\n\n{{ $json.analysis.substring(0, 1500) }}",
         "additionalFields": {}
       },
       "id": "notify",

@@ -129,8 +129,8 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },

@@ -47,7 +47,15 @@
               "value": "ad_id"
             },
             {
-              "name": "per_page",
+              "name": "order_by[0][column]",
+              "value": "money"
+            },
+            {
+              "name": "order_by[0][direction]",
+              "value": "desc"
+            },
+            {
+              "name": "count",
               "value": "1000"
             }
           ]
@@ -70,14 +78,14 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "const statsRaw = $input.first().json;\nconst stats = statsRaw.data || statsRaw;\n\nif (!Array.isArray(stats)) {\n  return [{ json: { error: 'No block stats' } }];\n}\n\n// Aggregate by block_id\nconst blockAgg = {};\nstats.forEach(s => {\n  const blockId = s.block_id;\n  if (!blockId) return;\n  if (!blockAgg[blockId]) {\n    blockAgg[blockId] = { spend: 0, revenue: 0, clicks: 0, shows: 0, ads: new Set() };\n  }\n  blockAgg[blockId].spend += parseFloat(s.money) || 0;\n  blockAgg[blockId].revenue += parseFloat(s.postbacks_confirmed_money) || 0;\n  blockAgg[blockId].clicks += parseInt(s.clicks_count) || 0;\n  blockAgg[blockId].shows += parseInt(s.shows_count) || 0;\n  if (s.ad_id) blockAgg[blockId].ads.add(s.ad_id);\n});\n\nconst blacklist = [];\nconst whitelist = [];\nconst yellow = [];\n\nfor (const [blockId, b] of Object.entries(blockAgg)) {\n  const roi = b.spend > 0 ? ((b.revenue - b.spend) / b.spend * 100) : 0;\n  const ctr = b.shows > 0 ? (b.clicks / b.shows * 100) : 0;\n\n  const blockInfo = {\n    block_id: parseInt(blockId),\n    roi: Math.round(roi * 100) / 100,\n    ctr: Math.round(ctr * 10000) / 10000,\n    clicks: b.clicks,\n    shows: b.shows,\n    spend: Math.round(b.spend * 100) / 100,\n    revenue: Math.round(b.revenue * 100) / 100,\n    ad_count: b.ads.size\n  };\n\n  // GREEN: profitable block\n  if (roi > 20 && b.clicks > 10 && ctr > 0.5) {\n    blockInfo.classification = 'green';\n    whitelist.push(blockInfo);\n  }\n  // RED: losing block\n  else if ((roi < -30 && b.clicks > 20) || (ctr < 0.1 && b.shows > 500)) {\n    blockInfo.classification = 'red';\n    blacklist.push(blockInfo);\n  }\n  // YELLOW: observation\n  else {\n    blockInfo.classification = 'yellow';\n    yellow.push(blockInfo);\n  }\n}\n\nreturn [{\n  json: {\n    blacklist_blocks: blacklist.map(b => b.block_id),\n    whitelist_blocks: whitelist.map(b => b.block_id),\n    blacklist_details: blacklist,\n    whitelist_details: whitelist,\n    yellow_details: yellow,\n    total_analyzed: Object.keys(blockAgg).length\n  }\n}];"
+        "jsCode": "const statsRaw = $input.first().json;\nconst stats = statsRaw?.data?.result?.data || statsRaw?.data || (Array.isArray(statsRaw) ? statsRaw : []);\n\nif (!Array.isArray(stats)) {\n  return [{ json: { error: 'No block stats' } }];\n}\n\n// Aggregate by block_id\nconst blockAgg = {};\nstats.forEach(s => {\n  const blockId = s.block_id;\n  if (!blockId) return;\n  if (!blockAgg[blockId]) {\n    blockAgg[blockId] = { spend: 0, revenue: 0, clicks: 0, shows: 0, ads: new Set() };\n  }\n  blockAgg[blockId].spend += parseFloat(s.money) || 0;\n  blockAgg[blockId].revenue += parseFloat(s.postbacks_confirmed_money) || 0;\n  blockAgg[blockId].clicks += parseInt(s.clicks_count) || 0;\n  blockAgg[blockId].shows += parseInt(s.shows_count) || 0;\n  if (s.ad_id) blockAgg[blockId].ads.add(s.ad_id);\n});\n\nconst blacklist = [];\nconst whitelist = [];\nconst yellow = [];\n\nfor (const [blockId, b] of Object.entries(blockAgg)) {\n  const roi = b.spend > 0 ? ((b.revenue - b.spend) / b.spend * 100) : 0;\n  const ctr = b.shows > 0 ? (b.clicks / b.shows * 100) : 0;\n\n  const blockInfo = {\n    block_id: parseInt(blockId),\n    roi: Math.round(roi * 100) / 100,\n    ctr: Math.round(ctr * 10000) / 10000,\n    clicks: b.clicks,\n    shows: b.shows,\n    spend: Math.round(b.spend * 100) / 100,\n    revenue: Math.round(b.revenue * 100) / 100,\n    ad_count: b.ads.size\n  };\n\n  // GREEN: profitable block\n  if (roi > 20 && b.clicks > 10 && ctr > 0.5) {\n    blockInfo.classification = 'green';\n    whitelist.push(blockInfo);\n  }\n  // RED: losing block\n  else if ((roi < -30 && b.clicks > 20) || (ctr < 0.1 && b.shows > 500)) {\n    blockInfo.classification = 'red';\n    blacklist.push(blockInfo);\n  }\n  // YELLOW: observation\n  else {\n    blockInfo.classification = 'yellow';\n    yellow.push(blockInfo);\n  }\n}\n\nreturn [{\n  json: {\n    blacklist_blocks: blacklist.map(b => b.block_id),\n    whitelist_blocks: whitelist.map(b => b.block_id),\n    blacklist_details: blacklist,\n    whitelist_details: whitelist,\n    yellow_details: yellow,\n    total_analyzed: Object.keys(blockAgg).length\n  }\n}];"
       },
       "id": "classify-blocks",
       "name": "Classify Blocks",
@@ -102,7 +110,7 @@
               "value": "1"
             },
             {
-              "name": "per_page",
+              "name": "count",
               "value": "100"
             }
           ]
@@ -125,14 +133,14 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "const blockData = $('Classify Blocks').first().json;\nconst adsRaw = $('Fetch Active Ad Groups').first().json;\nconst ads = adsRaw.data || adsRaw;\n\n// Get unique ad_group_ids\nconst adGroupIds = [...new Set((Array.isArray(ads) ? ads : []).map(a => a.ad_group_id).filter(Boolean))];\n\nif (adGroupIds.length === 0) {\n  return [{ json: { action: 'SKIP', reason: 'No ad groups found' } }];\n}\n\n// Prepare updates for each ad group\nreturn adGroupIds.map(agId => ({\n  json: {\n    ad_group_id: agId,\n    blacklist_blocks: blockData.blacklist_blocks,\n    whitelist_blocks: blockData.whitelist_blocks,\n    blacklist_count: blockData.blacklist_blocks.length,\n    whitelist_count: blockData.whitelist_blocks.length,\n    total_analyzed: blockData.total_analyzed\n  }\n}));"
+        "jsCode": "const blockData = $('Classify Blocks').first().json;\nconst adsRaw = $('Fetch Active Ad Groups').first().json;\nconst ads = adsRaw?.data?.result?.data || adsRaw?.data || (Array.isArray(adsRaw) ? adsRaw : []);\n\n// Get unique ad_group_ids\nconst adGroupIds = [...new Set((Array.isArray(ads) ? ads : []).map(a => a.ad_group_id).filter(Boolean))];\n\nif (adGroupIds.length === 0) {\n  return [{ json: { action: 'SKIP', reason: 'No ad groups found' } }];\n}\n\n// Prepare updates for each ad group\nreturn adGroupIds.map(agId => ({\n  json: {\n    ad_group_id: agId,\n    blacklist_blocks: blockData.blacklist_blocks,\n    whitelist_blocks: blockData.whitelist_blocks,\n    blacklist_count: blockData.blacklist_blocks.length,\n    whitelist_count: blockData.whitelist_blocks.length,\n    total_analyzed: blockData.total_analyzed\n  }\n}));"
       },
       "id": "prepare-updates",
       "name": "Prepare Updates",
@@ -164,8 +172,8 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
@@ -193,7 +201,7 @@
     {
       "parameters": {
         "chatId": "591828204",
-        "text": "=🎯 BLOCK OPTIMIZER {{ $now.format('dd.MM.yyyy') }}\n\nAnalyzed: {{ $json.total_analyzed }} blocks\n🟢 Whitelisted: {{ $json.whitelist_count }} blocks\n🔴 Blacklisted: {{ $json.blacklist_count }} blocks\n\nUpdated ad group #{{ $json.ad_group_id }}",
+        "text": "=\ud83c\udfaf BLOCK OPTIMIZER {{ $now.format('dd.MM.yyyy') }}\n\nAnalyzed: {{ $json.total_analyzed }} blocks\n\ud83d\udfe2 Whitelisted: {{ $json.whitelist_count }} blocks\n\ud83d\udd34 Blacklisted: {{ $json.blacklist_count }} blocks\n\nUpdated ad group #{{ $json.ad_group_id }}",
         "additionalFields": {}
       },
       "id": "notify",

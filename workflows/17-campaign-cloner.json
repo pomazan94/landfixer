@@ -62,8 +62,8 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
@@ -148,7 +148,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const agResponse = $input.first().json;\nconst newAdGroupId = agResponse.data?.id || agResponse.id;\nconst sourceAds = $('Fetch Source Ads').first().json;\nconst ads = sourceAds.data || sourceAds;\n\nif (!Array.isArray(ads) || ads.length === 0) {\n  return [{ json: { error: 'No source ads found' } }];\n}\n\n// Prepare ads for cloning (slightly modify titles)\nreturn ads.map(ad => ({\n  json: {\n    new_ad_group_id: newAdGroupId,\n    original_title: ad.title,\n    original_url: ad.original_url,\n    bid: ad.one_bid_for_all_geo,\n    target_token: $('Setup Clone Parameters').first().json.target_token\n  }\n}));"
+        "jsCode": "const agResponse = $input.first().json;\nconst newAdGroupId = agResponse.data?.id || agResponse.id;\nconst sourceAds = $('Fetch Source Ads').first().json;\nconst ads = sourceAds?.data?.result?.data || sourceAds?.data || (Array.isArray(sourceAds) ? sourceAds : []);\n\nif (!Array.isArray(ads) || ads.length === 0) {\n  return [{ json: { error: 'No source ads found' } }];\n}\n\n// Prepare ads for cloning (slightly modify titles)\nreturn ads.map(ad => ({\n  json: {\n    new_ad_group_id: newAdGroupId,\n    original_title: ad.title,\n    original_url: ad.original_url,\n    bid: ad.one_bid_for_all_geo,\n    target_token: $('Setup Clone Parameters').first().json.target_token\n  }\n}));"
       },
       "id": "prepare-ad-clones",
       "name": "Prepare Ad Clones",

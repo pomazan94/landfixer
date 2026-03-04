@@ -35,7 +35,7 @@
               "value": "3"
             },
             {
-              "name": "per_page",
+              "name": "count",
               "value": "50"
             }
           ]
@@ -58,14 +58,14 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "const response = $input.first().json;\nconst ads = response.data || response;\n\nif (!Array.isArray(ads) || ads.length === 0) {\n  return []; // No banned ads\n}\n\n// Filter: only try remoderation up to 3 times\nreturn ads\n  .filter(ad => ad.status_id === 3)\n  .map(ad => ({\n    json: {\n      ad_id: ad.id,\n      title: ad.title,\n      ban_reason: ad.ban_reason || 'Unknown',\n      original_url: ad.original_url\n    }\n  }));"
+        "jsCode": "const response = $input.first().json;\nconst ads = response?.data?.result?.data || response?.data || (Array.isArray(response) ? response : []);\n\nif (!Array.isArray(ads) || ads.length === 0) {\n  return []; // No banned ads\n}\n\n// Filter: only try remoderation up to 3 times\nreturn ads\n  .filter(ad => ad.status_id === 3)\n  .map(ad => ({\n    json: {\n      ad_id: ad.id,\n      ad_group_id: ad.ad_group_id,\n      title: ad.title,\n      ban_reason: ad.ban_reason || 'Unknown',\n      original_url: ad.original_url\n    }\n  }));"
       },
       "id": "filter-banned",
       "name": "Filter Banned Ads",
@@ -105,7 +105,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 256,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Тизерное объявление было отклонено модерацией.\\n\\nОригинальный заголовок: '{{ $json.title }}'\\nПричина бана: '{{ $json.ban_reason }}'\\n\\nПерефразируй заголовок так, чтобы:\\n1. Сохранить основной смысл и интригу\\n2. Убрать элементы, которые могли вызвать бан\\n3. Сделать более нейтральным, но всё ещё привлекательным\\n4. Длина 30-120 символов\\n\\nОтветь ТОЛЬКО новым заголовком, без объяснений.\"\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 256,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"\u0422\u0438\u0437\u0435\u0440\u043d\u043e\u0435 \u043e\u0431\u044a\u044f\u0432\u043b\u0435\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u043e \u043c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u0435\u0439.\\n\\n\u041e\u0440\u0438\u0433\u0438\u043d\u0430\u043b\u044c\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: '{{ $json.title }}'\\n\u041f\u0440\u0438\u0447\u0438\u043d\u0430 \u0431\u0430\u043d\u0430: '{{ $json.ban_reason }}'\\n\\n\u041f\u0435\u0440\u0435\u0444\u0440\u0430\u0437\u0438\u0440\u0443\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a \u0442\u0430\u043a, \u0447\u0442\u043e\u0431\u044b:\\n1. \u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u0441\u043c\u044b\u0441\u043b \u0438 \u0438\u043d\u0442\u0440\u0438\u0433\u0443\\n2. \u0423\u0431\u0440\u0430\u0442\u044c \u044d\u043b\u0435\u043c\u0435\u043d\u0442\u044b, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u043c\u043e\u0433\u043b\u0438 \u0432\u044b\u0437\u0432\u0430\u0442\u044c \u0431\u0430\u043d\\n3. \u0421\u0434\u0435\u043b\u0430\u0442\u044c \u0431\u043e\u043b\u0435\u0435 \u043d\u0435\u0439\u0442\u0440\u0430\u043b\u044c\u043d\u044b\u043c, \u043d\u043e \u0432\u0441\u0451 \u0435\u0449\u0451 \u043f\u0440\u0438\u0432\u043b\u0435\u043a\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u043c\\n4. \u0414\u043b\u0438\u043d\u0430 30-120 \u0441\u0438\u043c\u0432\u043e\u043b\u043e\u0432\\n\\n\u041e\u0442\u0432\u0435\u0442\u044c \u0422\u041e\u041b\u042c\u041a\u041e \u043d\u043e\u0432\u044b\u043c \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043a\u043e\u043c, \u0431\u0435\u0437 \u043e\u0431\u044a\u044f\u0441\u043d\u0435\u043d\u0438\u0439.\"\n    }\n  ]\n}",
         "options": {
           "response": {
             "response": {
@@ -145,7 +145,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.geozo.com/v1/advertiser/ads/teaser/update/{{ $json.ad_id }}",
+        "url": "=https://api.geozo.com/v1/advertiser/ad_groups/{{ $json.ad_group_id }}/ads/teaser/update/{{ $json.ad_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -170,15 +170,15 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.geozo.com/v1/advertiser/ads/remoderate/{{ $json.ad_id }}",
+        "url": "=https://api.geozo.com/v1/advertiser/ad_groups/{{ $json.ad_group_id }}/ads/remoderate/{{ $json.ad_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {}
@@ -193,8 +193,8 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
@@ -222,7 +222,7 @@
     {
       "parameters": {
         "chatId": "591828204",
-        "text": "=🔄 REMODERATION\n\nAd #{{ $json.ad_id }}\nBan reason: {{ $json.ban_reason }}\nOld title: {{ $json.old_title }}\nNew title: {{ $json.new_title }}\n\nSent for remoderation.",
+        "text": "=\ud83d\udd04 REMODERATION\n\nAd #{{ $json.ad_id }}\nBan reason: {{ $json.ban_reason }}\nOld title: {{ $json.old_title }}\nNew title: {{ $json.new_title }}\n\nSent for remoderation.",
         "additionalFields": {}
       },
       "id": "notify-telegram",

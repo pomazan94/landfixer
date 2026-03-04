@@ -43,7 +43,15 @@
               "value": "ad_id"
             },
             {
-              "name": "per_page",
+              "name": "order_by[0][column]",
+              "value": "money"
+            },
+            {
+              "name": "order_by[0][direction]",
+              "value": "desc"
+            },
+            {
+              "name": "count",
               "value": "500"
             }
           ]
@@ -66,8 +74,8 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
@@ -85,7 +93,7 @@
               "value": "1"
             },
             {
-              "name": "per_page",
+              "name": "count",
               "value": "500"
             }
           ]
@@ -108,14 +116,14 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "const statsItems = $('Fetch Ad Stats').first().json;\nconst adsItems = $('Fetch Active Ads').first().json;\n\nconst statsData = statsItems.data || statsItems;\nconst adsData = adsItems.data || adsItems;\n\nif (!Array.isArray(statsData) || !Array.isArray(adsData)) {\n  return [{ json: { error: 'Invalid data', actions: [] } }];\n}\n\n// Build ads map for current bids\nconst adsMap = {};\nadsData.forEach(ad => {\n  adsMap[ad.id] = {\n    current_bid: parseFloat(ad.one_bid_for_all_geo) || 0,\n    status_id: ad.status_id\n  };\n});\n\nconst maxCeiling = parseFloat(0.10);\nconst actions = [];\n\nstatsData.forEach(d => {\n  const adId = d.ad_id;\n  const spend = parseFloat(d.money) || 0;\n  const revenue = parseFloat(d.postbacks_confirmed_money) || 0;\n  const clicks = parseInt(d.clicks_count) || 0;\n  const shows = parseInt(d.shows_count) || 0;\n  const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n  const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n  const currentBid = adsMap[adId]?.current_bid || 0;\n\n  let action = 'HOLD';\n  let bidMultiplier = 1.0;\n  let reason = '';\n\n  // Rule 1: CTR > 2% AND ROI > 0 = golden teaser\n  if (ctr > 2 && roi > 0 && clicks > 10) {\n    action = 'RAISE_BID';\n    bidMultiplier = 1.20;\n    reason = `Golden teaser: CTR ${ctr.toFixed(2)}%, ROI ${roi.toFixed(1)}%`;\n  }\n  // Rule 2: ROI > 50% with enough data\n  else if (roi > 50 && clicks > 20) {\n    action = 'RAISE_BID';\n    bidMultiplier = 1.10;\n    reason = `High ROI ${roi.toFixed(1)}% with ${clicks} clicks`;\n  }\n  // Rule 3: ROI 0-50% = hold\n  else if (roi >= 0 && roi <= 50 && clicks > 20) {\n    action = 'HOLD';\n    reason = `Stable ROI ${roi.toFixed(1)}%`;\n  }\n  // Rule 4: ROI -30% to 0% = lower bid\n  else if (roi >= -30 && roi < 0 && clicks > 30) {\n    action = 'LOWER_BID';\n    bidMultiplier = 0.85;\n    reason = `Negative ROI ${roi.toFixed(1)}%, lowering 15%`;\n  }\n  // Rule 5: ROI < -30% = significant lower\n  else if (roi < -30 && roi >= -50 && clicks > 20) {\n    action = 'LOWER_BID';\n    bidMultiplier = 0.70;\n    reason = `Bad ROI ${roi.toFixed(1)}%, lowering 30%`;\n  }\n  // Rule 6: ROI < -50% AND spent > $3 = STOP\n  else if (roi < -50 && spend > 3) {\n    action = 'STOP';\n    reason = `Critical ROI ${roi.toFixed(1)}%, spent $${spend.toFixed(2)} - STOPPING`;\n  }\n  // Rule 7: Dead teaser (no clicks but many shows)\n  else if (clicks < 5 && shows > 1000) {\n    action = 'STOP';\n    reason = `Dead teaser: ${clicks} clicks / ${shows} shows in 24h`;\n  }\n\n  if (action !== 'HOLD') {\n    let newBid = currentBid * bidMultiplier;\n    if (newBid > maxCeiling) newBid = maxCeiling;\n    if (newBid < 0.001) newBid = 0.001;\n\n    actions.push({\n      json: {\n        ad_id: adId,\n        action: action,\n        current_bid: currentBid,\n        new_bid: action === 'STOP' ? currentBid : Math.round(newBid * 10000) / 10000,\n        roi: Math.round(roi * 100) / 100,\n        clicks: clicks,\n        shows: shows,\n        spend: spend,\n        ctr: Math.round(ctr * 10000) / 10000,\n        reason: reason\n      }\n    });\n  }\n});\n\nif (actions.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No bid changes needed' } }];\n}\n\nreturn actions;"
+        "jsCode": "const statsItems = $('Fetch Ad Stats').first().json;\nconst adsItems = $('Fetch Active Ads').first().json;\n\nconst statsData = statsItems?.data?.result?.data || statsItems?.data || (Array.isArray(statsItems) ? statsItems : []);\nconst adsData = adsItems?.data?.result?.data || adsItems?.data || (Array.isArray(adsItems) ? adsItems : []);\n\nif (!Array.isArray(statsData) || !Array.isArray(adsData)) {\n  return [{ json: { error: 'Invalid data', actions: [] } }];\n}\n\n// Build ads map for current bids\nconst adsMap = {};\nadsData.forEach(ad => {\n  adsMap[ad.id] = {\n    current_bid: parseFloat(ad.one_bid_for_all_geo) || 0,\n    status_id: ad.status_id\n  };\n});\n\nconst maxCeiling = parseFloat(0.10);\nconst actions = [];\n\nstatsData.forEach(d => {\n  const adId = d.ad_id;\n  const spend = parseFloat(d.money) || 0;\n  const revenue = parseFloat(d.postbacks_confirmed_money) || 0;\n  const clicks = parseInt(d.clicks_count) || 0;\n  const shows = parseInt(d.shows_count) || 0;\n  const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n  const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n  const currentBid = adsMap[adId]?.current_bid || 0;\n\n  let action = 'HOLD';\n  let bidMultiplier = 1.0;\n  let reason = '';\n\n  // Rule 1: CTR > 2% AND ROI > 0 = golden teaser\n  if (ctr > 2 && roi > 0 && clicks > 10) {\n    action = 'RAISE_BID';\n    bidMultiplier = 1.20;\n    reason = `Golden teaser: CTR ${ctr.toFixed(2)}%, ROI ${roi.toFixed(1)}%`;\n  }\n  // Rule 2: ROI > 50% with enough data\n  else if (roi > 50 && clicks > 20) {\n    action = 'RAISE_BID';\n    bidMultiplier = 1.10;\n    reason = `High ROI ${roi.toFixed(1)}% with ${clicks} clicks`;\n  }\n  // Rule 3: ROI 0-50% = hold\n  else if (roi >= 0 && roi <= 50 && clicks > 20) {\n    action = 'HOLD';\n    reason = `Stable ROI ${roi.toFixed(1)}%`;\n  }\n  // Rule 4: ROI -30% to 0% = lower bid\n  else if (roi >= -30 && roi < 0 && clicks > 30) {\n    action = 'LOWER_BID';\n    bidMultiplier = 0.85;\n    reason = `Negative ROI ${roi.toFixed(1)}%, lowering 15%`;\n  }\n  // Rule 5: ROI < -30% = significant lower\n  else if (roi < -30 && roi >= -50 && clicks > 20) {\n    action = 'LOWER_BID';\n    bidMultiplier = 0.70;\n    reason = `Bad ROI ${roi.toFixed(1)}%, lowering 30%`;\n  }\n  // Rule 6: ROI < -50% AND spent > $3 = STOP\n  else if (roi < -50 && spend > 3) {\n    action = 'STOP';\n    reason = `Critical ROI ${roi.toFixed(1)}%, spent $${spend.toFixed(2)} - STOPPING`;\n  }\n  // Rule 7: Dead teaser (no clicks but many shows)\n  else if (clicks < 5 && shows > 1000) {\n    action = 'STOP';\n    reason = `Dead teaser: ${clicks} clicks / ${shows} shows in 24h`;\n  }\n\n  if (action !== 'HOLD') {\n    let newBid = currentBid * bidMultiplier;\n    if (newBid > maxCeiling) newBid = maxCeiling;\n    if (newBid < 0.001) newBid = 0.001;\n\n    actions.push({\n      json: {\n        ad_id: adId,\n        action: action,\n        current_bid: currentBid,\n        new_bid: action === 'STOP' ? currentBid : Math.round(newBid * 10000) / 10000,\n        roi: Math.round(roi * 100) / 100,\n        clicks: clicks,\n        shows: shows,\n        spend: spend,\n        ctr: Math.round(ctr * 10000) / 10000,\n        reason: reason\n      }\n    });\n  }\n});\n\nif (actions.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No bid changes needed' } }];\n}\n\nreturn actions;"
       },
       "id": "apply-bid-rules",
       "name": "Apply Bid Rules",
@@ -165,14 +173,8 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "ad_ids",
-              "value": "={{ [$json.ad_id] }}"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ids\": {{ JSON.stringify([$json.ad_id]) }}\n}",
         "options": {}
       },
       "id": "stop-ad",
@@ -185,8 +187,8 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
@@ -197,8 +199,19 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"ads\": [\n    {\n      \"ad_id\": {{ $json.ad_id }},\n      \"one_bid_for_all_geo\": {{ $json.new_bid }}\n    }\n  ]\n}",
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "ids[]",
+              "value": "={{ $json.ad_id }}"
+            },
+            {
+              "name": "one_bid_for_all_geo",
+              "value": "={{ $json.new_bid }}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "update-bid",
@@ -211,8 +224,8 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
@@ -239,7 +252,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst changes = items.filter(i => i.json.action && i.json.action !== 'NONE');\n\nif (changes.length === 0) return [];\n\nconst stops = changes.filter(i => i.json.action === 'STOP');\nconst raises = changes.filter(i => i.json.action === 'RAISE_BID');\nconst lowers = changes.filter(i => i.json.action === 'LOWER_BID');\n\nlet msg = `🤖 SMART BIDDER ${$now.format('dd.MM.yyyy HH:mm')}\\n\\n`;\nmsg += `Total changes: ${changes.length}\\n`;\nmsg += `⬆️ Raised: ${raises.length} | ⬇️ Lowered: ${lowers.length} | 🛑 Stopped: ${stops.length}\\n\\n`;\n\nif (stops.length > 0) {\n  msg += `🛑 STOPPED:\\n`;\n  stops.forEach(s => msg += `  #${s.json.ad_id}: ${s.json.reason}\\n`);\n  msg += `\\n`;\n}\n\nif (raises.length > 0) {\n  msg += `⬆️ BID RAISED:\\n`;\n  raises.slice(0, 5).forEach(r => msg += `  #${r.json.ad_id}: $${r.json.current_bid} → $${r.json.new_bid} (${r.json.reason})\\n`);\n  msg += `\\n`;\n}\n\nif (lowers.length > 0) {\n  msg += `⬇️ BID LOWERED:\\n`;\n  lowers.slice(0, 5).forEach(l => msg += `  #${l.json.ad_id}: $${l.json.current_bid} → $${l.json.new_bid} (${l.json.reason})\\n`);\n}\n\nreturn [{ json: { message: msg } }];"
+        "jsCode": "const items = $input.all();\nconst changes = items.filter(i => i.json.action && i.json.action !== 'NONE');\n\nif (changes.length === 0) return [];\n\nconst stops = changes.filter(i => i.json.action === 'STOP');\nconst raises = changes.filter(i => i.json.action === 'RAISE_BID');\nconst lowers = changes.filter(i => i.json.action === 'LOWER_BID');\n\nlet msg = `\ud83e\udd16 SMART BIDDER ${$now.format('dd.MM.yyyy HH:mm')}\\n\\n`;\nmsg += `Total changes: ${changes.length}\\n`;\nmsg += `\u2b06\ufe0f Raised: ${raises.length} | \u2b07\ufe0f Lowered: ${lowers.length} | \ud83d\uded1 Stopped: ${stops.length}\\n\\n`;\n\nif (stops.length > 0) {\n  msg += `\ud83d\uded1 STOPPED:\\n`;\n  stops.forEach(s => msg += `  #${s.json.ad_id}: ${s.json.reason}\\n`);\n  msg += `\\n`;\n}\n\nif (raises.length > 0) {\n  msg += `\u2b06\ufe0f BID RAISED:\\n`;\n  raises.slice(0, 5).forEach(r => msg += `  #${r.json.ad_id}: $${r.json.current_bid} \u2192 $${r.json.new_bid} (${r.json.reason})\\n`);\n  msg += `\\n`;\n}\n\nif (lowers.length > 0) {\n  msg += `\u2b07\ufe0f BID LOWERED:\\n`;\n  lowers.slice(0, 5).forEach(l => msg += `  #${l.json.ad_id}: $${l.json.current_bid} \u2192 $${l.json.new_bid} (${l.json.reason})\\n`);\n}\n\nreturn [{ json: { message: msg } }];"
       },
       "id": "format-summary",
       "name": "Format Summary",

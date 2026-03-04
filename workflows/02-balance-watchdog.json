@@ -45,8 +45,8 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
@@ -60,12 +60,16 @@
         "queryParameters": {
           "parameters": [
             {
-              "name": "filters[date_from]",
-              "value": "={{ $now.format('yyyy-MM-dd') }}"
+              "name": "order_by[column]",
+              "value": "processed_at"
             },
             {
-              "name": "filters[date_to]",
-              "value": "={{ $now.format('yyyy-MM-dd') }}"
+              "name": "order_by[direction]",
+              "value": "desc"
+            },
+            {
+              "name": "count",
+              "value": "50"
             }
           ]
         },
@@ -87,14 +91,14 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "const balanceData = $('Get Current Balance').first().json;\nconst historyData = $('Get Balance History').first().json;\n\nconst currentBalance = parseFloat(balanceData.data?.balance || balanceData.balance || 0);\n\n// Calculate spend from history\nconst history = historyData.data || [];\nconst spendEntries = history.filter(h => h.type === 'spend');\nconst totalSpendToday = spendEntries.reduce((sum, h) => sum + Math.abs(parseFloat(h.amount) || 0), 0);\n\n// Calculate spend rate\nconst now = new Date();\nconst hoursElapsed = now.getHours() + now.getMinutes() / 60;\nconst spendRatePerHour = hoursElapsed > 0 ? totalSpendToday / hoursElapsed : 0;\n\n// Estimate hours remaining\nconst hoursRemaining = spendRatePerHour > 0 ? currentBalance / spendRatePerHour : 999;\n\n// Thresholds from env\nconst minBalanceAlert = parseFloat(10);\n\nlet alerts = [];\n\nif (currentBalance < minBalanceAlert) {\n  alerts.push({\n    type: 'LOW_BALANCE',\n    severity: 'critical',\n    message: `💰 BALANCE LOW! $${currentBalance.toFixed(2)} remaining (threshold: $${minBalanceAlert})`\n  });\n}\n\nif (hoursRemaining < 6 && hoursRemaining < 999) {\n  alerts.push({\n    type: 'BALANCE_RUNNING_OUT',\n    severity: 'warning',\n    message: `⏰ Balance will run out in ~${hoursRemaining.toFixed(1)} hours at current rate`\n  });\n}\n\nif (spendRatePerHour > 0) {\n  // Check for anomalous spend rate (would need historical comparison)\n  // For now just log it\n}\n\nreturn [{\n  json: {\n    balance: Math.round(currentBalance * 100) / 100,\n    total_spend_today: Math.round(totalSpendToday * 100) / 100,\n    spend_rate_per_hour: Math.round(spendRatePerHour * 10000) / 10000,\n    hours_remaining: Math.round(hoursRemaining * 100) / 100,\n    hours_elapsed: Math.round(hoursElapsed * 100) / 100,\n    alerts: alerts,\n    has_alerts: alerts.length > 0,\n    collected_at: $now.toISO()\n  }\n}];"
+        "jsCode": "const balanceData = $('Get Current Balance').first().json;\nconst historyData = $('Get Balance History').first().json;\n\nconst currentBalance = parseFloat(balanceData?.data?.balance || balanceData?.balance || 0);\n\n// Calculate spend from history (API returns data.result.data for paginated lists)\nconst history = historyData?.data?.result?.data || historyData?.data || (Array.isArray(historyData) ? historyData : []);\nconst todayStr = new Date().toISOString().slice(0, 10);\nconst spendEntries = Array.isArray(history) ? history.filter(h => h.type === 'spend' && (h.processed_at || '').startsWith(todayStr)) : [];\nconst totalSpendToday = spendEntries.reduce((sum, h) => sum + Math.abs(parseFloat(h.amount) || 0), 0);\n\n// Calculate spend rate\nconst now = new Date();\nconst hoursElapsed = now.getHours() + now.getMinutes() / 60;\nconst spendRatePerHour = hoursElapsed > 0 ? totalSpendToday / hoursElapsed : 0;\n\n// Estimate hours remaining\nconst hoursRemaining = spendRatePerHour > 0 ? currentBalance / spendRatePerHour : 999;\n\n// Thresholds from env\nconst minBalanceAlert = parseFloat(10);\n\nlet alerts = [];\n\nif (currentBalance < minBalanceAlert) {\n  alerts.push({\n    type: 'LOW_BALANCE',\n    severity: 'critical',\n    message: `💰 BALANCE LOW! $${currentBalance.toFixed(2)} remaining (threshold: $${minBalanceAlert})`\n  });\n}\n\nif (hoursRemaining < 6 && hoursRemaining < 999) {\n  alerts.push({\n    type: 'BALANCE_RUNNING_OUT',\n    severity: 'warning',\n    message: `⏰ Balance will run out in ~${hoursRemaining.toFixed(1)} hours at current rate`\n  });\n}\n\nif (spendRatePerHour > 0) {\n  // Check for anomalous spend rate (would need historical comparison)\n  // For now just log it\n}\n\nreturn [{\n  json: {\n    balance: Math.round(currentBalance * 100) / 100,\n    total_spend_today: Math.round(totalSpendToday * 100) / 100,\n    spend_rate_per_hour: Math.round(spendRatePerHour * 10000) / 10000,\n    hours_remaining: Math.round(hoursRemaining * 100) / 100,\n    hours_elapsed: Math.round(hoursElapsed * 100) / 100,\n    alerts: alerts,\n    has_alerts: alerts.length > 0,\n    collected_at: $now.toISO()\n  }\n}];"
       },
       "id": "calculate-metrics",
       "name": "Calculate Balance Metrics",

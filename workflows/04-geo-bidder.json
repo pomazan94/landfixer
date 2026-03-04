@@ -47,7 +47,15 @@
               "value": "ad_id"
             },
             {
-              "name": "per_page",
+              "name": "order_by[0][column]",
+              "value": "money"
+            },
+            {
+              "name": "order_by[0][direction]",
+              "value": "desc"
+            },
+            {
+              "name": "count",
               "value": "1000"
             }
           ]
@@ -70,8 +78,8 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
@@ -99,14 +107,14 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
     {
       "parameters": {
-        "jsCode": "const statsRaw = $('Fetch Geo Stats (7 days)').first().json;\nconst minBidsRaw = $('Fetch Min Bids').first().json;\n\nconst stats = statsRaw.data || statsRaw;\nconst minBids = minBidsRaw.data || minBidsRaw;\n\nif (!Array.isArray(stats)) {\n  return [{ json: { error: 'No geo stats data' } }];\n}\n\n// Build min bids map\nconst minBidMap = {};\nif (Array.isArray(minBids)) {\n  minBids.forEach(mb => {\n    minBidMap[mb.country_code] = {\n      min: parseFloat(mb.min_bid) || 0.001,\n      recommended: parseFloat(mb.recommended_bid) || 0.005\n    };\n  });\n}\n\nconst maxCeiling = parseFloat(0.10);\n\n// Group stats by ad_id, then by country\nconst adGeoStats = {};\nstats.forEach(d => {\n  const adId = d.ad_id;\n  const country = d.country_code;\n  if (!adId || !country) return;\n\n  if (!adGeoStats[adId]) adGeoStats[adId] = {};\n  if (!adGeoStats[adId][country]) {\n    adGeoStats[adId][country] = { spend: 0, revenue: 0, clicks: 0, shows: 0 };\n  }\n\n  adGeoStats[adId][country].spend += parseFloat(d.money) || 0;\n  adGeoStats[adId][country].revenue += parseFloat(d.postbacks_confirmed_money) || 0;\n  adGeoStats[adId][country].clicks += parseInt(d.clicks_count) || 0;\n  adGeoStats[adId][country].shows += parseInt(d.shows_count) || 0;\n});\n\nconst results = [];\n\nfor (const adId of Object.keys(adGeoStats)) {\n  const geoBids = {};\n  const details = [];\n\n  for (const country of Object.keys(adGeoStats[adId])) {\n    const g = adGeoStats[adId][country];\n    const roi = g.spend > 0 ? ((g.revenue - g.spend) / g.spend * 100) : 0;\n    const ctr = g.shows > 0 ? (g.clicks / g.shows * 100) : 0;\n    const minBid = minBidMap[country]?.min || 0.001;\n    const recBid = minBidMap[country]?.recommended || 0.005;\n\n    // Calculate optimal bid based on ROI\n    let optimalBid = recBid;\n    if (roi > 50 && g.clicks > 10) {\n      optimalBid = recBid * 1.5; // Scale profitable geos\n    } else if (roi > 0 && g.clicks > 5) {\n      optimalBid = recBid * 1.1;\n    } else if (roi < -30 && g.clicks > 10) {\n      optimalBid = minBid; // Minimize losing geos\n    } else if (roi < -50 && g.spend > 2) {\n      optimalBid = 0; // Effectively disable this geo\n    }\n\n    // Enforce bounds\n    if (optimalBid > maxCeiling) optimalBid = maxCeiling;\n    if (optimalBid > 0 && optimalBid < minBid) optimalBid = minBid;\n\n    if (optimalBid > 0) {\n      geoBids[country] = Math.round(optimalBid * 10000) / 10000;\n    }\n\n    details.push({\n      country, roi: Math.round(roi * 100) / 100,\n      clicks: g.clicks, spend: Math.round(g.spend * 100) / 100,\n      bid: geoBids[country] || 0\n    });\n  }\n\n  if (Object.keys(geoBids).length > 0) {\n    results.push({\n      json: {\n        ad_id: parseInt(adId),\n        geo_bids: geoBids,\n        details: details\n      }\n    });\n  }\n}\n\nif (results.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No geo bid changes needed' } }];\n}\n\nreturn results;"
+        "jsCode": "const statsRaw = $('Fetch Geo Stats (7 days)').first().json;\nconst minBidsRaw = $('Fetch Min Bids').first().json;\n\nconst stats = statsRaw?.data?.result?.data || statsRaw?.data || (Array.isArray(statsRaw) ? statsRaw : []);\nconst minBids = minBidsRaw?.data?.result?.data || minBidsRaw?.data || (Array.isArray(minBidsRaw) ? minBidsRaw : []);\n\nif (!Array.isArray(stats)) {\n  return [{ json: { error: 'No geo stats data' } }];\n}\n\n// Build min bids map\nconst minBidMap = {};\nif (Array.isArray(minBids)) {\n  minBids.forEach(mb => {\n    minBidMap[mb.country_code] = {\n      min: parseFloat(mb.min_bid) || 0.001,\n      recommended: parseFloat(mb.recommended_bid) || 0.005\n    };\n  });\n}\n\nconst maxCeiling = parseFloat(0.10);\n\n// Group stats by ad_id, then by country\nconst adGeoStats = {};\nstats.forEach(d => {\n  const adId = d.ad_id;\n  const country = d.country_code;\n  if (!adId || !country) return;\n\n  if (!adGeoStats[adId]) adGeoStats[adId] = {};\n  if (!adGeoStats[adId][country]) {\n    adGeoStats[adId][country] = { spend: 0, revenue: 0, clicks: 0, shows: 0 };\n  }\n\n  adGeoStats[adId][country].spend += parseFloat(d.money) || 0;\n  adGeoStats[adId][country].revenue += parseFloat(d.postbacks_confirmed_money) || 0;\n  adGeoStats[adId][country].clicks += parseInt(d.clicks_count) || 0;\n  adGeoStats[adId][country].shows += parseInt(d.shows_count) || 0;\n});\n\nconst results = [];\n\nfor (const adId of Object.keys(adGeoStats)) {\n  const geoBids = {};\n  const details = [];\n\n  for (const country of Object.keys(adGeoStats[adId])) {\n    const g = adGeoStats[adId][country];\n    const roi = g.spend > 0 ? ((g.revenue - g.spend) / g.spend * 100) : 0;\n    const ctr = g.shows > 0 ? (g.clicks / g.shows * 100) : 0;\n    const minBid = minBidMap[country]?.min || 0.001;\n    const recBid = minBidMap[country]?.recommended || 0.005;\n\n    // Calculate optimal bid based on ROI\n    let optimalBid = recBid;\n    if (roi > 50 && g.clicks > 10) {\n      optimalBid = recBid * 1.5; // Scale profitable geos\n    } else if (roi > 0 && g.clicks > 5) {\n      optimalBid = recBid * 1.1;\n    } else if (roi < -30 && g.clicks > 10) {\n      optimalBid = minBid; // Minimize losing geos\n    } else if (roi < -50 && g.spend > 2) {\n      optimalBid = 0; // Effectively disable this geo\n    }\n\n    // Enforce bounds\n    if (optimalBid > maxCeiling) optimalBid = maxCeiling;\n    if (optimalBid > 0 && optimalBid < minBid) optimalBid = minBid;\n\n    if (optimalBid > 0) {\n      geoBids[country] = Math.round(optimalBid * 10000) / 10000;\n    }\n\n    details.push({\n      country, roi: Math.round(roi * 100) / 100,\n      clicks: g.clicks, spend: Math.round(g.spend * 100) / 100,\n      bid: geoBids[country] || 0\n    });\n  }\n\n  // API only supports one_bid_for_all_geo, so calculate weighted average\n  const totalClicks = details.reduce((s, d) => s + d.clicks, 0);\n  let weightedBid = 0;\n  if (totalClicks > 0) {\n    details.forEach(d => {\n      if (d.bid > 0) weightedBid += d.bid * (d.clicks / totalClicks);\n    });\n  } else {\n    const bids = details.filter(d => d.bid > 0).map(d => d.bid);\n    weightedBid = bids.length > 0 ? bids.reduce((s, b) => s + b, 0) / bids.length : 0;\n  }\n\n  if (weightedBid > 0) {\n    results.push({\n      json: {\n        ad_id: parseInt(adId),\n        one_bid_for_all_geo: Math.round(weightedBid * 10000) / 10000,\n        details: details\n      }\n    });\n  }\n}\n\nif (results.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No geo bid changes needed' } }];\n}\n\nreturn results;"
       },
       "id": "calculate-geo-bids",
       "name": "Calculate Optimal Geo Bids",
@@ -124,8 +132,19 @@
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"ads\": [\n    {\n      \"ad_id\": {{ $json.ad_id }},\n      \"geo_bids\": {{ JSON.stringify($json.geo_bids) }}\n    }\n  ]\n}",
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "ids[]",
+              "value": "={{ $json.ad_id }}"
+            },
+            {
+              "name": "one_bid_for_all_geo",
+              "value": "={{ $json.one_bid_for_all_geo }}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "update-geo-bids",
@@ -138,8 +157,8 @@
       ],
       "credentials": {
         "httpHeaderAuth": {
-          "id": "geozo-api-cred",
-          "name": "Geozo API Token"
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
         }
       }
     },
