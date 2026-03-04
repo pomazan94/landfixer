@@ -24,7 +24,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/stats/tmp_with_postbacks",
+        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/stats/tmp_with_postbacks",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -70,7 +70,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ads/all",
+        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/all",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -157,7 +157,7 @@
     {
       "parameters": {
         "method": "PUT",
-        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ads/all/bid",
+        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/all/bid",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -182,7 +182,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID || '' }}",
         "text": "=⏱ BUDGET PACER {{ $now.format('dd.MM.yyyy HH:mm') }}\n\n{{ $json.reason }}\n\nSpend: ${{ $json.total_spend }} / ${{ $json.daily_budget }}\nRemaining: ${{ $json.remaining_budget }}\nRate: ${{ $json.actual_rate }}/h (target: ${{ $json.target_rate }}/h)\nAction: {{ $json.action }} ({{ Math.round(($json.bid_adjustment - 1) * 100) }}%)\nAds adjusted: {{ $json.ads_to_update?.length || 0 }}",
         "additionalFields": {}
       },

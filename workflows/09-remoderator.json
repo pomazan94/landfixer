@@ -24,7 +24,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ads/all",
+        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/all",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendQuery": true,
@@ -145,7 +145,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ads/teaser/update/{{ $json.ad_id }}",
+        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/teaser/update/{{ $json.ad_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -178,7 +178,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.GEOZO_API_BASE_URL }}/advertiser/ads/remoderate/{{ $json.ad_id }}",
+        "url": "={{ $env.GEOZO_API_BASE_URL || 'https://api.geozo.com/v1' }}/advertiser/ads/remoderate/{{ $json.ad_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {}
@@ -221,7 +221,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID || '' }}",
         "text": "=🔄 REMODERATION\n\nAd #{{ $json.ad_id }}\nBan reason: {{ $json.ban_reason }}\nOld title: {{ $json.old_title }}\nNew title: {{ $json.new_title }}\n\nSent for remoderation.",
         "additionalFields": {}
       },

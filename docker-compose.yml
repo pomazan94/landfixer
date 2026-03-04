@@ -24,6 +24,27 @@ services:
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
       - GENERIC_TIMEZONE=${TIMEZONE:-Europe/Moscow}
+      # --- Business env vars accessible via $env in workflows ---
+      - GEOZO_API_BASE_URL=${GEOZO_API_BASE_URL:-https://api.geozo.com/v1}
+      - GEOZO_API_TOKEN=${GEOZO_API_TOKEN}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-20250514}
+      - IMAGE_GEN_API=${IMAGE_GEN_API:-stable-diffusion}
+      - STABLE_DIFFUSION_API_URL=${STABLE_DIFFUSION_API_URL:-http://localhost:7860}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DEFAULT_BID=${DEFAULT_BID:-0.01}
+      - MAX_BID_CEILING=${MAX_BID_CEILING:-0.10}
+      - DAILY_BUDGET_LIMIT=${DAILY_BUDGET_LIMIT:-50}
+      - MIN_BALANCE_ALERT=${MIN_BALANCE_ALERT:-10}
+      - DEFAULT_LANDING_URL=${DEFAULT_LANDING_URL}
+      - DEFAULT_AD_GROUP_ID=${DEFAULT_AD_GROUP_ID}
+      - PROXY_PROVIDER=${PROXY_PROVIDER:-brightdata}
+      - PROXY_HOST=${PROXY_HOST}
+      - PROXY_PORT=${PROXY_PORT:-22225}
+      - PROXY_USER=${PROXY_USER}
+      - PROXY_PASSWORD=${PROXY_PASSWORD}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/home/node/workflows
@@ -116,6 +137,27 @@ services:
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
       - GENERIC_TIMEZONE=${TIMEZONE:-Europe/Moscow}
+      # --- Business env vars accessible via $env in workflows ---
+      - GEOZO_API_BASE_URL=${GEOZO_API_BASE_URL:-https://api.geozo.com/v1}
+      - GEOZO_API_TOKEN=${GEOZO_API_TOKEN}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-20250514}
+      - IMAGE_GEN_API=${IMAGE_GEN_API:-stable-diffusion}
+      - STABLE_DIFFUSION_API_URL=${STABLE_DIFFUSION_API_URL:-http://localhost:7860}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DEFAULT_BID=${DEFAULT_BID:-0.01}
+      - MAX_BID_CEILING=${MAX_BID_CEILING:-0.10}
+      - DAILY_BUDGET_LIMIT=${DAILY_BUDGET_LIMIT:-50}
+      - MIN_BALANCE_ALERT=${MIN_BALANCE_ALERT:-10}
+      - DEFAULT_LANDING_URL=${DEFAULT_LANDING_URL}
+      - DEFAULT_AD_GROUP_ID=${DEFAULT_AD_GROUP_ID}
+      - PROXY_PROVIDER=${PROXY_PROVIDER:-brightdata}
+      - PROXY_HOST=${PROXY_HOST}
+      - PROXY_PORT=${PROXY_PORT:-22225}
+      - PROXY_USER=${PROXY_USER}
+      - PROXY_PASSWORD=${PROXY_PASSWORD}
     volumes:
       - n8n2_data:/home/node/.n8n
     depends_on:

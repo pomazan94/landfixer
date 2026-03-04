@@ -155,7 +155,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID || '' }}",
         "text": "={{ $json.message }}",
         "additionalFields": {}
       },
@@ -219,7 +219,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID || '' }}",
         "text": "=📅 WEEKLY OPTIMIZATION LAUNCHED\n\nRunning:\n- Coefficient Tuner (OS/Browser/ISP)\n- Time Targeting Optimizer\n\nResults will be reported individually.",
         "additionalFields": {}
       },

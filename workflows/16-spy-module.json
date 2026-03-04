@@ -102,7 +102,7 @@
     },
     {
       "parameters": {
-        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID || '' }}",
         "text": "=🕵️ SPY MODULE - Competitor Analysis\n\nAnalyzed {{ $json.competitors_count }} unique competitor teasers\n\n{{ $json.analysis }}",
         "additionalFields": {}
       },
