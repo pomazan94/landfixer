@@ -328,7 +328,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO bid_rollback_snapshots (ad_id, snapshot_bid, snapshot_cpl, snapshot_ctr)\nVALUES (\n  {{ $json.ad_id }},\n  {{ $json.snapshot_bid }},\n  {{ $json.snapshot_cpl || 'NULL' }},\n  {{ $json.snapshot_ctr || 'NULL' }}\n);",
+        "query": "INSERT INTO bid_rollback_snapshots (ad_id, snapshot_bid, snapshot_cpl, snapshot_ctr)\nVALUES (\n  {{ $json.ad_id }},\n  {{ $json.snapshot_bid }},\n  {{ $json.snapshot_cpl || 'NULL' }},\n  {{ $json.snapshot_ctr || 'NULL' }}\n);\n\n-- Also create bid expectation for feedback loop\nINSERT INTO bid_expectations (ad_id, old_bid, new_bid, action, expected_metric, expected_direction, baseline_value, measurement_window_hours)\nVALUES (\n  {{ $json.ad_id }},\n  {{ $json.snapshot_bid }},\n  {{ $json.snapshot_bid }},\n  'bid_change',\n  'cpl',\n  'down',\n  {{ $json.snapshot_cpl || 0 }},\n  4\n);",
         "options": {}
       },
       "id": "save-rollback",

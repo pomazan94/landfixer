@@ -1,0 +1,287 @@
+{
+  "name": "23 - Rollback Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [0, 150]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Find rollback candidates: snapshots older than threshold, not yet triggered\nSELECT rs.id AS snapshot_id, rs.ad_id, rs.snapshot_bid, rs.snapshot_cpl, rs.snapshot_ctr,\n       rs.rollback_threshold_hours, rs.created_at,\n       EXTRACT(EPOCH FROM (NOW() - rs.created_at)) / 3600 AS hours_since_change\nFROM bid_rollback_snapshots rs\nWHERE rs.rollback_triggered = FALSE\n  AND rs.created_at < NOW() - (rs.rollback_threshold_hours || ' hours')::INTERVAL\n  AND rs.created_at > NOW() - INTERVAL '24 hours'\nORDER BY rs.created_at ASC\nLIMIT 50",
+        "options": {}
+      },
+      "id": "fetch-snapshots",
+      "name": "Fetch Rollback Candidates",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 0],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.geozo.com/v1/advertiser/stats/tmp_with_postbacks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "filters[date_from]", "value": "={{ $now.minus({ days: 1 }).format('yyyy-MM-dd') }}" },
+            { "name": "filters[date_to]", "value": "={{ $now.format('yyyy-MM-dd') }}" },
+            { "name": "groups[0]", "value": "ad_id" },
+            { "name": "count", "value": "500" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "id": "fetch-current-stats",
+      "name": "Fetch Current Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, 150],
+      "credentials": {
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT param5 AS ad_id, COUNT(*) AS total_leads,\n       SUM(CASE WHEN status = 'Depositor' THEN 1 ELSE 0 END) AS depositors\nFROM leads\nWHERE param5 IS NOT NULL AND param5 != '' AND param5 REGEXP '^[0-9]+$'\n  AND created_at >= DATE_SUB(CURDATE(), INTERVAL 1 DAY)\nGROUP BY param5",
+        "options": {}
+      },
+      "id": "fetch-crm",
+      "name": "Fetch CRM Leads",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [250, 300],
+      "credentials": {
+        "mySql": { "id": "mysql-crm", "name": "MySQL CRM" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// ROLLBACK ENGINE\n// ============================================\n// For each bid change snapshot:\n// 1. Compare current metrics vs snapshot baseline\n// 2. If metrics got WORSE (CTR dropped >30%, or CPL increased >20%):\n//    -> ROLLBACK: restore the old bid\n// 3. If metrics improved or stable -> mark snapshot as checked (no rollback needed)\n\nconst snapshots = $('Fetch Rollback Candidates').all().map(i => i.json);\nconst statsData = $('Fetch Current Stats').first().json;\nconst crmItems = $('Fetch CRM Leads').all().map(i => i.json);\n\nif (snapshots.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No rollback candidates' } }];\n}\n\n// Parse stats\nconst statsArr = statsData?.data?.result?.data || statsData?.data || (Array.isArray(statsData) ? statsData : []);\nconst statsMap = {};\nif (Array.isArray(statsArr)) {\n  statsArr.forEach(s => {\n    const adId = Number(s.ad_id);\n    const spend = Number(s.money) || 0;\n    const clicks = Number(s.clicks_count) || 0;\n    const shows = Number(s.shows_count) || 0;\n    statsMap[adId] = {\n      spend, clicks, shows,\n      ctr: shows > 0 ? (clicks / shows * 100) : 0,\n      cpc: clicks > 0 ? spend / clicks : 0\n    };\n  });\n}\n\n// CRM map\nconst crmMap = {};\ncrmItems.forEach(c => {\n  const adId = Number(c.ad_id);\n  crmMap[adId] = { leads: Number(c.total_leads) || 0, deps: Number(c.depositors) || 0 };\n});\n\nconst actions = [];\n\nsnapshots.forEach(snap => {\n  const adId = Number(snap.ad_id);\n  const stats = statsMap[adId];\n  const crm = crmMap[adId] || { leads: 0, deps: 0 };\n  const snapshotCpl = Number(snap.snapshot_cpl) || 0;\n  const snapshotCtr = Number(snap.snapshot_ctr) || 0;\n\n  let shouldRollback = false;\n  let reason = '';\n\n  if (!stats || stats.clicks < 5) {\n    // Not enough data to evaluate, mark as checked\n    actions.push({\n      json: {\n        snapshot_id: snap.snapshot_id,\n        ad_id: adId,\n        action: 'MARK_CHECKED',\n        reason: 'Insufficient data for evaluation',\n        rollback_bid: snap.snapshot_bid\n      }\n    });\n    return;\n  }\n\n  const currentCpl = crm.leads > 0 ? stats.spend / crm.leads : (stats.spend > 50 ? 99999 : 0);\n  const currentCtr = stats.ctr;\n\n  // Check CTR deterioration (>30% drop)\n  if (snapshotCtr > 0 && currentCtr > 0 && currentCtr < snapshotCtr * 0.7) {\n    shouldRollback = true;\n    reason = `CTR dropped ${((1 - currentCtr / snapshotCtr) * 100).toFixed(0)}%: ${snapshotCtr.toFixed(2)}% -> ${currentCtr.toFixed(2)}%`;\n  }\n\n  // Check CPL deterioration (>20% increase)\n  if (snapshotCpl > 0 && currentCpl > 0 && currentCpl !== 99999 && currentCpl > snapshotCpl * 1.2) {\n    shouldRollback = true;\n    reason = `CPL increased ${((currentCpl / snapshotCpl - 1) * 100).toFixed(0)}%: $${snapshotCpl.toFixed(0)} -> $${currentCpl.toFixed(0)}`;\n  }\n\n  // Had leads before, now zero with significant spend\n  if (snapshotCpl > 0 && snapshotCpl < 99999 && crm.leads === 0 && stats.spend > 100) {\n    shouldRollback = true;\n    reason = `Lost leads: had CPL $${snapshotCpl.toFixed(0)}, now 0 leads with $${stats.spend.toFixed(0)} spend`;\n  }\n\n  if (shouldRollback) {\n    actions.push({\n      json: {\n        snapshot_id: snap.snapshot_id,\n        ad_id: adId,\n        action: 'ROLLBACK',\n        rollback_bid: snap.snapshot_bid,\n        current_cpl: currentCpl === 99999 ? -1 : Math.round(currentCpl * 100) / 100,\n        snapshot_cpl: snapshotCpl,\n        current_ctr: Math.round(currentCtr * 10000) / 10000,\n        snapshot_ctr: snapshotCtr,\n        reason: reason\n      }\n    });\n  } else {\n    actions.push({\n      json: {\n        snapshot_id: snap.snapshot_id,\n        ad_id: adId,\n        action: 'MARK_CHECKED',\n        reason: 'Metrics stable or improved',\n        rollback_bid: snap.snapshot_bid\n      }\n    });\n  }\n});\n\nif (actions.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'All snapshots evaluated, no actions needed' } }];\n}\n\nreturn actions;"
+      },
+      "id": "rollback-logic",
+      "name": "Rollback Decision Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [550, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "is-rollback",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "ROLLBACK",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-action",
+      "name": "Rollback or Just Mark?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 100]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all/bid",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "ids[]", "value": "={{ $json.ad_id }}" },
+            { "name": "one_bid_for_all_geo", "value": "={{ $json.rollback_bid }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "execute-rollback",
+      "name": "Execute Rollback (Set Old Bid)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, -50],
+      "credentials": {
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Mark snapshot as rollback triggered\nUPDATE bid_rollback_snapshots SET\n  rollback_triggered = TRUE,\n  checked_at = NOW()\nWHERE id = {{ $json.snapshot_id }};\n\n-- Log rollback in bid_history\nINSERT INTO bid_history (ad_id, old_bid, new_bid, reason, rule_applied, clicks_at_change)\nVALUES (\n  {{ $json.ad_id }},\n  0,\n  {{ $json.rollback_bid }},\n  'ROLLBACK: {{ $json.reason.replace(/'/g, \"''\").slice(0, 200) }}',\n  'ROLLBACK',\n  0\n);\n\n-- Log state transition\nINSERT INTO teaser_state_log (ad_id, old_state, new_state, reason, triggered_by)\nVALUES (\n  {{ $json.ad_id }},\n  'active',\n  'active',\n  'ROLLBACK: {{ $json.reason.replace(/'/g, \"''\").slice(0, 150) }}',\n  'rollback_engine'\n);",
+        "options": {}
+      },
+      "id": "log-rollback",
+      "name": "Log Rollback",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1050, 100],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Just mark as checked (no rollback needed)\nUPDATE bid_rollback_snapshots SET\n  rollback_triggered = FALSE,\n  checked_at = NOW()\nWHERE id = {{ $json.snapshot_id }};",
+        "options": {}
+      },
+      "id": "mark-checked",
+      "name": "Mark as Checked",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1050, 250],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst rollbacks = items.filter(i => i.json.action === 'ROLLBACK');\nconst checked = items.filter(i => i.json.action === 'MARK_CHECKED');\nconst total = items.filter(i => i.json.action && i.json.action !== 'NONE');\n\nif (rollbacks.length === 0 && total.length === 0) return [];\n\nlet msg = `ROLLBACK ENGINE ${$now.toFormat('dd.MM.yyyy HH:mm')}\\n`;\nmsg += `Checked: ${total.length} | Rollbacks: ${rollbacks.length} | OK: ${checked.length}\\n`;\n\nif (rollbacks.length > 0) {\n  msg += `\\nROLLBACKS:\\n`;\n  rollbacks.forEach(r => {\n    msg += `  #${r.json.ad_id}: bid -> $${r.json.rollback_bid} | ${r.json.reason}\\n`;\n  });\n}\n\nreturn [{ json: { message: msg, has_rollbacks: rollbacks.length > 0 } }];"
+      },
+      "id": "format-summary",
+      "name": "Format Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 350]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "has-rollbacks",
+              "leftValue": "={{ $json.has_rollbacks }}",
+              "rightValue": "true",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "should-notify",
+      "name": "Has Rollbacks?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "chatId": "591828204",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "send-telegram",
+      "name": "Send Rollback Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1300, 350],
+      "credentials": {
+        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
+      }
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [[
+        { "node": "Fetch Rollback Candidates", "type": "main", "index": 0 },
+        { "node": "Fetch Current Stats", "type": "main", "index": 0 },
+        { "node": "Fetch CRM Leads", "type": "main", "index": 0 }
+      ]]
+    },
+    "Called by Orchestrator": {
+      "main": [[
+        { "node": "Fetch Rollback Candidates", "type": "main", "index": 0 },
+        { "node": "Fetch Current Stats", "type": "main", "index": 0 },
+        { "node": "Fetch CRM Leads", "type": "main", "index": 0 }
+      ]]
+    },
+    "Fetch Rollback Candidates": {
+      "main": [[ { "node": "Rollback Decision Logic", "type": "main", "index": 0 } ]]
+    },
+    "Fetch Current Stats": {
+      "main": [[ { "node": "Rollback Decision Logic", "type": "main", "index": 0 } ]]
+    },
+    "Fetch CRM Leads": {
+      "main": [[ { "node": "Rollback Decision Logic", "type": "main", "index": 0 } ]]
+    },
+    "Rollback Decision Logic": {
+      "main": [[
+        { "node": "Rollback or Just Mark?", "type": "main", "index": 0 },
+        { "node": "Format Summary", "type": "main", "index": 0 }
+      ]]
+    },
+    "Rollback or Just Mark?": {
+      "main": [
+        [
+          { "node": "Execute Rollback (Set Old Bid)", "type": "main", "index": 0 },
+          { "node": "Log Rollback", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Mark as Checked", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Format Summary": {
+      "main": [[ { "node": "Has Rollbacks?", "type": "main", "index": 0 } ]]
+    },
+    "Has Rollbacks?": {
+      "main": [
+        [ { "node": "Send Rollback Report", "type": "main", "index": 0 } ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "optimizer", "id": "tag-optimizer" },
+    { "name": "safety", "id": "tag-safety" }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

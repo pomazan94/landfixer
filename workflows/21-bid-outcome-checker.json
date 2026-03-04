@@ -1,0 +1,199 @@
+{
+  "name": "21 - Bid Outcome Checker",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [0, 150]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Fetch unchecked bid expectations older than measurement window\nSELECT be.id, be.ad_id, be.old_bid, be.new_bid, be.action,\n       be.expected_metric, be.expected_direction, be.baseline_value,\n       be.measurement_window_hours, be.created_at\nFROM bid_expectations be\nWHERE be.checked = FALSE\n  AND be.created_at < NOW() - (be.measurement_window_hours || ' hours')::INTERVAL\nORDER BY be.created_at ASC\nLIMIT 100",
+        "options": {}
+      },
+      "id": "fetch-unchecked",
+      "name": "Fetch Unchecked Expectations",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 75],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Get current stats for all ads with unchecked expectations\nSELECT s.ad_id,\n       SUM(s.money) AS total_spend,\n       SUM(s.clicks) AS total_clicks,\n       SUM(s.shows) AS total_shows,\n       CASE WHEN SUM(s.clicks) > 0 THEN SUM(s.money) / SUM(s.clicks) ELSE 0 END AS current_cpc,\n       CASE WHEN SUM(s.shows) > 0 THEN (SUM(s.clicks)::DECIMAL / SUM(s.shows)) * 100 ELSE 0 END AS current_ctr\nFROM ad_stats s\nWHERE s.date >= CURRENT_DATE - 1\n  AND s.ad_id IN (SELECT DISTINCT ad_id FROM bid_expectations WHERE checked = FALSE)\nGROUP BY s.ad_id",
+        "options": {}
+      },
+      "id": "fetch-current-stats",
+      "name": "Fetch Current Stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 225],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT param5 AS ad_id, COUNT(*) AS total_leads\nFROM leads\nWHERE param5 IS NOT NULL AND param5 != '' AND param5 REGEXP '^[0-9]+$'\n  AND created_at >= DATE_SUB(CURDATE(), INTERVAL 2 DAY)\nGROUP BY param5",
+        "options": {}
+      },
+      "id": "fetch-crm-leads",
+      "name": "Fetch Recent CRM Leads",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [250, 375],
+      "credentials": {
+        "mySql": { "id": "mysql-crm", "name": "MySQL CRM" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// BID OUTCOME CHECKER - Feedback Loop\n// ============================================\n// For each bid change made >4h ago:\n// 1. Check if the expected outcome happened\n// 2. Mark as success/failure/neutral\n// 3. Update escalation_failures on teasers\n// 4. Adaptive: adjust future aggressiveness based on success rate\n\nconst expectations = $('Fetch Unchecked Expectations').all().map(i => i.json);\nconst statsItems = $('Fetch Current Stats').all().map(i => i.json);\nconst crmItems = $('Fetch Recent CRM Leads').all().map(i => i.json);\n\nif (expectations.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No unchecked expectations' } }];\n}\n\n// Stats map\nconst statsMap = {};\nstatsItems.forEach(s => {\n  statsMap[Number(s.ad_id)] = {\n    spend: Number(s.total_spend) || 0,\n    clicks: Number(s.total_clicks) || 0,\n    cpc: Number(s.current_cpc) || 0,\n    ctr: Number(s.current_ctr) || 0\n  };\n});\n\n// CRM map\nconst crmMap = {};\ncrmItems.forEach(c => {\n  crmMap[Number(c.ad_id)] = Number(c.total_leads) || 0;\n});\n\nconst results = [];\nlet successCount = 0;\nlet failureCount = 0;\nlet neutralCount = 0;\n\nexpectations.forEach(exp => {\n  const adId = Number(exp.ad_id);\n  const stats = statsMap[adId];\n  const leads = crmMap[adId] || 0;\n  const baseline = Number(exp.baseline_value) || 0;\n\n  let outcome = 'insufficient_data';\n  let actualValue = null;\n\n  if (!stats) {\n    outcome = 'insufficient_data';\n  } else {\n    // Determine actual metric value\n    switch (exp.expected_metric) {\n      case 'cpl':\n        actualValue = leads > 0 ? stats.spend / leads : (stats.spend > 0 ? 99999 : null);\n        if (actualValue === null) {\n          outcome = 'insufficient_data';\n        } else if (exp.expected_direction === 'down') {\n          outcome = actualValue < baseline * 0.9 ? 'success' : (actualValue > baseline * 1.1 ? 'failure' : 'neutral');\n        } else {\n          outcome = actualValue > baseline * 1.1 ? 'success' : (actualValue < baseline * 0.9 ? 'failure' : 'neutral');\n        }\n        break;\n      case 'ctr':\n        actualValue = stats.ctr;\n        if (exp.expected_direction === 'up') {\n          outcome = actualValue > baseline * 1.1 ? 'success' : (actualValue < baseline * 0.8 ? 'failure' : 'neutral');\n        } else {\n          outcome = actualValue < baseline * 0.9 ? 'success' : (actualValue > baseline * 1.2 ? 'failure' : 'neutral');\n        }\n        break;\n      case 'cpc':\n        actualValue = stats.cpc;\n        if (exp.expected_direction === 'down') {\n          outcome = actualValue < baseline * 0.85 ? 'success' : (actualValue > baseline * 1.05 ? 'failure' : 'neutral');\n        }\n        break;\n      default:\n        outcome = 'insufficient_data';\n    }\n  }\n\n  if (outcome === 'success') successCount++;\n  else if (outcome === 'failure') failureCount++;\n  else neutralCount++;\n\n  results.push({\n    json: {\n      expectation_id: exp.id,\n      ad_id: adId,\n      action: exp.action,\n      expected_metric: exp.expected_metric,\n      expected_direction: exp.expected_direction,\n      baseline_value: baseline,\n      actual_value: actualValue !== null ? Math.round(actualValue * 100) / 100 : null,\n      outcome: outcome,\n      old_bid: exp.old_bid,\n      new_bid: exp.new_bid\n    }\n  });\n});\n\n// Add summary as first item\nresults.unshift({\n  json: {\n    is_summary: true,\n    total_checked: expectations.length,\n    success: successCount,\n    failure: failureCount,\n    neutral: neutralCount,\n    insufficient_data: expectations.length - successCount - failureCount - neutralCount,\n    success_rate: expectations.length > 0 ? Math.round((successCount / expectations.length) * 100) : 0\n  }\n});\n\nreturn results;"
+      },
+      "id": "evaluate-outcomes",
+      "name": "Evaluate Outcomes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [550, 150]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "not-summary",
+              "leftValue": "={{ $json.is_summary }}",
+              "rightValue": "true",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-results",
+      "name": "Filter Individual Results",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 50]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Update expectation with outcome\nUPDATE bid_expectations SET\n  outcome = '{{ $json.outcome }}',\n  actual_value = {{ $json.actual_value || 'NULL' }},\n  checked = TRUE,\n  checked_at = NOW()\nWHERE id = {{ $json.expectation_id }};\n\n-- Update escalation_failures on teaser if outcome is failure\nUPDATE teasers SET\n  escalation_failures = CASE WHEN '{{ $json.outcome }}' = 'failure' THEN escalation_failures + 1 ELSE escalation_failures END,\n  updated_at = NOW()\nWHERE ad_id = {{ $json.ad_id }};",
+        "options": {}
+      },
+      "id": "update-expectations",
+      "name": "Update Expectations + Teaser",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1050, -50],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format summary from the first item\nconst items = $input.all();\nconst summary = items.find(i => i.json.is_summary);\n\nif (!summary) return [];\n\nconst s = summary.json;\nconst failures = items.filter(i => i.json.outcome === 'failure').slice(0, 5);\n\nlet msg = `BID OUTCOME CHECKER ${$now.toFormat('dd.MM.yyyy HH:mm')}\\n`;\nmsg += `Checked: ${s.total_checked} | OK: ${s.success} | Fail: ${s.failure} | Neutral: ${s.neutral} | No data: ${s.insufficient_data}\\n`;\nmsg += `Success rate: ${s.success_rate}%\\n`;\n\nif (failures.length > 0) {\n  msg += `\\nFailed changes:\\n`;\n  failures.forEach(f => {\n    msg += `  #${f.json.ad_id}: ${f.json.action} ${f.json.expected_metric} expected ${f.json.expected_direction}, baseline ${f.json.baseline_value} -> actual ${f.json.actual_value}\\n`;\n  });\n}\n\nif (s.success_rate < 40 && s.total_checked >= 5) {\n  msg += `\\n⚠️ Low success rate! Consider reducing bid change aggressiveness.`;\n}\n\nreturn [{ json: { message: msg, success_rate: s.success_rate } }];"
+      },
+      "id": "format-summary",
+      "name": "Format Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "591828204",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "send-telegram",
+      "name": "Send Outcome Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1050, 300],
+      "credentials": {
+        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
+      }
+    }
+  ],
+  "connections": {
+    "Every Hour": {
+      "main": [[
+        { "node": "Fetch Unchecked Expectations", "type": "main", "index": 0 },
+        { "node": "Fetch Current Stats", "type": "main", "index": 0 },
+        { "node": "Fetch Recent CRM Leads", "type": "main", "index": 0 }
+      ]]
+    },
+    "Called by Orchestrator": {
+      "main": [[
+        { "node": "Fetch Unchecked Expectations", "type": "main", "index": 0 },
+        { "node": "Fetch Current Stats", "type": "main", "index": 0 },
+        { "node": "Fetch Recent CRM Leads", "type": "main", "index": 0 }
+      ]]
+    },
+    "Fetch Unchecked Expectations": {
+      "main": [[ { "node": "Evaluate Outcomes", "type": "main", "index": 0 } ]]
+    },
+    "Fetch Current Stats": {
+      "main": [[ { "node": "Evaluate Outcomes", "type": "main", "index": 0 } ]]
+    },
+    "Fetch Recent CRM Leads": {
+      "main": [[ { "node": "Evaluate Outcomes", "type": "main", "index": 0 } ]]
+    },
+    "Evaluate Outcomes": {
+      "main": [[
+        { "node": "Filter Individual Results", "type": "main", "index": 0 },
+        { "node": "Format Summary", "type": "main", "index": 0 }
+      ]]
+    },
+    "Filter Individual Results": {
+      "main": [
+        [ { "node": "Update Expectations + Teaser", "type": "main", "index": 0 } ],
+        []
+      ]
+    },
+    "Format Summary": {
+      "main": [[ { "node": "Send Outcome Report", "type": "main", "index": 0 } ]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "optimizer", "id": "tag-optimizer" },
+    { "name": "safety", "id": "tag-safety" }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}

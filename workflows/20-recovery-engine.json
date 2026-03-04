@@ -1,0 +1,277 @@
+{
+  "name": "20 - Recovery Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every 4 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [0, 150]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Check if emergency is active (don't recover during emergency)\nSELECT is_active FROM emergency_state WHERE is_active = TRUE ORDER BY activated_at DESC LIMIT 1",
+        "options": {}
+      },
+      "id": "check-emergency",
+      "name": "Check Emergency",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [250, 75],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "not-emergency",
+              "leftValue": "={{ $json.is_active }}",
+              "rightValue": "true",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "emergency-gate",
+      "name": "Emergency Active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 75]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT t.id AS teaser_id, t.ad_id, t.state, t.state_changed_at, t.state_reason,\n       t.recovery_attempts, t.pause_count, t.bid, t.escalation_level,\n       gp.min_bid, gp.max_bid, gp.max_cpl, gp.country_code,\n       EXTRACT(EPOCH FROM (NOW() - t.state_changed_at)) / 3600 AS hours_in_state\nFROM teasers t\nLEFT JOIN geo_payouts gp ON gp.country_code = (\n  SELECT country_code FROM geo_payouts LIMIT 1\n)\nWHERE t.state IN ('paused_low_ctr', 'paused_high_cpl', 'paused_budget', 'paused_anomaly', 'stopped', 'recovery_queue')\n  AND t.recovery_attempts < 3\n  AND t.ad_id IS NOT NULL\nORDER BY t.state_changed_at ASC",
+        "options": {}
+      },
+      "id": "fetch-paused-teasers",
+      "name": "Fetch Paused Teasers",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [700, 0],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT ad_id, anomaly_type, severity, resolved, detected_at\nFROM anomalies\nWHERE resolved = FALSE\n  AND detected_at >= NOW() - INTERVAL '48 hours'\nORDER BY ad_id, detected_at DESC",
+        "options": {}
+      },
+      "id": "fetch-active-anomalies",
+      "name": "Fetch Active Anomalies",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [700, 150],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// RECOVERY ENGINE - Restore paused teasers\n// ============================================\n// Rules:\n//   paused_low_ctr:    24h min pause -> recover with max_bid if < 7 days old, else STOP\n//   paused_high_cpl:   12h min pause -> recover with max_bid (give another chance)\n//   paused_budget:     auto-recover at morning (06:00) with bid * 0.9\n//   paused_anomaly:    only if anomaly resolved -> recover with previous bid\n//   recovery_queue:    48h timeout -> STOP permanently\n//   stopped:           30 days timeout -> mark DEAD\n// Max 3 recovery attempts per teaser.\n\nconst pausedTeasers = $('Fetch Paused Teasers').all().map(i => i.json);\nconst anomalyItems = $('Fetch Active Anomalies').all().map(i => i.json);\n\nif (pausedTeasers.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No paused teasers to recover' } }];\n}\n\n// Anomaly map: ad_id -> has unresolved anomaly\nconst anomalyMap = {};\nanomalyItems.forEach(a => {\n  const adId = Number(a.ad_id);\n  if (!anomalyMap[adId]) anomalyMap[adId] = [];\n  anomalyMap[adId].push(a);\n});\n\nconst now = new Date();\nconst hour = now.getHours();\nconst isMorning = hour >= 5 && hour <= 8;\n\nconst actions = [];\n\npausedTeasers.forEach(t => {\n  const hoursInState = Number(t.hours_in_state) || 0;\n  const recoveryAttempts = Number(t.recovery_attempts) || 0;\n  const maxBid = Number(t.max_bid) || 0.15;\n  const minBid = Number(t.min_bid) || 0.01;\n  const currentBid = Number(t.bid) || minBid;\n  const geo = t.country_code || '?';\n  const hasUnresolvedAnomaly = (anomalyMap[t.ad_id] || []).length > 0;\n\n  let action = 'HOLD';\n  let newBid = currentBid;\n  let newState = t.state;\n  let reason = '';\n\n  switch (t.state) {\n    case 'paused_low_ctr':\n      if (hoursInState < 24) {\n        action = 'HOLD';\n        reason = `${geo} #${t.ad_id} paused_low_ctr: ${hoursInState.toFixed(1)}h < 24h min`;\n      } else if (recoveryAttempts >= 2) {\n        // Too many attempts, stop permanently\n        action = 'STOP_PERMANENT';\n        newState = 'dead';\n        reason = `${geo} #${t.ad_id} paused_low_ctr: ${recoveryAttempts} recovery attempts exhausted`;\n      } else {\n        // Give another chance with max bid to get real data\n        action = 'RECOVER';\n        newBid = maxBid;\n        newState = 'active';\n        reason = `${geo} #${t.ad_id} paused_low_ctr: recovering at max bid $${maxBid} (attempt ${recoveryAttempts + 1}/3)`;\n      }\n      break;\n\n    case 'paused_high_cpl':\n      if (hoursInState < 12) {\n        action = 'HOLD';\n        reason = `${geo} #${t.ad_id} paused_high_cpl: ${hoursInState.toFixed(1)}h < 12h min`;\n      } else if (recoveryAttempts >= 2) {\n        action = 'STOP_PERMANENT';\n        newState = 'dead';\n        reason = `${geo} #${t.ad_id} paused_high_cpl: ${recoveryAttempts} recovery attempts exhausted`;\n      } else {\n        // Recover with max bid - fresh start\n        action = 'RECOVER';\n        newBid = maxBid;\n        newState = 'active';\n        reason = `${geo} #${t.ad_id} paused_high_cpl: recovering at max bid $${maxBid} (attempt ${recoveryAttempts + 1}/3)`;\n      }\n      break;\n\n    case 'paused_budget':\n      if (!isMorning) {\n        action = 'HOLD';\n        reason = `${geo} #${t.ad_id} paused_budget: waiting for morning (06:00)`;\n      } else {\n        // Auto-recover in morning with slightly lower bid\n        action = 'RECOVER';\n        newBid = Math.max(currentBid * 0.9, minBid);\n        newState = 'active';\n        reason = `${geo} #${t.ad_id} paused_budget: morning auto-recover at $${newBid.toFixed(4)}`;\n      }\n      break;\n\n    case 'paused_anomaly':\n      if (hasUnresolvedAnomaly) {\n        if (hoursInState > 24) {\n          newState = 'stopped';\n          action = 'ESCALATE';\n          reason = `${geo} #${t.ad_id} paused_anomaly: unresolved >24h, escalating to stopped`;\n        } else {\n          action = 'HOLD';\n          reason = `${geo} #${t.ad_id} paused_anomaly: anomaly still active`;\n        }\n      } else {\n        // Anomaly resolved, recover\n        action = 'RECOVER';\n        newBid = currentBid;  // Same bid, anomaly was external\n        newState = 'active';\n        reason = `${geo} #${t.ad_id} paused_anomaly: anomaly resolved, recovering at $${currentBid.toFixed(4)}`;\n      }\n      break;\n\n    case 'recovery_queue':\n      if (hoursInState > 48) {\n        action = 'STOP_PERMANENT';\n        newState = 'stopped';\n        reason = `${geo} #${t.ad_id} recovery_queue: 48h timeout, stopping`;\n      } else {\n        action = 'HOLD';\n        reason = `${geo} #${t.ad_id} recovery_queue: ${hoursInState.toFixed(1)}h / 48h`;\n      }\n      break;\n\n    case 'stopped':\n      if (hoursInState > 30 * 24) {\n        action = 'MARK_DEAD';\n        newState = 'dead';\n        reason = `${geo} #${t.ad_id} stopped: 30 days timeout, marking dead`;\n      } else {\n        action = 'HOLD';\n        reason = `${geo} #${t.ad_id} stopped: ${(hoursInState / 24).toFixed(1)} days`;\n      }\n      break;\n  }\n\n  if (action !== 'HOLD') {\n    actions.push({\n      json: {\n        teaser_id: t.teaser_id,\n        ad_id: t.ad_id,\n        action: action,\n        old_state: t.state,\n        new_state: newState,\n        current_bid: currentBid,\n        new_bid: Math.round(newBid * 10000) / 10000,\n        recovery_attempts: recoveryAttempts,\n        hours_in_state: Math.round(hoursInState * 10) / 10,\n        geo: geo,\n        reason: reason\n      }\n    });\n  }\n});\n\nif (actions.length === 0) {\n  return [{ json: { action: 'NONE', reason: `Checked ${pausedTeasers.length} paused teasers, none ready for recovery` } }];\n}\n\nreturn actions;"
+      },
+      "id": "recovery-logic",
+      "name": "Recovery Logic",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 75]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "is-recover",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "RECOVER",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-action",
+      "name": "Recover or State Change?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 75]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all/bid",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "ids[]", "value": "={{ $json.ad_id }}" },
+            { "name": "one_bid_for_all_geo", "value": "={{ $json.new_bid }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "reactivate-ad",
+      "name": "Reactivate Ad (Set Bid)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, -50],
+      "credentials": {
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all/play",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ids\": {{ JSON.stringify([$json.ad_id]) }}\n}",
+        "options": {}
+      },
+      "id": "play-ad",
+      "name": "Play Ad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1750, -50],
+      "credentials": {
+        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Update teaser state\nUPDATE teasers SET\n  state = '{{ $json.new_state }}',\n  state_changed_at = NOW(),\n  state_reason = '{{ $json.reason.replace(/'/g, \"''\").slice(0, 200) }}',\n  recovery_attempts = CASE WHEN '{{ $json.action }}' = 'RECOVER' THEN recovery_attempts + 1 ELSE recovery_attempts END,\n  escalation_level = CASE WHEN '{{ $json.action }}' = 'RECOVER' THEN 0 ELSE escalation_level END,\n  escalation_failures = CASE WHEN '{{ $json.action }}' = 'RECOVER' THEN 0 ELSE escalation_failures END,\n  bid = CASE WHEN '{{ $json.action }}' = 'RECOVER' THEN {{ $json.new_bid }} ELSE bid END,\n  updated_at = NOW()\nWHERE ad_id = {{ $json.ad_id }};\n\n-- Log state transition\nINSERT INTO teaser_state_log (teaser_id, ad_id, old_state, new_state, reason, triggered_by)\nVALUES (\n  {{ $json.teaser_id || 'NULL' }},\n  {{ $json.ad_id }},\n  '{{ $json.old_state }}',\n  '{{ $json.new_state }}',\n  '{{ $json.reason.replace(/'/g, \"''\").slice(0, 200) }}',\n  'recovery_engine'\n);",
+        "options": {}
+      },
+      "id": "update-state",
+      "name": "Update Teaser State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1500, 200],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst changes = items.filter(i => i.json.action && i.json.action !== 'NONE');\n\nif (changes.length === 0) return [];\n\nconst recovered = changes.filter(i => i.json.action === 'RECOVER');\nconst stopped = changes.filter(i => i.json.action === 'STOP_PERMANENT' || i.json.action === 'MARK_DEAD');\nconst escalated = changes.filter(i => i.json.action === 'ESCALATE');\n\nlet msg = `RECOVERY ENGINE ${$now.toFormat('dd.MM.yyyy HH:mm')}\\n`;\nmsg += `Recovered: ${recovered.length} | Stopped: ${stopped.length} | Escalated: ${escalated.length}\\n\\n`;\n\nif (recovered.length > 0) {\n  msg += `RECOVERED:\\n`;\n  recovered.forEach(r => {\n    msg += `  ${r.json.geo} #${r.json.ad_id}: ${r.json.old_state} -> active, bid $${r.json.new_bid} (attempt ${r.json.recovery_attempts + 1}/3)\\n`;\n  });\n  msg += `\\n`;\n}\n\nif (stopped.length > 0) {\n  msg += `PERMANENTLY STOPPED:\\n`;\n  stopped.forEach(s => {\n    msg += `  ${s.json.geo} #${s.json.ad_id}: ${s.json.old_state} -> ${s.json.new_state} (${s.json.recovery_attempts} attempts)\\n`;\n  });\n  msg += `\\n`;\n}\n\nif (escalated.length > 0) {\n  msg += `ESCALATED:\\n`;\n  escalated.forEach(e => {\n    msg += `  ${e.json.geo} #${e.json.ad_id}: ${e.json.reason}\\n`;\n  });\n}\n\nreturn [{ json: { message: msg } }];"
+      },
+      "id": "format-summary",
+      "name": "Format Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 350]
+    },
+    {
+      "parameters": {
+        "chatId": "591828204",
+        "text": "={{ $json.message }}",
+        "additionalFields": {}
+      },
+      "id": "send-telegram",
+      "name": "Send Recovery Report",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1500, 350],
+      "credentials": {
+        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
+      }
+    }
+  ],
+  "connections": {
+    "Every 4 Hours": {
+      "main": [[ { "node": "Check Emergency", "type": "main", "index": 0 } ]]
+    },
+    "Called by Orchestrator": {
+      "main": [[ { "node": "Check Emergency", "type": "main", "index": 0 } ]]
+    },
+    "Check Emergency": {
+      "main": [[ { "node": "Emergency Active?", "type": "main", "index": 0 } ]]
+    },
+    "Emergency Active?": {
+      "main": [
+        [],
+        [
+          { "node": "Fetch Paused Teasers", "type": "main", "index": 0 },
+          { "node": "Fetch Active Anomalies", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Paused Teasers": {
+      "main": [[ { "node": "Recovery Logic", "type": "main", "index": 0 } ]]
+    },
+    "Fetch Active Anomalies": {
+      "main": [[ { "node": "Recovery Logic", "type": "main", "index": 0 } ]]
+    },
+    "Recovery Logic": {
+      "main": [[
+        { "node": "Recover or State Change?", "type": "main", "index": 0 },
+        { "node": "Format Summary", "type": "main", "index": 0 }
+      ]]
+    },
+    "Recover or State Change?": {
+      "main": [
+        [
+          { "node": "Reactivate Ad (Set Bid)", "type": "main", "index": 0 },
+          { "node": "Update Teaser State", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Update Teaser State", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Reactivate Ad (Set Bid)": {
+      "main": [[ { "node": "Play Ad", "type": "main", "index": 0 } ]]
+    },
+    "Format Summary": {
+      "main": [[ { "node": "Send Recovery Report", "type": "main", "index": 0 } ]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "optimizer", "id": "tag-optimizer" },
+    { "name": "safety", "id": "tag-safety" }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}
