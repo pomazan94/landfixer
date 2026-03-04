@@ -85,7 +85,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const statsRaw = $input.first().json;\nconst stats = statsRaw?.data?.result?.data || statsRaw?.data || (Array.isArray(statsRaw) ? statsRaw : []);\n\nif (!Array.isArray(stats)) {\n  return [{ json: { error: 'No block stats' } }];\n}\n\n// Aggregate by block_id\nconst blockAgg = {};\nstats.forEach(s => {\n  const blockId = s.block_id;\n  if (!blockId) return;\n  if (!blockAgg[blockId]) {\n    blockAgg[blockId] = { spend: 0, revenue: 0, clicks: 0, shows: 0, ads: new Set() };\n  }\n  blockAgg[blockId].spend += s.money || 0;\n  blockAgg[blockId].revenue += s.postbacks_confirmed_money || 0;\n  blockAgg[blockId].clicks += s.clicks_count || 0;\n  blockAgg[blockId].shows += s.shows_count || 0;\n  if (s.ad_id) blockAgg[blockId].ads.add(s.ad_id);\n});\n\nconst blacklist = [];\nconst whitelist = [];\nconst yellow = [];\n\nfor (const [blockId, b] of Object.entries(blockAgg)) {\n  const roi = b.spend > 0 ? ((b.revenue - b.spend) / b.spend * 100) : 0;\n  const ctr = b.shows > 0 ? (b.clicks / b.shows * 100) : 0;\n\n  const blockInfo = {\n    block_id: blockId,\n    roi: Math.round(roi * 100) / 100,\n    ctr: Math.round(ctr * 10000) / 10000,\n    clicks: b.clicks,\n    shows: b.shows,\n    spend: Math.round(b.spend * 100) / 100,\n    revenue: Math.round(b.revenue * 100) / 100,\n    ad_count: b.ads.size\n  };\n\n  // GREEN: profitable block\n  if (roi > 20 && b.clicks > 10 && ctr > 0.5) {\n    blockInfo.classification = 'green';\n    whitelist.push(blockInfo);\n  }\n  // RED: losing block\n  else if ((roi < -30 && b.clicks > 20) || (ctr < 0.1 && b.shows > 500)) {\n    blockInfo.classification = 'red';\n    blacklist.push(blockInfo);\n  }\n  // YELLOW: observation\n  else {\n    blockInfo.classification = 'yellow';\n    yellow.push(blockInfo);\n  }\n}\n\nreturn [{\n  json: {\n    blacklist_blocks: blacklist.map(b => b.block_id),\n    whitelist_blocks: whitelist.map(b => b.block_id),\n    blacklist_details: blacklist,\n    whitelist_details: whitelist,\n    yellow_details: yellow,\n    total_analyzed: Object.keys(blockAgg).length\n  }\n}];"
+        "jsCode": "const statsRaw = $('Fetch Block Stats (7 days)').first().json;\nconst stats = statsRaw?.data?.result?.data || statsRaw?.data || (Array.isArray(statsRaw) ? statsRaw : []);\n\n// Get CRM data (depositors + revenue by block)\nlet crmMap = {};\ntry {\n  const crmRows = $('Fetch CRM Block Stats').all().map(i => i.json);\n  crmRows.forEach(r => {\n    if (r.block_id) {\n      crmMap[String(r.block_id)] = {\n        leads: Number(r.total_leads) || 0,\n        depositors: Number(r.depositors) || 0,\n        crm_revenue: Number(r.crm_revenue) || 0\n      };\n    }\n  });\n} catch (e) {\n  // CRM data not available, continue with Geozo data only\n}\n\nif (!Array.isArray(stats)) {\n  return [{ json: { error: 'No block stats' } }];\n}\n\n// Aggregate Geozo stats by block_id\nconst blockAgg = {};\nstats.forEach(s => {\n  const blockId = String(s.block_id);\n  if (!blockId) return;\n  if (!blockAgg[blockId]) {\n    blockAgg[blockId] = { spend: 0, geozo_revenue: 0, clicks: 0, shows: 0, ads: new Set() };\n  }\n  blockAgg[blockId].spend += s.money || 0;\n  blockAgg[blockId].geozo_revenue += s.postbacks_confirmed_money || 0;\n  blockAgg[blockId].clicks += s.clicks_count || 0;\n  blockAgg[blockId].shows += s.shows_count || 0;\n  if (s.ad_id) blockAgg[blockId].ads.add(s.ad_id);\n});\n\nconst blacklist = [];\nconst whitelist = [];\nconst yellow = [];\n\nfor (const [blockId, b] of Object.entries(blockAgg)) {\n  const crm = crmMap[blockId] || { leads: 0, depositors: 0, crm_revenue: 0 };\n  \n  // Use CRM revenue if available, otherwise fall back to Geozo postbacks\n  const revenue = crm.crm_revenue > 0 ? crm.crm_revenue : b.geozo_revenue;\n  const roi = b.spend > 0 ? ((revenue - b.spend) / b.spend * 100) : 0;\n  const ctr = b.shows > 0 ? (b.clicks / b.shows * 100) : 0;\n  const cr = crm.leads > 0 ? (crm.depositors / crm.leads * 100) : 0;\n\n  const blockInfo = {\n    block_id: blockId,\n    roi: Math.round(roi * 100) / 100,\n    ctr: Math.round(ctr * 10000) / 10000,\n    cr: Math.round(cr * 100) / 100,\n    clicks: b.clicks,\n    shows: b.shows,\n    spend: Math.round(b.spend * 100) / 100,\n    revenue: Math.round(revenue * 100) / 100,\n    crm_leads: crm.leads,\n    crm_depositors: crm.depositors,\n    ad_count: b.ads.size,\n    data_source: crm.crm_revenue > 0 ? 'crm' : 'geozo'\n  };\n\n  // GREEN: profitable block (CRM ROI > 15% with depositors, or Geozo ROI > 20%)\n  if (crm.depositors > 0 && roi > 15 && b.clicks > 10) {\n    blockInfo.classification = 'green';\n    whitelist.push(blockInfo);\n  }\n  else if (roi > 20 && b.clicks > 10 && ctr > 0.5) {\n    blockInfo.classification = 'green';\n    whitelist.push(blockInfo);\n  }\n  // RED: losing block (high spend, no depositors from CRM)\n  else if (crm.leads >= 10 && crm.depositors === 0 && b.spend > 5) {\n    blockInfo.classification = 'red';\n    blacklist.push(blockInfo);\n  }\n  else if ((roi < -30 && b.clicks > 20) || (ctr < 0.1 && b.shows > 500)) {\n    blockInfo.classification = 'red';\n    blacklist.push(blockInfo);\n  }\n  // YELLOW: observation\n  else {\n    blockInfo.classification = 'yellow';\n    yellow.push(blockInfo);\n  }\n}\n\nreturn [{\n  json: {\n    blacklist_blocks: blacklist.map(b => b.block_id),\n    whitelist_blocks: whitelist.map(b => b.block_id),\n    blacklist_details: blacklist,\n    whitelist_details: whitelist,\n    yellow_details: yellow,\n    total_analyzed: Object.keys(blockAgg).length,\n    crm_blocks_matched: Object.keys(crmMap).length\n  }\n}];"
       },
       "id": "classify-blocks",
       "name": "Classify Blocks",
@@ -201,7 +201,7 @@
     {
       "parameters": {
         "chatId": "591828204",
-        "text": "=\ud83c\udfaf BLOCK OPTIMIZER {{ $now.format('dd.MM.yyyy') }}\n\nAnalyzed: {{ $json.total_analyzed }} blocks\n\ud83d\udfe2 Whitelisted: {{ $json.whitelist_count }} blocks\n\ud83d\udd34 Blacklisted: {{ $json.blacklist_count }} blocks\n\nUpdated ad group #{{ $json.ad_group_id }}",
+        "text": "=\ud83c\udfaf BLOCK OPTIMIZER {{ $now.format('dd.MM.yyyy') }}\n\nAnalyzed: {{ $json.total_analyzed }} blocks (CRM matched: {{ $json.crm_blocks_matched || 0 }})\n\ud83d\udfe2 Whitelisted: {{ $json.whitelist_count }} blocks\n\ud83d\udd34 Blacklisted: {{ $json.blacklist_count }} blocks\n\nUpdated ad group #{{ $json.ad_group_id }}",
         "additionalFields": {}
       },
       "id": "notify",
@@ -229,6 +229,27 @@
         0,
         150
       ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT param6 AS block_id, COUNT(*) AS total_leads, SUM(CASE WHEN status = 'Depositor' THEN 1 ELSE 0 END) AS depositors, ROUND(SUM(CASE WHEN status = 'Depositor' THEN cost ELSE 0 END), 2) AS crm_revenue FROM `leads` WHERE param6 IS NOT NULL AND param6 != '' AND param6 REGEXP '^[0-9]+$' AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) GROUP BY param6 HAVING COUNT(*) >= 3"
+      },
+      "id": "fetch-crm-stats",
+      "name": "Fetch CRM Block Stats",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        220,
+        150
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "mysql-crm",
+          "name": "CRM DB"
+        }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -244,11 +265,27 @@
             "node": "Fetch Active Ad Groups",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Fetch CRM Block Stats",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
     },
     "Fetch Block Stats (7 days)": {
+      "main": [
+        [
+          {
+            "node": "Classify Blocks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch CRM Block Stats": {
       "main": [
         [
           {
@@ -318,6 +355,11 @@
           },
           {
             "node": "Fetch Active Ad Groups",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch CRM Block Stats",
             "type": "main",
             "index": 0
           }
