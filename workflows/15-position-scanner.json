@@ -170,7 +170,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO position_tracking (site_url, ad_id, position, total_teasers_in_block, competitor_titles)\nVALUES (\n  '{{ $json.site_url.replace(/'/g, \"''\") }}',\n  NULL,\n  NULL,\n  {{ $json.teasers_found }},\n  '{{ JSON.stringify({ block_ids: $json.block_ids, teasers: $json.teasers, country_code: $json.country_code }).replace(/'/g, \"''\") }}'::jsonb\n);",
+        "query": "WITH our_match AS (\n  SELECT t.ad_id, (elem->>'position')::int AS pos\n  FROM teasers t,\n  jsonb_array_elements('{{ JSON.stringify($json.teasers).replace(/'/g, \"''\") }}'::jsonb) elem\n  WHERE t.ad_id IS NOT NULL\n    AND t.ad_id::text = elem->>'media_id'\n  LIMIT 1\n)\nINSERT INTO position_tracking (site_url, ad_id, position, total_teasers_in_block, competitor_titles)\nVALUES (\n  '{{ $json.site_url.replace(/'/g, \"''\") }}',\n  (SELECT ad_id FROM our_match),\n  (SELECT pos FROM our_match),\n  {{ $json.teasers_found }},\n  '{{ JSON.stringify({ block_ids: $json.block_ids, teasers: $json.teasers, country_code: $json.country_code }).replace(/'/g, \"''\") }}'::jsonb\n);",
         "options": {}
       },
       "id": "save-positions",
