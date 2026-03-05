@@ -159,7 +159,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const input = $input.first().json;\nconst renderHtml = input.data || input.body || (typeof input === 'string' ? input : '');\nconst blockData = $('Extract Block IDs').first().json;\nconst siteUrl = blockData.site_url;\nconst geo = blockData.country_code;\n\nif (!renderHtml || renderHtml.length < 50) {\n  return [{ json: {\n    site_url: siteUrl,\n    country_code: geo,\n    widget_found: true,\n    block_ids: blockData.block_ids,\n    teasers_found: 0,\n    teasers: [],\n    error: 'Render API returned empty or short response',\n    scanned_at: blockData.scanned_at\n  }}];\n}\n\nconst teasers = [];\n\n// Parse teaser titles from rendered HTML\n// Pattern: <div class=\"block-*-media__title\">TITLE</div>\nconst titleRegex = /class=[\"'][^\"']*media__title[\"'][^>]*>\\s*([\\s\\S]*?)\\s*<\\/div>/gi;\nlet titleMatch;\nlet position = 0;\nwhile ((titleMatch = titleRegex.exec(renderHtml)) !== null) {\n  position++;\n  const title = titleMatch[1].replace(/<[^>]+>/g, '').trim();\n  if (title.length > 5) {\n    teasers.push({ position, title });\n  }\n}\n\n// Also extract click URLs to match with our ads\nconst clickUrls = [];\nconst clickRegex = /href=[\"'](https:\\/\\/render\\.sustainablyaware\\.com\\/v1\\/direct\\/click[^\"']*)[\"']/gi;\nlet clickMatch;\nwhile ((clickMatch = clickRegex.exec(renderHtml)) !== null) {\n  clickUrls.push(clickMatch[1]);\n}\n\n// Extract media/ad IDs from click URLs\nfor (let i = 0; i < teasers.length && i < clickUrls.length; i++) {\n  const mediaMatch = clickUrls[i].match(/media=(\\d+)/);\n  if (mediaMatch) {\n    teasers[i].media_id = mediaMatch[1];\n  }\n  teasers[i].click_url = clickUrls[i];\n}\n\nreturn [{ json: {\n  site_url: siteUrl,\n  country_code: geo,\n  widget_found: true,\n  block_ids: blockData.block_ids,\n  teasers_found: teasers.length,\n  teasers: teasers,\n  scanned_at: blockData.scanned_at\n}}];"
+        "jsCode": "const input = $input.first().json;\nconst renderHtml = input.data || input.body || (typeof input === 'string' ? input : '');\nconst blockData = $('Extract Block IDs').first().json;\nconst siteUrl = blockData.site_url;\nconst geo = blockData.country_code;\n\nif (!renderHtml || renderHtml.length < 50) {\n  return [{ json: {\n    site_url: siteUrl,\n    country_code: geo,\n    widget_found: true,\n    block_ids: blockData.block_ids,\n    teasers_found: 0,\n    teasers: [],\n    error: 'Render API returned empty or short response',\n    scanned_at: blockData.scanned_at\n  }}];\n}\n\nconst teasers = [];\n\n// Parse teaser titles from rendered HTML\n// Pattern: <div class=\"block-*-media__title\">TITLE</div>\nconst titleRegex = /class=[\"'][^\"']*media__title[\"'][^>]*>\\s*([\\s\\S]*?)\\s*<\\/div>/gi;\nlet titleMatch;\nlet position = 0;\nwhile ((titleMatch = titleRegex.exec(renderHtml)) !== null) {\n  position++;\n  const title = titleMatch[1].replace(/<[^>]+>/g, '').trim();\n  if (title.length > 5) {\n    teasers.push({ position, title });\n  }\n}\n\n// Extract image URLs from background-image:url('...')\nconst imageUrls = [];\nconst imgRegex = /class=[\"'][^\"']*media__img[\"'][^>]*style=[\"'][^\"']*background-image:\\s*url\\(['\\\"]?([^'\\\")]+)['\\\"]?\\)/gi;\nlet imgMatch;\nwhile ((imgMatch = imgRegex.exec(renderHtml)) !== null) {\n  // Decode HTML entities like &#39; -> '\n  const url = imgMatch[1].replace(/&amp;/g, '&').replace(/&#39;/g, \"'\").replace(/&quot;/g, '\"');\n  imageUrls.push(url);\n}\n\n// Also extract click URLs to match with our ads\nconst clickUrls = [];\nconst clickRegex = /href=[\"'](https:\\/\\/render\\.sustainablyaware\\.com\\/v1\\/direct\\/click[^\"']*)[\"']/gi;\nlet clickMatch;\nwhile ((clickMatch = clickRegex.exec(renderHtml)) !== null) {\n  clickUrls.push(clickMatch[1].replace(/&amp;/g, '&'));\n}\n\n// Merge all extracted data per teaser\nfor (let i = 0; i < teasers.length; i++) {\n  // Click URL and media_id\n  if (i < clickUrls.length) {\n    const mediaMatch = clickUrls[i].match(/media=(\\d+)/);\n    if (mediaMatch) {\n      teasers[i].media_id = mediaMatch[1];\n    }\n    teasers[i].click_url = clickUrls[i];\n  }\n  // Image URL\n  if (i < imageUrls.length) {\n    teasers[i].image_url = imageUrls[i];\n  }\n}\n\nreturn [{ json: {\n  site_url: siteUrl,\n  country_code: geo,\n  widget_found: true,\n  block_ids: blockData.block_ids,\n  teasers_found: teasers.length,\n  teasers: teasers,\n  scanned_at: blockData.scanned_at\n}}];"
       },
       "id": "parse-teasers",
       "name": "Parse Teasers from Render",
@@ -211,6 +211,88 @@
       "credentials": {
         "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
       }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT title, destination_url FROM competitors WHERE site_url = '{{ $json.site_url.replace(/'/g, \"''\") }}' AND destination_url IS NOT NULL AND destination_url != ''",
+        "options": {}
+      },
+      "id": "fetch-known-competitors",
+      "name": "Fetch Known Competitors",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2020, -180],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter out teasers already in DB with known landing URL\n// RATE LIMIT: max 4 NEW teasers per scan to avoid anti-fraud\nconst knownRows = $input.all().map(i => i.json);\nconst knownTitles = new Set(knownRows.map(r => r.title).filter(Boolean));\n\nconst data = $('Parse Teasers from Render').first().json;\nconst teasers = data.teasers || [];\nconst siteUrl = data.site_url;\nconst geo = data.country_code;\nconst proxyUrl = $('Prepare Scan Requests').first().json.proxy_url || '';\n\nif (teasers.length === 0) {\n  return [{ json: { skip: true, site_url: siteUrl, country_code: geo } }];\n}\n\nconst MAX_RESOLVES_PER_SCAN = 4;\n\n// Only resolve teasers we haven't resolved before\nconst newTeasers = teasers.filter(t => t.click_url && !knownTitles.has(t.title));\n// Also keep already-known ones to update position/image (but skip resolve)\nconst knownTeasers = teasers.filter(t => knownTitles.has(t.title));\n\n// Save known teasers directly (update position/times_seen) without resolving\nconst results = [];\n\n// New teasers get full resolve treatment\nconst toResolve = newTeasers.slice(0, MAX_RESOLVES_PER_SCAN);\ntoResolve.forEach((t, idx) => {\n  results.push({\n    json: {\n      title: t.title,\n      position: t.position,\n      media_id: t.media_id || null,\n      click_url: t.click_url,\n      image_url: t.image_url || null,\n      site_url: siteUrl,\n      country_code: geo,\n      proxy_url: proxyUrl,\n      resolve_delay_ms: idx * 3000,  // 3s between clicks to look human\n      needs_resolve: true\n    }\n  });\n});\n\n// Known teasers skip resolve, go straight to save\nknownTeasers.forEach(t => {\n  results.push({\n    json: {\n      title: t.title,\n      position: t.position,\n      media_id: t.media_id || null,\n      click_url: t.click_url || null,\n      image_url: t.image_url || null,\n      site_url: siteUrl,\n      country_code: geo,\n      proxy_url: proxyUrl,\n      needs_resolve: false,\n      landing_url: null  // keep existing in DB\n    }\n  });\n});\n\nif (results.length === 0) {\n  return [{ json: { skip: true, site_url: siteUrl, country_code: geo } }];\n}\n\nreturn results;"
+      },
+      "id": "split-teasers",
+      "name": "Split Teasers for Resolve",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2240, -180]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Wait before resolving to respect rate limits (3s between clicks)\nconst item = $input.first().json;\nconst delay = item.resolve_delay_ms || 0;\nif (delay > 0) {\n  await new Promise(r => setTimeout(r, delay));\n}\n\n// Follow redirects manually to capture final URL\n// Using GET (not HEAD) because some trackers don't redirect on HEAD\nconst proxyUrl = item.proxy_url || '';\nconst clickUrl = item.click_url;\n\ntry {\n  const fetchOpts = {\n    method: 'GET',\n    redirect: 'follow',\n    headers: {\n      'User-Agent': 'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.64 Mobile Safari/537.36',\n      'Accept': 'text/html,application/xhtml+xml',\n      'Accept-Language': 'en-US,en;q=0.9'\n    },\n    timeout: 15000\n  };\n\n  const response = await fetch(clickUrl, fetchOpts);\n  const finalUrl = response.url || '';\n  const statusCode = response.status;\n\n  // Try to get location header if redirect wasn't followed\n  const location = response.headers?.get('location') || '';\n\n  return [{ json: {\n    ...item,\n    resolved_url: finalUrl || location || 'resolve_failed',\n    resolve_status: statusCode,\n    resolve_error: null\n  }}];\n} catch(err) {\n  return [{ json: {\n    ...item,\n    resolved_url: 'resolve_failed',\n    resolve_status: 0,\n    resolve_error: err.message\n  }}];\n}"
+      },
+      "id": "resolve-landing-url",
+      "name": "Resolve Landing URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2680, -300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "needs-resolve",
+              "leftValue": "={{ $json.needs_resolve }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "needs-resolve-check",
+      "name": "Needs Resolve?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2460, -180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nlet landingUrl = data.resolved_url || 'resolve_failed';\n\n// Detect anti-fraud interstitial pages (not the real landing)\n// These are typically short URLs or known tracker domains\nconst trackerDomains = ['sustainablyaware.com', 'ecomindfulliving.com'];\nconst isInterstitial = trackerDomains.some(d => landingUrl.includes(d));\n\nif (isInterstitial) {\n  landingUrl = 'blocked_by_antifraud';\n}\n\nreturn [{ json: {\n  title: data.title,\n  position: data.position,\n  media_id: data.media_id,\n  click_url: data.click_url,\n  image_url: data.image_url,\n  landing_url: landingUrl,\n  site_url: data.site_url,\n  country_code: data.country_code,\n  resolve_status: data.resolve_status,\n  resolve_error: data.resolve_error\n}}];"
+      },
+      "id": "extract-landing-url",
+      "name": "Extract Landing URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2900, -300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO competitors (site_url, title, image_url, destination_url, position)\nVALUES (\n  '{{ $json.site_url.replace(/'/g, \"''\") }}',\n  '{{ $json.title.replace(/'/g, \"''\") }}',\n  {{ $json.image_url ? \"'\" + $json.image_url.replace(/'/g, \"''\") + \"'\" : \"NULL\" }},\n  {{ $json.landing_url && !['resolve_failed','blocked_by_antifraud'].includes($json.landing_url) ? \"'\" + $json.landing_url.replace(/'/g, \"''\") + \"'\" : \"NULL\" }},\n  {{ $json.position || 0 }}\n)\nON CONFLICT (site_url, title) WHERE site_url IS NOT NULL AND title IS NOT NULL\nDO UPDATE SET\n  last_seen_at = NOW(),\n  times_seen = competitors.times_seen + 1,\n  position = EXCLUDED.position,\n  image_url = COALESCE(EXCLUDED.image_url, competitors.image_url),\n  destination_url = COALESCE(EXCLUDED.destination_url, competitors.destination_url);",
+        "options": {}
+      },
+      "id": "save-competitors",
+      "name": "Save Competitors",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [3120, -180],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
     }
   ],
   "connections": {
@@ -248,7 +330,28 @@
       "main": [[ { "node": "Parse Teasers from Render", "type": "main", "index": 0 } ]]
     },
     "Parse Teasers from Render": {
-      "main": [[ { "node": "Save Positions", "type": "main", "index": 0 } ]]
+      "main": [[
+        { "node": "Save Positions", "type": "main", "index": 0 },
+        { "node": "Fetch Known Competitors", "type": "main", "index": 0 }
+      ]]
+    },
+    "Split Teasers for Resolve": {
+      "main": [[ { "node": "Needs Resolve?", "type": "main", "index": 0 } ]]
+    },
+    "Needs Resolve?": {
+      "main": [
+        [ { "node": "Resolve Landing URL", "type": "main", "index": 0 } ],
+        [ { "node": "Save Competitors", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Resolve Landing URL": {
+      "main": [[ { "node": "Extract Landing URL", "type": "main", "index": 0 } ]]
+    },
+    "Extract Landing URL": {
+      "main": [[ { "node": "Save Competitors", "type": "main", "index": 0 } ]]
+    },
+    "Fetch Known Competitors": {
+      "main": [[ { "node": "Split Teasers for Resolve", "type": "main", "index": 0 } ]]
     }
   },
   "settings": {
@@ -259,5 +362,5 @@
   "staticData": null,
   "tags": [{ "name": "scraper", "id": "tag-scraper" }],
   "pinData": {},
-  "versionId": "3"
+  "versionId": "4"
 }
