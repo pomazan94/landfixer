@@ -1,0 +1,465 @@
+{
+  "name": "90 - Webhook Manager (UI Actions)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "emergency-stop",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-emergency-stop",
+      "name": "Emergency Stop Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "emergency-stop"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "emergency-clear",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-emergency-clear",
+      "name": "Emergency Clear Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 200],
+      "webhookId": "emergency-clear"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lower-all-bids",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-lower-bids",
+      "name": "Lower Bids Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 400],
+      "webhookId": "lower-all-bids"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "resume-teaser",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-resume",
+      "name": "Resume Teaser Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 600],
+      "webhookId": "resume-teaser"
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "status",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "wh-status",
+      "name": "Status Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 800],
+      "webhookId": "status"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all/stop",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": {}
+      },
+      "id": "api-stop-all",
+      "name": "API: Stop All Ads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO emergency_state (is_active, trigger_reason, triggered_by, activated_at, auto_deactivate_at)\nVALUES (TRUE, 'Manual emergency stop via webhook', 'webhook_manager', NOW(), NOW() + INTERVAL '2 hours')\nON CONFLICT (is_active) WHERE is_active = TRUE\nDO UPDATE SET trigger_reason = 'Manual emergency stop via webhook', activated_at = NOW(), auto_deactivate_at = NOW() + INTERVAL '2 hours';\n\nUPDATE teasers SET state = 'stopped', state_changed_at = NOW(), state_reason = 'Emergency stop via webhook' WHERE state = 'active';",
+        "options": {}
+      },
+      "id": "db-emergency-on",
+      "name": "DB: Activate Emergency",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [550, 0],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "591828204",
+        "text": "=EMERGENCY STOP activated via webhook at {{ $now.toFormat('dd.MM.yyyy HH:mm') }}",
+        "additionalFields": {}
+      },
+      "id": "tg-emergency-stop",
+      "name": "TG: Emergency Stop",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [800, -50],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"action\": \"emergency_stop\", \"message\": \"All ads stopped, emergency state activated\", \"timestamp\": \"{{ $now.toISO() }}\" }",
+        "options": {}
+      },
+      "id": "resp-emergency-stop",
+      "name": "Respond: Emergency Stop",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [800, 50]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE emergency_state SET is_active = FALSE, deactivated_at = NOW() WHERE is_active = TRUE;",
+        "options": {}
+      },
+      "id": "db-emergency-off",
+      "name": "DB: Deactivate Emergency",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [300, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "591828204",
+        "text": "=Emergency CLEARED via webhook at {{ $now.toFormat('dd.MM.yyyy HH:mm') }}",
+        "additionalFields": {}
+      },
+      "id": "tg-emergency-clear",
+      "name": "TG: Emergency Clear",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [550, 150],
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"action\": \"emergency_clear\", \"message\": \"Emergency state deactivated\", \"timestamp\": \"{{ $now.toISO() }}\" }",
+        "options": {}
+      },
+      "id": "resp-emergency-clear",
+      "name": "Respond: Emergency Clear",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [550, 250]
+    },
+    {
+      "parameters": {
+        "jsCode": "const pct = Number($input.first().json.query?.pct || $input.first().json.body?.pct || 10);\nconst factor = (100 - pct) / 100;\n\nreturn [{ json: { pct, factor, action: 'lower_all_bids' } }];"
+      },
+      "id": "calc-lower-pct",
+      "name": "Parse Lower Percentage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [300, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "filters[status_id_in][]", "value": "5" },
+            { "name": "count", "value": "500" }
+          ]
+        },
+        "options": { "response": { "response": { "responseFormat": "json" } } }
+      },
+      "id": "fetch-active-lower",
+      "name": "Fetch Active Ads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [550, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const factor = $('Parse Lower Percentage').first().json.factor;\nconst pct = $('Parse Lower Percentage').first().json.pct;\nconst adsRaw = $('Fetch Active Ads').first().json;\nconst ads = adsRaw?.data?.result?.data || adsRaw?.data || (Array.isArray(adsRaw) ? adsRaw : []);\n\nif (!Array.isArray(ads) || ads.length === 0) {\n  return [{ json: { action: 'SKIP', reason: 'No active ads', count: 0, pct } }];\n}\n\nconst updates = [];\nads.forEach(ad => {\n  let currentBid = 0;\n  if (ad.bids && Array.isArray(ad.bids)) {\n    const extract = (node) => {\n      if (node.bid) currentBid = currentBid || Number(node.bid);\n      const children = node.children ? (Array.isArray(node.children) ? node.children : Object.values(node.children)) : [];\n      children.forEach(c => extract(c));\n    };\n    ad.bids.forEach(b => extract(b));\n  }\n  if (currentBid > 0) {\n    const newBid = Math.max(0.01, Math.round(currentBid * factor * 10000) / 10000);\n    if (newBid !== currentBid) {\n      updates.push({ ad_id: ad.id, old_bid: currentBid, new_bid: newBid });\n    }\n  }\n});\n\nreturn updates.map(u => ({ json: u }));"
+      },
+      "id": "calc-new-bids",
+      "name": "Calculate New Bids",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 400]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all/bid",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "ids[]", "value": "={{ $json.ad_id }}" },
+            { "name": "one_bid_for_all_geo", "value": "={{ $json.new_bid }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "api-update-bid",
+      "name": "API: Update Bid",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 350],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO bid_history (ad_id, old_bid, new_bid, reason, rule_applied)\nVALUES ({{ $json.ad_id }}, {{ $json.old_bid }}, {{ $json.new_bid }}, 'Manual lower via webhook', 'webhook_lower');",
+        "options": {}
+      },
+      "id": "db-log-lower",
+      "name": "DB: Log Bid Lower",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1050, 450],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"action\": \"lower_all_bids\", \"message\": \"Lowered bids for active ads\", \"timestamp\": \"{{ $now.toISO() }}\" }",
+        "options": {}
+      },
+      "id": "resp-lower-bids",
+      "name": "Respond: Lower Bids",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1050, 550]
+    },
+    {
+      "parameters": {
+        "jsCode": "const adId = $input.first().json.query?.ad_id || $input.first().json.body?.ad_id;\nif (!adId) {\n  return [{ json: { error: 'ad_id is required', success: false } }];\n}\nreturn [{ json: { ad_id: Number(adId) } }];"
+      },
+      "id": "parse-resume",
+      "name": "Parse Ad ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [300, 600]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://api.geozo.com/v1/advertiser/ads/all/start",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"ids\": {{ JSON.stringify([$json.ad_id]) }}\n}",
+        "options": {}
+      },
+      "id": "api-resume",
+      "name": "API: Resume Ad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [550, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE teasers SET state = 'active', state_changed_at = NOW(), state_reason = 'Resumed via webhook', recovery_attempts = 0, escalation_level = 0, updated_at = NOW() WHERE ad_id = {{ $json.ad_id }};\n\nINSERT INTO teaser_state_log (ad_id, old_state, new_state, reason, triggered_by)\nSELECT {{ $json.ad_id }}, state, 'active', 'Resumed via webhook', 'webhook_manager' FROM teasers WHERE ad_id = {{ $json.ad_id }};",
+        "options": {}
+      },
+      "id": "db-resume",
+      "name": "DB: Resume State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [800, 600],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"success\": true, \"action\": \"resume_teaser\", \"ad_id\": {{ $json.ad_id }}, \"message\": \"Teaser resumed\", \"timestamp\": \"{{ $now.toISO() }}\" }",
+        "options": {}
+      },
+      "id": "resp-resume",
+      "name": "Respond: Resume",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1050, 600]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT json_build_object(\n  'balance', (SELECT balance FROM balance_history ORDER BY collected_at DESC LIMIT 1),\n  'spend_today', (SELECT COALESCE(SUM(money), 0) FROM ad_stats WHERE date = CURRENT_DATE),\n  'daily_budget', 200,\n  'emergency', (SELECT COALESCE((SELECT json_build_object('active', is_active, 'reason', trigger_reason, 'since', activated_at) FROM emergency_state WHERE is_active = TRUE LIMIT 1), '{\"active\": false}'::json)),\n  'teasers', json_build_object(\n    'active', (SELECT COUNT(*) FROM teasers WHERE state = 'active'),\n    'paused', (SELECT COUNT(*) FROM teasers WHERE state LIKE 'paused_%'),\n    'stopped', (SELECT COUNT(*) FROM teasers WHERE state = 'stopped'),\n    'testing', (SELECT COUNT(*) FROM teasers WHERE state = 'testing'),\n    'recovery', (SELECT COUNT(*) FROM teasers WHERE state = 'recovery_queue')\n  ),\n  'anomalies_unresolved', (SELECT COUNT(*) FROM anomalies WHERE resolved = FALSE),\n  'bid_changes_24h', (SELECT COUNT(*) FROM bid_history WHERE changed_at > NOW() - INTERVAL '24 hours'),\n  'locks', (SELECT COALESCE(json_agg(json_build_object('name', lock_name, 'by', locked_by, 'expires', expires_at)), '[]'::json) FROM workflow_locks WHERE expires_at > NOW())\n) AS status;",
+        "options": {}
+      },
+      "id": "db-status",
+      "name": "DB: Get Status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [300, 800],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.status) }}",
+        "options": {}
+      },
+      "id": "resp-status",
+      "name": "Respond: Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [550, 800]
+    }
+  ],
+  "connections": {
+    "Emergency Stop Webhook": {
+      "main": [[{ "node": "API: Stop All Ads", "type": "main", "index": 0 }]]
+    },
+    "API: Stop All Ads": {
+      "main": [[{ "node": "DB: Activate Emergency", "type": "main", "index": 0 }]]
+    },
+    "DB: Activate Emergency": {
+      "main": [[
+        { "node": "TG: Emergency Stop", "type": "main", "index": 0 },
+        { "node": "Respond: Emergency Stop", "type": "main", "index": 0 }
+      ]]
+    },
+    "Emergency Clear Webhook": {
+      "main": [[{ "node": "DB: Deactivate Emergency", "type": "main", "index": 0 }]]
+    },
+    "DB: Deactivate Emergency": {
+      "main": [[
+        { "node": "TG: Emergency Clear", "type": "main", "index": 0 },
+        { "node": "Respond: Emergency Clear", "type": "main", "index": 0 }
+      ]]
+    },
+    "Lower Bids Webhook": {
+      "main": [[{ "node": "Parse Lower Percentage", "type": "main", "index": 0 }]]
+    },
+    "Parse Lower Percentage": {
+      "main": [[{ "node": "Fetch Active Ads", "type": "main", "index": 0 }]]
+    },
+    "Fetch Active Ads": {
+      "main": [[{ "node": "Calculate New Bids", "type": "main", "index": 0 }]]
+    },
+    "Calculate New Bids": {
+      "main": [[
+        { "node": "API: Update Bid", "type": "main", "index": 0 },
+        { "node": "DB: Log Bid Lower", "type": "main", "index": 0 },
+        { "node": "Respond: Lower Bids", "type": "main", "index": 0 }
+      ]]
+    },
+    "Resume Teaser Webhook": {
+      "main": [[{ "node": "Parse Ad ID", "type": "main", "index": 0 }]]
+    },
+    "Parse Ad ID": {
+      "main": [[{ "node": "API: Resume Ad", "type": "main", "index": 0 }]]
+    },
+    "API: Resume Ad": {
+      "main": [[{ "node": "DB: Resume State", "type": "main", "index": 0 }]]
+    },
+    "DB: Resume State": {
+      "main": [[{ "node": "Respond: Resume", "type": "main", "index": 0 }]]
+    },
+    "Status Webhook": {
+      "main": [[{ "node": "DB: Get Status", "type": "main", "index": 0 }]]
+    },
+    "DB: Get Status": {
+      "main": [[{ "node": "Respond: Status", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "management", "id": "tag-management" },
+    { "name": "webhook", "id": "tag-webhook" }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}
