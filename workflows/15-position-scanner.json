@@ -159,7 +159,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Process ALL refresh rounds and merge unique teasers by media_id\nconst items = $input.all();\nconst blockData = $('Extract Block IDs').first().json;\nconst siteUrl = blockData.site_url;\nconst geo = blockData.country_code;\n\nconst allTeasers = new Map(); // media_id -> teaser data (dedup)\nlet totalRounds = 0;\n\nfor (const item of items) {\n  const renderHtml = item.json.data || item.json.body || (typeof item.json === 'string' ? item.json : '');\n  if (!renderHtml || renderHtml.length < 50) continue;\n  totalRounds++;\n\n  const teasers = [];\n  // Use matchAll() — safe across loop iterations (no lastIndex bug)\n  let position = 0;\n  const titleMatches = renderHtml.matchAll(/class=[\"'][^\"']*media__title[\"'][^>]*>\\s*([\\s\\S]*?)\\s*<\\/div>/gi);\n  for (const titleMatch of titleMatches) {\n    position++;\n    const title = titleMatch[1].replace(/<[^>]+>/g, '').trim();\n    if (title.length > 5) {\n      teasers.push({ position, title });\n    }\n  }\n\n  const imageUrls = [];\n  const imgMatches = renderHtml.matchAll(/class=[\"'][^\"']*media__img[\"'][^>]*style=[\"'][^\"']*background-image:\\s*url\\(['\\\"]?([^'\\\")]+)['\\\"]?\\)/gi);\n  for (const imgMatch of imgMatches) {\n    const url = imgMatch[1]\n      .replace(/&amp;/g, '&')\n      .replace(/&#39;/g, '')\n      .replace(/&quot;/g, '')\n      .replace(/^['\"]|['\"]$/g, '');\n    if (url.startsWith('http')) imageUrls.push(url);\n  }\n\n  const clickUrls = [];\n  const clickMatches = renderHtml.matchAll(/href=[\"'](https:\\/\\/render\\.sustainablyaware\\.com\\/v1\\/direct\\/click[^\"']*)[\"']/gi);\n  for (const clickMatch of clickMatches) {\n    clickUrls.push(clickMatch[1].replace(/&amp;/g, '&'));\n  }\n\n  for (let i = 0; i < teasers.length; i++) {\n    if (i < clickUrls.length) {\n      const mediaMatch = clickUrls[i].match(/media=(\\d+)/);\n      if (mediaMatch) teasers[i].media_id = mediaMatch[1];\n      teasers[i].click_url = clickUrls[i];\n    }\n    if (i < imageUrls.length) teasers[i].image_url = imageUrls[i];\n  }\n\n  // Merge into allTeasers — keep first occurrence (has original position)\n  for (const t of teasers) {\n    if (t.media_id && !allTeasers.has(t.media_id)) {\n      allTeasers.set(t.media_id, t);\n    }\n  }\n}\n\nconst uniqueTeasers = Array.from(allTeasers.values());\n\nreturn [{ json: {\n  site_url: siteUrl,\n  country_code: geo,\n  widget_found: true,\n  block_ids: blockData.block_ids,\n  teasers_found: uniqueTeasers.length,\n  refresh_rounds: totalRounds,\n  teasers: uniqueTeasers,\n  scanned_at: blockData.scanned_at\n}}];"
+        "jsCode": "// Fetch ALL render URLs directly and merge unique teasers\n// Bypasses HTTP Request node which can't handle multiple items\nconst items = $input.all().filter(i => i.json.widget_found && i.json.render_url);\n\nif (items.length === 0) {\n  return [{ json: { widget_found: false, teasers_found: 0, teasers: [], error: 'No render URLs' } }];\n}\n\nconst siteUrl = items[0].json.site_url;\nconst geo = items[0].json.country_code;\nconst blockIds = items[0].json.block_ids;\n\nconst allTeasers = new Map();\nlet totalRounds = 0;\nlet errors = [];\n\nfunction parseTeasers(renderHtml) {\n  const teasers = [];\n  let position = 0;\n  for (const m of renderHtml.matchAll(/class=[\"'][^\"']*media__title[\"'][^>]*>\\s*([\\s\\S]*?)\\s*<\\/div>/gi)) {\n    position++;\n    const title = m[1].replace(/<[^>]+>/g, '').trim();\n    if (title.length > 5) teasers.push({ position, title });\n  }\n\n  const imageUrls = [];\n  for (const m of renderHtml.matchAll(/class=[\"'][^\"']*media__img[\"'][^>]*style=[\"'][^\"']*background-image:\\s*url\\(['\\\"]?([^'\\\")]+)['\\\"]?\\)/gi)) {\n    const url = m[1].replace(/&amp;/g, '&').replace(/&#39;/g, '').replace(/&quot;/g, '').replace(/^['\"]|['\"]$/g, '');\n    if (url.startsWith('http')) imageUrls.push(url);\n  }\n\n  const clickUrls = [];\n  for (const m of renderHtml.matchAll(/href=[\"'](https:\\/\\/render\\.sustainablyaware\\.com\\/v1\\/direct\\/click[^\"']*)[\"']/gi)) {\n    clickUrls.push(m[1].replace(/&amp;/g, '&'));\n  }\n\n  for (let i = 0; i < teasers.length; i++) {\n    if (i < clickUrls.length) {\n      const mediaMatch = clickUrls[i].match(/media=(\\d+)/);\n      if (mediaMatch) teasers[i].media_id = mediaMatch[1];\n      teasers[i].click_url = clickUrls[i];\n    }\n    if (i < imageUrls.length) teasers[i].image_url = imageUrls[i];\n  }\n  return teasers;\n}\n\n// Fetch each render URL directly using fetch()\nfor (const item of items) {\n  try {\n    const resp = await fetch(item.json.render_url, {\n      headers: {\n        'User-Agent': item.json.user_agent || 'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36',\n        'Referer': item.json.site_url,\n        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',\n        'Accept-Language': 'en-US,en;q=0.9'\n      }\n    });\n    const renderHtml = await resp.text();\n    if (!renderHtml || renderHtml.length < 50) continue;\n    totalRounds++;\n\n    const teasers = parseTeasers(renderHtml);\n    for (const t of teasers) {\n      if (t.media_id && !allTeasers.has(t.media_id)) {\n        allTeasers.set(t.media_id, t);\n      }\n    }\n  } catch (e) {\n    errors.push(`Round ${totalRounds + 1}: ${e.message}`);\n  }\n}\n\nconst uniqueTeasers = Array.from(allTeasers.values());\n\nreturn [{ json: {\n  site_url: siteUrl,\n  country_code: geo,\n  widget_found: true,\n  block_ids: blockIds,\n  teasers_found: uniqueTeasers.length,\n  refresh_rounds: totalRounds,\n  teasers: uniqueTeasers,\n  fetch_errors: errors.length > 0 ? errors : undefined,\n  scanned_at: $now.toISO()\n}}];"
       },
       "id": "parse-teasers",
       "name": "Parse Teasers from Render",
@@ -326,28 +326,6 @@
       "credentials": {
         "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
       }
-    },
-    {
-      "parameters": {
-        "batchSize": 1,
-        "options": {}
-      },
-      "id": "split-pages",
-      "name": "Loop Over Proxies",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [810, 0]
-    },
-    {
-      "parameters": {
-        "batchSize": 1,
-        "options": {}
-      },
-      "id": "split-renders",
-      "name": "Loop Over Renders",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [1470, -60]
     }
   ],
   "connections": {
@@ -367,34 +345,19 @@
       ]
     },
     "Prepare Scan Requests": {
-      "main": [[ { "node": "Loop Over Proxies", "type": "main", "index": 0 } ]]
-    },
-    "Loop Over Proxies": {
-      "main": [
-        [ { "node": "Fetch Page via Proxy", "type": "main", "index": 0 } ],
-        [ { "node": "Extract Block IDs", "type": "main", "index": 0 } ]
-      ]
+      "main": [[ { "node": "Fetch Page via Proxy", "type": "main", "index": 0 } ]]
     },
     "Fetch Page via Proxy": {
-      "main": [[ { "node": "Loop Over Proxies", "type": "main", "index": 0 } ]]
+      "main": [[ { "node": "Extract Block IDs", "type": "main", "index": 0 } ]]
     },
     "Extract Block IDs": {
       "main": [[ { "node": "Widget Found?", "type": "main", "index": 0 } ]]
     },
     "Widget Found?": {
       "main": [
-        [ { "node": "Loop Over Renders", "type": "main", "index": 0 } ],
+        [ { "node": "Parse Teasers from Render", "type": "main", "index": 0 } ],
         [ { "node": "Save No Widget", "type": "main", "index": 0 } ]
       ]
-    },
-    "Loop Over Renders": {
-      "main": [
-        [ { "node": "Fetch Widget Render", "type": "main", "index": 0 } ],
-        [ { "node": "Parse Teasers from Render", "type": "main", "index": 0 } ]
-      ]
-    },
-    "Fetch Widget Render": {
-      "main": [[ { "node": "Loop Over Renders", "type": "main", "index": 0 } ]]
     },
     "Parse Teasers from Render": {
       "main": [[
