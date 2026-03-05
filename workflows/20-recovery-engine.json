@@ -29,7 +29,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "-- Check if emergency is active (don't recover during emergency)\nSELECT is_active FROM emergency_state WHERE is_active = TRUE ORDER BY activated_at DESC LIMIT 1",
+        "query": "-- Check if emergency is active (don't recover during emergency)\nSELECT COALESCE((SELECT is_active FROM emergency_state WHERE is_active = TRUE ORDER BY activated_at DESC LIMIT 1), FALSE) AS is_active",
         "options": {}
       },
       "id": "check-emergency",
@@ -44,7 +44,7 @@
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
           "conditions": [
             {
               "id": "not-emergency",
@@ -106,7 +106,7 @@
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
           "conditions": [
             {
               "id": "is-recover",
@@ -225,11 +225,11 @@
     },
     "Emergency Active?": {
       "main": [
-        [],
         [
           { "node": "Fetch Paused Teasers", "type": "main", "index": 0 },
           { "node": "Fetch Active Anomalies", "type": "main", "index": 0 }
-        ]
+        ],
+        []
       ]
     },
     "Fetch Paused Teasers": {
