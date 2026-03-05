@@ -66,12 +66,7 @@
     },
     {
       "parameters": {
-        "mode": "combine",
-        "mergeByFields": {
-          "values": []
-        },
-        "combinationMode": "multiplex",
-        "options": {}
+        "mode": "append"
       },
       "id": "wait-for-both",
       "name": "Wait For Both",
