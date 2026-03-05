@@ -168,7 +168,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const statsRaw = $('Fetch Daily Stats').first().json;\nconst balanceRaw = $('Fetch Balance').first().json;\nconst geoRaw = $('Fetch Geo Stats').first().json;\n\nconst stats = statsRaw?.data?.result?.data || statsRaw?.data || (Array.isArray(statsRaw) ? statsRaw : []);\nconst balance = Number(balanceRaw?.data?.balance || balanceRaw?.balance || 0);\nconst geoStats = geoRaw?.data?.result?.data || geoRaw?.data || (Array.isArray(geoRaw) ? geoRaw : []);\n\nlet totalSpend = 0, totalRevenue = 0, totalClicks = 0, totalShows = 0;\nconst adPerformance = [];\n\nif (Array.isArray(stats)) {\n  stats.forEach(s => {\n    const spend = s.money || 0;\n    const revenue = s.postbacks_confirmed_money || 0;\n    const clicks = s.clicks_count || 0;\n    const shows = s.shows_count || 0;\n    const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n\n    totalSpend += spend;\n    totalRevenue += revenue;\n    totalClicks += clicks;\n    totalShows += shows;\n\n    adPerformance.push({ ad_id: s.ad_id, spend, revenue, roi, clicks });\n  });\n}\n\n// Sort by ROI\nadPerformance.sort((a, b) => b.roi - a.roi);\n\nconst totalRoi = totalSpend > 0 ? ((totalRevenue - totalSpend) / totalSpend * 100) : 0;\nconst totalProfit = totalRevenue - totalSpend;\n\n// Best and worst\nconst top5 = adPerformance.filter(a => a.roi > 0).slice(0, 5);\nconst worst5 = adPerformance.filter(a => a.roi < 0 && a.spend > 0).slice(-5).reverse();\n\n// Geo breakdown\nconst geoBreakdown = [];\nif (Array.isArray(geoStats)) {\n  geoStats.forEach(g => {\n    const spend = g.money || 0;\n    const revenue = g.postbacks_confirmed_money || 0;\n    const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n    geoBreakdown.push({ country: g.country_code, spend, revenue, roi: Math.round(roi) });\n  });\n  geoBreakdown.sort((a, b) => b.roi - a.roi);\n}\n\n// Count from DB (approximation from stats)\nconst activeAds = adPerformance.filter(a => a.clicks > 0).length;\n\nreturn [{\n  json: {\n    date: $now.toFormat('yyyy-MM-dd'),\n    balance: Math.round(balance * 100) / 100,\n    total_spend: Math.round(totalSpend * 100) / 100,\n    total_revenue: Math.round(totalRevenue * 100) / 100,\n    total_profit: Math.round(totalProfit * 100) / 100,\n    total_roi: Math.round(totalRoi * 100) / 100,\n    total_clicks: totalClicks,\n    total_shows: totalShows,\n    active_ads: activeAds,\n    top5: top5,\n    worst5: worst5,\n    geo_breakdown: geoBreakdown.slice(0, 10)\n  }\n}];"
+        "jsCode": "const statsRaw = $('Fetch Daily Stats').first().json;\nconst balanceRaw = $('Fetch Balance').first().json;\nconst geoRaw = $('Fetch Geo Stats').first().json;\n\nconst stats = statsRaw?.data?.result?.data || statsRaw?.data || (Array.isArray(statsRaw) ? statsRaw : []);\nconst balance = Number(balanceRaw?.data?.balance || balanceRaw?.balance || 0);\nconst geoStats = geoRaw?.data?.result?.data || geoRaw?.data || (Array.isArray(geoRaw) ? geoRaw : []);\n\nlet totalSpend = 0, totalRevenue = 0, totalClicks = 0, totalShows = 0;\nconst adPerformance = [];\n\nif (Array.isArray(stats)) {\n  stats.forEach(s => {\n    const spend = s.money || 0;\n    const revenue = s.postbacks_confirmed_money || 0;\n    const clicks = s.clicks_count || 0;\n    const shows = s.shows_count || 0;\n    const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n\n    totalSpend += spend;\n    totalRevenue += revenue;\n    totalClicks += clicks;\n    totalShows += shows;\n\n    adPerformance.push({ ad_id: s.ad_id, spend, revenue, roi, clicks });\n  });\n}\n\nadPerformance.sort((a, b) => b.roi - a.roi);\n\nconst totalRoi = totalSpend > 0 ? ((totalRevenue - totalSpend) / totalSpend * 100) : 0;\nconst totalProfit = totalRevenue - totalSpend;\nconst top5 = adPerformance.filter(a => a.roi > 0).slice(0, 5);\nconst worst5 = adPerformance.filter(a => a.roi < 0 && a.spend > 0).slice(-5).reverse();\nconst activeAds = adPerformance.filter(a => a.clicks > 0).length;\n\nconst geoBreakdown = [];\nif (Array.isArray(geoStats)) {\n  geoStats.forEach(g => {\n    const spend = g.money || 0;\n    const revenue = g.postbacks_confirmed_money || 0;\n    const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n    geoBreakdown.push({ country: g.country_code, spend, revenue, roi: Math.round(roi) });\n  });\n  geoBreakdown.sort((a, b) => b.roi - a.roi);\n}\n\n// Build report text\nconst date = $now.toFormat('dd.MM.yyyy');\nconst profitSign = totalProfit >= 0 ? '+' : '';\n\nlet msg = `DAILY REPORT ${date}\\n`;\nmsg += `\\nBalance: $${balance.toFixed(2)}`;\nmsg += `\\nSpend: $${totalSpend.toFixed(2)} | Revenue: $${totalRevenue.toFixed(2)}`;\nmsg += `\\nProfit: ${profitSign}$${totalProfit.toFixed(2)} | ROI: ${totalRoi.toFixed(1)}%`;\nmsg += `\\nClicks: ${totalClicks} | Shows: ${totalShows} | Ads: ${activeAds}`;\n\nif (top5.length > 0) {\n  msg += `\\n\\nTOP ${top5.length}:`;\n  top5.forEach(a => {\n    msg += `\\n  #${a.ad_id}: ROI ${a.roi.toFixed(1)}% profit $${(a.revenue - a.spend).toFixed(2)}`;\n  });\n}\n\nif (worst5.length > 0) {\n  msg += `\\n\\nWORST ${worst5.length}:`;\n  worst5.forEach(a => {\n    msg += `\\n  #${a.ad_id}: ROI ${a.roi.toFixed(1)}% loss $${(a.spend - a.revenue).toFixed(2)}`;\n  });\n}\n\nif (geoBreakdown.length > 0) {\n  msg += `\\n\\nGEO:`;\n  geoBreakdown.slice(0, 10).forEach(g => {\n    msg += `\\n  ${g.country}: ROI ${g.roi}% spend $${g.spend.toFixed(2)}`;\n  });\n}\n\nreturn [{\n  json: {\n    date: $now.toFormat('yyyy-MM-dd'),\n    balance: Math.round(balance * 100) / 100,\n    total_spend: Math.round(totalSpend * 100) / 100,\n    total_revenue: Math.round(totalRevenue * 100) / 100,\n    total_profit: Math.round(totalProfit * 100) / 100,\n    total_roi: Math.round(totalRoi * 100) / 100,\n    report_text: msg\n  }\n}];"
       },
       "id": "compile-report",
       "name": "Compile Report Data",
@@ -176,51 +176,6 @@
       "typeVersion": 2,
       "position": [
         500,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Составь краткий дневной отчёт медиабайера на основе данных. Используй эмодзи. Выдели ключевые инсайты и рекомендации на завтра.\\n\\nДанные за {{ $json.date }}:\\n- Баланс: ${{ $json.balance }}\\n- Расход: ${{ $json.total_spend }}\\n- Доход: ${{ $json.total_revenue }}\\n- Профит: ${{ $json.total_profit }}\\n- ROI: {{ $json.total_roi }}%\\n- Клики: {{ $json.total_clicks }}\\n- Показы: {{ $json.total_shows }}\\n- Активных объявлений: {{ $json.active_ads }}\\n\\nТоп-5 профитных:\\n{{ $json.top5.map(a => `Ad #${a.ad_id}: ROI ${a.roi.toFixed(1)}%, Profit $${(a.revenue-a.spend).toFixed(2)}`).join('\\n') }}\\n\\nТоп-5 убыточных:\\n{{ $json.worst5.map(a => `Ad #${a.ad_id}: ROI ${a.roi.toFixed(1)}%, Loss $${(a.spend-a.revenue).toFixed(2)}`).join('\\n') }}\\n\\nГео:\\n{{ $json.geo_breakdown.map(g => `${g.country}: ROI ${g.roi}%, Spend $${g.spend.toFixed(2)}`).join('\\n') }}\\n\\nФормат: текст для Telegram (без markdown, максимум 3000 символов).\"\n    }\n  ]\n}",
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "id": "generate-report",
-      "name": "Generate Report (Claude)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        740,
-        0
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "claude-api-cred",
-          "name": "Claude API Key"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "const claudeResponse = $input.first().json;\nconst reportData = $('Compile Report Data').first().json;\n\nconst reportText = claudeResponse.content?.[0]?.text || 'Report generation failed';\n\nreturn [{\n  json: {\n    report_text: reportText,\n    ...reportData\n  }\n}];"
-      },
-      "id": "prepare-output",
-      "name": "Prepare Output",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        960,
         0
       ]
     },
@@ -235,7 +190,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1180,
+        740,
         -80
       ],
       "credentials": {
@@ -256,7 +211,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1180,
+        740,
         80
       ],
       "credentials": {
@@ -326,28 +281,6 @@
       "main": [
         [
           {
-            "node": "Generate Report (Claude)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Generate Report (Claude)": {
-      "main": [
-        [
-          {
-            "node": "Prepare Output",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare Output": {
-      "main": [
-        [
-          {
             "node": "Save P&L",
             "type": "main",
             "index": 0
@@ -378,5 +311,5 @@
     }
   ],
   "pinData": {},
-  "versionId": "1"
+  "versionId": "2"
 }
