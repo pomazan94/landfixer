@@ -16,15 +16,10 @@
       "name": "Every 4 Hours",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
-    },
-    {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [0, 150]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -36,21 +31,34 @@
       "name": "Check Emergency",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [250, 75],
+      "position": [
+        250,
+        75
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
             {
               "id": "not-emergency",
               "leftValue": "={{ $json.is_active }}",
               "rightValue": "true",
-              "operator": { "type": "string", "operation": "notEquals" }
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
             }
           ],
           "combinator": "and"
@@ -61,7 +69,10 @@
       "name": "Emergency Active?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [480, 75]
+      "position": [
+        480,
+        75
+      ]
     },
     {
       "parameters": {
@@ -73,9 +84,15 @@
       "name": "Fetch Paused Teasers",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [700, 0],
+      "position": [
+        700,
+        0
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -88,9 +105,15 @@
       "name": "Fetch Active Anomalies",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [700, 150],
+      "position": [
+        700,
+        150
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -101,18 +124,28 @@
       "name": "Recovery Logic",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1000, 75]
+      "position": [
+        1000,
+        75
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
             {
               "id": "is-recover",
               "leftValue": "={{ $json.action }}",
               "rightValue": "RECOVER",
-              "operator": { "type": "string", "operation": "equals" }
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
             }
           ],
           "combinator": "and"
@@ -123,7 +156,10 @@
       "name": "Recover or State Change?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1250, 75]
+      "position": [
+        1250,
+        75
+      ]
     },
     {
       "parameters": {
@@ -135,8 +171,14 @@
         "contentType": "form-urlencoded",
         "bodyParameters": {
           "parameters": [
-            { "name": "ids[]", "value": "={{ $json.ad_id }}" },
-            { "name": "one_bid_for_all_geo", "value": "={{ $json.new_bid }}" }
+            {
+              "name": "ids[]",
+              "value": "={{ $json.ad_id }}"
+            },
+            {
+              "name": "one_bid_for_all_geo",
+              "value": "={{ $json.new_bid }}"
+            }
           ]
         },
         "options": {}
@@ -145,9 +187,15 @@
       "name": "Reactivate Ad (Set Bid)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1500, -50],
+      "position": [
+        1500,
+        -50
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -166,9 +214,15 @@
       "name": "Play Ad",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1750, -50],
+      "position": [
+        1750,
+        -50
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -182,9 +236,15 @@
       "name": "Update Teaser State",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1500, 200],
+      "position": [
+        1500,
+        200
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -195,7 +255,10 @@
       "name": "Format Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1250, 350]
+      "position": [
+        1250,
+        350
+      ]
     },
     {
       "parameters": {
@@ -207,59 +270,140 @@
       "name": "Send Recovery Report",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1500, 350],
+      "position": [
+        1500,
+        350
+      ],
       "credentials": {
-        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
       }
     }
   ],
   "connections": {
     "Every 4 Hours": {
-      "main": [[ { "node": "Check Emergency", "type": "main", "index": 0 } ]]
-    },
-    "Called by Orchestrator": {
-      "main": [[ { "node": "Check Emergency", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Check Emergency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Check Emergency": {
-      "main": [[ { "node": "Emergency Active?", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Emergency Active?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Emergency Active?": {
       "main": [
         [
-          { "node": "Fetch Paused Teasers", "type": "main", "index": 0 },
-          { "node": "Fetch Active Anomalies", "type": "main", "index": 0 }
+          {
+            "node": "Fetch Paused Teasers",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Active Anomalies",
+            "type": "main",
+            "index": 0
+          }
         ],
         []
       ]
     },
     "Fetch Paused Teasers": {
-      "main": [[ { "node": "Recovery Logic", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Recovery Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Active Anomalies": {
-      "main": [[ { "node": "Recovery Logic", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Recovery Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Recovery Logic": {
-      "main": [[
-        { "node": "Recover or State Change?", "type": "main", "index": 0 },
-        { "node": "Format Summary", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Recover or State Change?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Recover or State Change?": {
       "main": [
         [
-          { "node": "Reactivate Ad (Set Bid)", "type": "main", "index": 0 },
-          { "node": "Update Teaser State", "type": "main", "index": 0 }
+          {
+            "node": "Reactivate Ad (Set Bid)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Teaser State",
+            "type": "main",
+            "index": 0
+          }
         ],
         [
-          { "node": "Update Teaser State", "type": "main", "index": 0 }
+          {
+            "node": "Update Teaser State",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "Reactivate Ad (Set Bid)": {
-      "main": [[ { "node": "Play Ad", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Play Ad",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Format Summary": {
-      "main": [[ { "node": "Send Recovery Report", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Send Recovery Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -269,8 +413,14 @@
   },
   "staticData": null,
   "tags": [
-    { "name": "optimizer", "id": "tag-optimizer" },
-    { "name": "safety", "id": "tag-safety" }
+    {
+      "name": "optimizer",
+      "id": "tag-optimizer"
+    },
+    {
+      "name": "safety",
+      "id": "tag-safety"
+    }
   ],
   "pinData": {},
   "versionId": "1"

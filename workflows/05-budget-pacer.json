@@ -16,15 +16,10 @@
       "name": "Every 2 Hours",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
-    },
-    {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [0, 150]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -36,21 +31,34 @@
       "name": "Check Locks & Emergency",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [250, 75],
+      "position": [
+        250,
+        75
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
             {
               "id": "safe-to-run",
               "leftValue": "={{ $json.emergency_active }}",
               "rightValue": "true",
-              "operator": { "type": "string", "operation": "notEquals" }
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
             }
           ],
           "combinator": "and"
@@ -61,7 +69,10 @@
       "name": "Emergency Active?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [480, 75]
+      "position": [
+        480,
+        75
+      ]
     },
     {
       "parameters": {
@@ -73,9 +84,15 @@
       "name": "Acquire Bid Lock",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [700, 0],
+      "position": [
+        700,
+        0
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -87,25 +104,53 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "filters[date_from]", "value": "={{ $now.format('yyyy-MM-dd') }}" },
-            { "name": "filters[date_to]", "value": "={{ $now.format('yyyy-MM-dd') }}" },
-            { "name": "groups[0]", "value": "ad_id" },
-            { "name": "order_by[0][column]", "value": "money" },
-            { "name": "order_by[0][direction]", "value": "desc" },
-            { "name": "count", "value": "500" }
+            {
+              "name": "filters[date_from]",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "filters[date_to]",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "groups[0]",
+              "value": "ad_id"
+            },
+            {
+              "name": "order_by[0][column]",
+              "value": "money"
+            },
+            {
+              "name": "order_by[0][direction]",
+              "value": "desc"
+            },
+            {
+              "name": "count",
+              "value": "500"
+            }
           ]
         },
         "options": {
-          "response": { "response": { "responseFormat": "json" } }
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       },
       "id": "fetch-today-spend",
       "name": "Fetch Today Spend",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, 150],
+      "position": [
+        700,
+        150
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -118,21 +163,37 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "filters[status_id_in][]", "value": "5" },
-            { "name": "count", "value": "500" }
+            {
+              "name": "filters[status_id_in][]",
+              "value": "5"
+            },
+            {
+              "name": "count",
+              "value": "500"
+            }
           ]
         },
         "options": {
-          "response": { "response": { "responseFormat": "json" } }
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       },
       "id": "fetch-active-ads",
       "name": "Fetch Active Ads",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [700, 300],
+      "position": [
+        700,
+        300
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -146,9 +207,15 @@
       "name": "Fetch Geo Payouts",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [700, 450],
+      "position": [
+        700,
+        450
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -162,9 +229,15 @@
       "name": "Fetch CRM Leads Today",
       "type": "n8n-nodes-base.mySql",
       "typeVersion": 2.4,
-      "position": [700, 600],
+      "position": [
+        700,
+        600
+      ],
       "credentials": {
-        "mySql": { "id": "mysql-crm", "name": "MySQL CRM" }
+        "mySql": {
+          "id": "mysql-crm",
+          "name": "MySQL CRM"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -176,18 +249,28 @@
       "name": "Calculate Budget Pacing v2",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1000, 200]
+      "position": [
+        1000,
+        200
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
             {
               "id": "needs-action",
               "leftValue": "={{ $json.action }}",
               "rightValue": "HOLD",
-              "operator": { "type": "string", "operation": "notEquals" }
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
             }
           ],
           "combinator": "and"
@@ -198,18 +281,28 @@
       "name": "Needs Adjustment?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1250, 200]
+      "position": [
+        1250,
+        200
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
             {
               "id": "is-pause",
               "leftValue": "={{ $json.action }}",
               "rightValue": "PAUSE_TEASER",
-              "operator": { "type": "string", "operation": "equals" }
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
             }
           ],
           "combinator": "and"
@@ -220,7 +313,10 @@
       "name": "Pause or Bid Change?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1500, 100]
+      "position": [
+        1500,
+        100
+      ]
     },
     {
       "parameters": {
@@ -237,9 +333,15 @@
       "name": "Pause Overspending Teaser",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1750, -50],
+      "position": [
+        1750,
+        -50
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -253,9 +355,15 @@
       "name": "Log Pause State",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [2000, -50],
+      "position": [
+        2000,
+        -50
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -268,8 +376,14 @@
         "contentType": "form-urlencoded",
         "bodyParameters": {
           "parameters": [
-            { "name": "ids[]", "value": "={{ $json.ad_id }}" },
-            { "name": "one_bid_for_all_geo", "value": "={{ $json.new_bid }}" }
+            {
+              "name": "ids[]",
+              "value": "={{ $json.ad_id }}"
+            },
+            {
+              "name": "one_bid_for_all_geo",
+              "value": "={{ $json.new_bid }}"
+            }
           ]
         },
         "options": {}
@@ -278,9 +392,15 @@
       "name": "Update Bid",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1750, 200],
+      "position": [
+        1750,
+        200
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -294,9 +414,15 @@
       "name": "Log Bid Change",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [2000, 200],
+      "position": [
+        2000,
+        200
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -309,9 +435,15 @@
       "name": "Release Lock",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [2250, 100],
+      "position": [
+        2250,
+        100
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -324,77 +456,208 @@
       "name": "Notify Telegram",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1500, 400],
+      "position": [
+        1500,
+        400
+      ],
       "credentials": {
-        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
       }
     }
   ],
   "connections": {
     "Every 2 Hours": {
-      "main": [[ { "node": "Check Locks & Emergency", "type": "main", "index": 0 } ]]
-    },
-    "Called by Orchestrator": {
-      "main": [[ { "node": "Check Locks & Emergency", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Check Locks & Emergency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Check Locks & Emergency": {
-      "main": [[ { "node": "Emergency Active?", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Emergency Active?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Emergency Active?": {
       "main": [
         [
-          { "node": "Acquire Bid Lock", "type": "main", "index": 0 }
+          {
+            "node": "Acquire Bid Lock",
+            "type": "main",
+            "index": 0
+          }
         ],
         []
       ]
     },
     "Acquire Bid Lock": {
-      "main": [[ { "node": "Fetch Today Spend", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Fetch Today Spend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Today Spend": {
-      "main": [[ { "node": "Fetch Active Ads", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Fetch Active Ads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Active Ads": {
-      "main": [[ { "node": "Fetch Geo Payouts", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Fetch Geo Payouts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Geo Payouts": {
-      "main": [[ { "node": "Fetch CRM Leads Today", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Fetch CRM Leads Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch CRM Leads Today": {
-      "main": [[ { "node": "Calculate Budget Pacing v2", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Calculate Budget Pacing v2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Calculate Budget Pacing v2": {
-      "main": [[
-        { "node": "Needs Adjustment?", "type": "main", "index": 0 },
-        { "node": "Notify Telegram", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Needs Adjustment?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Needs Adjustment?": {
       "main": [
-        [ { "node": "Pause or Bid Change?", "type": "main", "index": 0 } ],
-        [ { "node": "Release Lock", "type": "main", "index": 0 } ]
+        [
+          {
+            "node": "Pause or Bid Change?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Release Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Pause or Bid Change?": {
       "main": [
-        [ { "node": "Pause Overspending Teaser", "type": "main", "index": 0 } ],
-        [ { "node": "Update Bid", "type": "main", "index": 0 } ]
+        [
+          {
+            "node": "Pause Overspending Teaser",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Bid",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Pause Overspending Teaser": {
-      "main": [[ { "node": "Log Pause State", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Log Pause State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Pause State": {
-      "main": [[ { "node": "Release Lock", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Release Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Update Bid": {
-      "main": [[ { "node": "Log Bid Change", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Log Bid Change",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Bid Change": {
-      "main": [[ { "node": "Release Lock", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Release Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Notify Telegram": {
-      "main": [[]]
+      "main": [
+        []
+      ]
     }
   },
   "settings": {
@@ -404,7 +667,10 @@
   },
   "staticData": null,
   "tags": [
-    { "name": "optimizer", "id": "tag-optimizer" }
+    {
+      "name": "optimizer",
+      "id": "tag-optimizer"
+    }
   ],
   "pinData": {},
   "versionId": "2"

@@ -16,15 +16,10 @@
       "name": "Every Hour",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
-    },
-    {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [0, 150]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -36,9 +31,15 @@
       "name": "Fetch Rollback Candidates",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [250, 0],
+      "position": [
+        250,
+        0
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -50,23 +51,45 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "filters[date_from]", "value": "={{ $now.minus({ days: 1 }).format('yyyy-MM-dd') }}" },
-            { "name": "filters[date_to]", "value": "={{ $now.format('yyyy-MM-dd') }}" },
-            { "name": "groups[0]", "value": "ad_id" },
-            { "name": "count", "value": "500" }
+            {
+              "name": "filters[date_from]",
+              "value": "={{ $now.minus({ days: 1 }).format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "filters[date_to]",
+              "value": "={{ $now.format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "groups[0]",
+              "value": "ad_id"
+            },
+            {
+              "name": "count",
+              "value": "500"
+            }
           ]
         },
         "options": {
-          "response": { "response": { "responseFormat": "json" } }
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       },
       "id": "fetch-current-stats",
       "name": "Fetch Current Stats",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [250, 150],
+      "position": [
+        250,
+        150
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -80,9 +103,15 @@
       "name": "Fetch CRM Leads",
       "type": "n8n-nodes-base.mySql",
       "typeVersion": 2.4,
-      "position": [250, 300],
+      "position": [
+        250,
+        300
+      ],
       "credentials": {
-        "mySql": { "id": "mysql-crm", "name": "MySQL CRM" }
+        "mySql": {
+          "id": "mysql-crm",
+          "name": "MySQL CRM"
+        }
       }
     },
     {
@@ -93,18 +122,28 @@
       "name": "Rollback Decision Logic",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [550, 100]
+      "position": [
+        550,
+        100
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
             {
               "id": "is-rollback",
               "leftValue": "={{ $json.action }}",
               "rightValue": "ROLLBACK",
-              "operator": { "type": "string", "operation": "equals" }
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
             }
           ],
           "combinator": "and"
@@ -115,7 +154,10 @@
       "name": "Rollback or Just Mark?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [800, 100]
+      "position": [
+        800,
+        100
+      ]
     },
     {
       "parameters": {
@@ -127,8 +169,14 @@
         "contentType": "form-urlencoded",
         "bodyParameters": {
           "parameters": [
-            { "name": "ids[]", "value": "={{ $json.ad_id }}" },
-            { "name": "one_bid_for_all_geo", "value": "={{ $json.rollback_bid }}" }
+            {
+              "name": "ids[]",
+              "value": "={{ $json.ad_id }}"
+            },
+            {
+              "name": "one_bid_for_all_geo",
+              "value": "={{ $json.rollback_bid }}"
+            }
           ]
         },
         "options": {}
@@ -137,9 +185,15 @@
       "name": "Execute Rollback (Set Old Bid)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1050, -50],
+      "position": [
+        1050,
+        -50
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -153,9 +207,15 @@
       "name": "Log Rollback",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1050, 100],
+      "position": [
+        1050,
+        100
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -168,9 +228,15 @@
       "name": "Mark as Checked",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1050, 250],
+      "position": [
+        1050,
+        250
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -181,18 +247,28 @@
       "name": "Format Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [800, 350]
+      "position": [
+        800,
+        350
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
             {
               "id": "has-rollbacks",
               "leftValue": "={{ $json.has_rollbacks }}",
               "rightValue": "true",
-              "operator": { "type": "string", "operation": "equals" }
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
             }
           ],
           "combinator": "and"
@@ -203,7 +279,10 @@
       "name": "Has Rollbacks?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1050, 400]
+      "position": [
+        1050,
+        400
+      ]
     },
     {
       "parameters": {
@@ -215,59 +294,132 @@
       "name": "Send Rollback Report",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1300, 350],
+      "position": [
+        1300,
+        350
+      ],
       "credentials": {
-        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
       }
     }
   ],
   "connections": {
     "Every Hour": {
-      "main": [[
-        { "node": "Fetch Rollback Candidates", "type": "main", "index": 0 },
-        { "node": "Fetch Current Stats", "type": "main", "index": 0 },
-        { "node": "Fetch CRM Leads", "type": "main", "index": 0 }
-      ]]
-    },
-    "Called by Orchestrator": {
-      "main": [[
-        { "node": "Fetch Rollback Candidates", "type": "main", "index": 0 },
-        { "node": "Fetch Current Stats", "type": "main", "index": 0 },
-        { "node": "Fetch CRM Leads", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Fetch Rollback Candidates",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Current Stats",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch CRM Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Rollback Candidates": {
-      "main": [[ { "node": "Rollback Decision Logic", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Rollback Decision Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Current Stats": {
-      "main": [[ { "node": "Rollback Decision Logic", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Rollback Decision Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch CRM Leads": {
-      "main": [[ { "node": "Rollback Decision Logic", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Rollback Decision Logic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Rollback Decision Logic": {
-      "main": [[
-        { "node": "Rollback or Just Mark?", "type": "main", "index": 0 },
-        { "node": "Format Summary", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Rollback or Just Mark?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Rollback or Just Mark?": {
       "main": [
         [
-          { "node": "Execute Rollback (Set Old Bid)", "type": "main", "index": 0 },
-          { "node": "Log Rollback", "type": "main", "index": 0 }
+          {
+            "node": "Execute Rollback (Set Old Bid)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Rollback",
+            "type": "main",
+            "index": 0
+          }
         ],
         [
-          { "node": "Mark as Checked", "type": "main", "index": 0 }
+          {
+            "node": "Mark as Checked",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "Format Summary": {
-      "main": [[ { "node": "Has Rollbacks?", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Has Rollbacks?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Has Rollbacks?": {
       "main": [
-        [ { "node": "Send Rollback Report", "type": "main", "index": 0 } ],
+        [
+          {
+            "node": "Send Rollback Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     }
@@ -279,8 +431,14 @@
   },
   "staticData": null,
   "tags": [
-    { "name": "optimizer", "id": "tag-optimizer" },
-    { "name": "safety", "id": "tag-safety" }
+    {
+      "name": "optimizer",
+      "id": "tag-optimizer"
+    },
+    {
+      "name": "safety",
+      "id": "tag-safety"
+    }
   ],
   "pinData": {},
   "versionId": "1"

@@ -105,7 +105,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 256,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"\u0422\u0438\u0437\u0435\u0440\u043d\u043e\u0435 \u043e\u0431\u044a\u044f\u0432\u043b\u0435\u043d\u0438\u0435 \u0431\u044b\u043b\u043e \u043e\u0442\u043a\u043b\u043e\u043d\u0435\u043d\u043e \u043c\u043e\u0434\u0435\u0440\u0430\u0446\u0438\u0435\u0439.\\n\\n\u041e\u0440\u0438\u0433\u0438\u043d\u0430\u043b\u044c\u043d\u044b\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a: '{{ $json.title }}'\\n\u041f\u0440\u0438\u0447\u0438\u043d\u0430 \u0431\u0430\u043d\u0430: '{{ $json.ban_reason }}'\\n\\n\u041f\u0435\u0440\u0435\u0444\u0440\u0430\u0437\u0438\u0440\u0443\u0439 \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a \u0442\u0430\u043a, \u0447\u0442\u043e\u0431\u044b:\\n1. \u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u0441\u043c\u044b\u0441\u043b \u0438 \u0438\u043d\u0442\u0440\u0438\u0433\u0443\\n2. \u0423\u0431\u0440\u0430\u0442\u044c \u044d\u043b\u0435\u043c\u0435\u043d\u0442\u044b, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u043c\u043e\u0433\u043b\u0438 \u0432\u044b\u0437\u0432\u0430\u0442\u044c \u0431\u0430\u043d\\n3. \u0421\u0434\u0435\u043b\u0430\u0442\u044c \u0431\u043e\u043b\u0435\u0435 \u043d\u0435\u0439\u0442\u0440\u0430\u043b\u044c\u043d\u044b\u043c, \u043d\u043e \u0432\u0441\u0451 \u0435\u0449\u0451 \u043f\u0440\u0438\u0432\u043b\u0435\u043a\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u043c\\n4. \u0414\u043b\u0438\u043d\u0430 30-120 \u0441\u0438\u043c\u0432\u043e\u043b\u043e\u0432\\n\\n\u041e\u0442\u0432\u0435\u0442\u044c \u0422\u041e\u041b\u042c\u041a\u041e \u043d\u043e\u0432\u044b\u043c \u0437\u0430\u0433\u043e\u043b\u043e\u0432\u043a\u043e\u043c, \u0431\u0435\u0437 \u043e\u0431\u044a\u044f\u0441\u043d\u0435\u043d\u0438\u0439.\"\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 256,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Тизерное объявление было отклонено модерацией.\\n\\nОригинальный заголовок: '{{ $json.title }}'\\nПричина бана: '{{ $json.ban_reason }}'\\n\\nПерефразируй заголовок так, чтобы:\\n1. Сохранить основной смысл и интригу\\n2. Убрать элементы, которые могли вызвать бан\\n3. Сделать более нейтральным, но всё ещё привлекательным\\n4. Длина 30-120 символов\\n\\nОтветь ТОЛЬКО новым заголовком, без объяснений.\"\n    }\n  ]\n}",
         "options": {
           "response": {
             "response": {
@@ -222,7 +222,7 @@
     {
       "parameters": {
         "chatId": "591828204",
-        "text": "=\ud83d\udd04 REMODERATION\n\nAd #{{ $json.ad_id }}\nBan reason: {{ $json.ban_reason }}\nOld title: {{ $json.old_title }}\nNew title: {{ $json.new_title }}\n\nSent for remoderation.",
+        "text": "=🔄 REMODERATION\n\nAd #{{ $json.ad_id }}\nBan reason: {{ $json.ban_reason }}\nOld title: {{ $json.old_title }}\nNew title: {{ $json.new_title }}\n\nSent for remoderation.",
         "additionalFields": {}
       },
       "id": "notify-telegram",
@@ -239,17 +239,6 @@
           "name": "Telegram Bot"
         }
       }
-    },
-    {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [
-        0,
-        150
-      ]
     }
   ],
   "connections": {
@@ -340,17 +329,6 @@
           },
           {
             "node": "Notify Telegram",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Called by Orchestrator": {
-      "main": [
-        [
-          {
-            "node": "Fetch Banned Ads",
             "type": "main",
             "index": 0
           }

@@ -16,15 +16,10 @@
       "name": "Every Hour",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
-    },
-    {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [0, 150]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -36,9 +31,15 @@
       "name": "Fetch Unchecked Expectations",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [250, 75],
+      "position": [
+        250,
+        75
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -51,9 +52,15 @@
       "name": "Fetch Current Stats",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [250, 225],
+      "position": [
+        250,
+        225
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -66,9 +73,15 @@
       "name": "Fetch Recent CRM Leads",
       "type": "n8n-nodes-base.mySql",
       "typeVersion": 2.4,
-      "position": [250, 375],
+      "position": [
+        250,
+        375
+      ],
       "credentials": {
-        "mySql": { "id": "mysql-crm", "name": "MySQL CRM" }
+        "mySql": {
+          "id": "mysql-crm",
+          "name": "MySQL CRM"
+        }
       }
     },
     {
@@ -79,18 +92,28 @@
       "name": "Evaluate Outcomes",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [550, 150]
+      "position": [
+        550,
+        150
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
             {
               "id": "not-summary",
               "leftValue": "={{ $json.is_summary }}",
               "rightValue": "true",
-              "operator": { "type": "string", "operation": "notEquals" }
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
             }
           ],
           "combinator": "and"
@@ -101,7 +124,10 @@
       "name": "Filter Individual Results",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [800, 50]
+      "position": [
+        800,
+        50
+      ]
     },
     {
       "parameters": {
@@ -113,9 +139,15 @@
       "name": "Update Expectations + Teaser",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1050, -50],
+      "position": [
+        1050,
+        -50
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -126,7 +158,10 @@
       "name": "Format Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [800, 300]
+      "position": [
+        800,
+        300
+      ]
     },
     {
       "parameters": {
@@ -138,50 +173,111 @@
       "name": "Send Outcome Report",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1050, 300],
+      "position": [
+        1050,
+        300
+      ],
       "credentials": {
-        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
       }
     }
   ],
   "connections": {
     "Every Hour": {
-      "main": [[
-        { "node": "Fetch Unchecked Expectations", "type": "main", "index": 0 },
-        { "node": "Fetch Current Stats", "type": "main", "index": 0 },
-        { "node": "Fetch Recent CRM Leads", "type": "main", "index": 0 }
-      ]]
-    },
-    "Called by Orchestrator": {
-      "main": [[
-        { "node": "Fetch Unchecked Expectations", "type": "main", "index": 0 },
-        { "node": "Fetch Current Stats", "type": "main", "index": 0 },
-        { "node": "Fetch Recent CRM Leads", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Fetch Unchecked Expectations",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Current Stats",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Recent CRM Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Unchecked Expectations": {
-      "main": [[ { "node": "Evaluate Outcomes", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Evaluate Outcomes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Current Stats": {
-      "main": [[ { "node": "Evaluate Outcomes", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Evaluate Outcomes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Recent CRM Leads": {
-      "main": [[ { "node": "Evaluate Outcomes", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Evaluate Outcomes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Evaluate Outcomes": {
-      "main": [[
-        { "node": "Filter Individual Results", "type": "main", "index": 0 },
-        { "node": "Format Summary", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Filter Individual Results",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Filter Individual Results": {
       "main": [
-        [ { "node": "Update Expectations + Teaser", "type": "main", "index": 0 } ],
+        [
+          {
+            "node": "Update Expectations + Teaser",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     },
     "Format Summary": {
-      "main": [[ { "node": "Send Outcome Report", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Send Outcome Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -191,8 +287,14 @@
   },
   "staticData": null,
   "tags": [
-    { "name": "optimizer", "id": "tag-optimizer" },
-    { "name": "safety", "id": "tag-safety" }
+    {
+      "name": "optimizer",
+      "id": "tag-optimizer"
+    },
+    {
+      "name": "safety",
+      "id": "tag-safety"
+    }
   ],
   "pinData": {},
   "versionId": "1"

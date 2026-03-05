@@ -202,17 +202,6 @@
           "name": "PostgreSQL"
         }
       }
-    },
-    {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [
-        0,
-        150
-      ]
     }
   ],
   "connections": {
@@ -303,17 +292,6 @@
         [
           {
             "node": "Update Queue Status",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Called by Orchestrator": {
-      "main": [
-        [
-          {
-            "node": "Fetch Pending Content",
             "type": "main",
             "index": 0
           }

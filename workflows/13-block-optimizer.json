@@ -201,7 +201,7 @@
     {
       "parameters": {
         "chatId": "591828204",
-        "text": "=\ud83c\udfaf BLOCK OPTIMIZER {{ $now.format('dd.MM.yyyy') }}\n\nAnalyzed: {{ $json.total_analyzed }} blocks (CRM matched: {{ $json.crm_blocks_matched || 0 }})\n\ud83d\udfe2 Whitelisted: {{ $json.whitelist_count }} blocks\n\ud83d\udd34 Blacklisted: {{ $json.blacklist_count }} blocks\n\nUpdated ad group #{{ $json.ad_group_id }}",
+        "text": "=🎯 BLOCK OPTIMIZER {{ $now.format('dd.MM.yyyy') }}\n\nAnalyzed: {{ $json.total_analyzed }} blocks (CRM matched: {{ $json.crm_blocks_matched || 0 }})\n🟢 Whitelisted: {{ $json.whitelist_count }} blocks\n🔴 Blacklisted: {{ $json.blacklist_count }} blocks\n\nUpdated ad group #{{ $json.ad_group_id }}",
         "additionalFields": {}
       },
       "id": "notify",
@@ -218,17 +218,6 @@
           "name": "Telegram Bot"
         }
       }
-    },
-    {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [
-        0,
-        150
-      ]
     },
     {
       "parameters": {
@@ -339,27 +328,6 @@
           },
           {
             "node": "Notify Telegram",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Called by Orchestrator": {
-      "main": [
-        [
-          {
-            "node": "Fetch Block Stats (7 days)",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch Active Ad Groups",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Fetch CRM Block Stats",
             "type": "main",
             "index": 0
           }

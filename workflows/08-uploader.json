@@ -181,17 +181,6 @@
         1540,
         0
       ]
-    },
-    {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [
-        0,
-        150
-      ]
     }
   ],
   "connections": {
@@ -266,17 +255,6 @@
         [
           {
             "node": "Rate Limit Wait (7s)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Called by Orchestrator": {
-      "main": [
-        [
-          {
-            "node": "Fetch Ready Content",
             "type": "main",
             "index": 0
           }

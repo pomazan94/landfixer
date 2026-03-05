@@ -198,17 +198,6 @@
       }
     },
     {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [
-        0,
-        150
-      ]
-    },
-    {
       "parameters": {
         "operation": "executeQuery",
         "query": "SELECT COALESCE(SUM(money), 0) AS total_spend FROM ad_stats WHERE date = CURRENT_DATE",
@@ -318,27 +307,6 @@
         [
           {
             "node": "Calculate Balance Metrics",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Called by Orchestrator": {
-      "main": [
-        [
-          {
-            "node": "Get Current Balance",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Get Balance History",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Get Today Spend from DB",
             "type": "main",
             "index": 0
           }

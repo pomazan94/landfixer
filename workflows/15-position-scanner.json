@@ -16,15 +16,10 @@
       "name": "Every 2 Hours",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
-    },
-    {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [0, 150]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -36,21 +31,34 @@
       "name": "Get Scan Targets",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [250, 75],
+      "position": [
+        250,
+        75
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
             {
               "id": "has-targets",
               "leftValue": "={{ $json.site_url }}",
               "rightValue": "",
-              "operator": { "type": "string", "operation": "notEquals" }
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
             }
           ],
           "combinator": "and"
@@ -61,7 +69,10 @@
       "name": "Has Targets?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [480, 75]
+      "position": [
+        480,
+        75
+      ]
     },
     {
       "parameters": {
@@ -71,7 +82,10 @@
       "name": "Prepare Scan Requests",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [700, 0]
+      "position": [
+        700,
+        0
+      ]
     },
     {
       "parameters": {
@@ -80,14 +94,30 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "User-Agent", "value": "={{ $json.user_agent }}" },
-            { "name": "Referer", "value": "={{ $json.referer }}" },
-            { "name": "Accept", "value": "text/html,application/xhtml+xml" },
-            { "name": "Accept-Language", "value": "ru-RU,ru;q=0.9,en-US;q=0.8" }
+            {
+              "name": "User-Agent",
+              "value": "={{ $json.user_agent }}"
+            },
+            {
+              "name": "Referer",
+              "value": "={{ $json.referer }}"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "ru-RU,ru;q=0.9,en-US;q=0.8"
+            }
           ]
         },
         "options": {
-          "response": { "response": { "responseFormat": "text" } },
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
           "proxy": "={{ $json.proxy_url }}",
           "timeout": 30000
         }
@@ -96,7 +126,10 @@
       "name": "Fetch Page via Proxy",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [920, 0],
+      "position": [
+        920,
+        0
+      ],
       "onError": "continueRegularOutput"
     },
     {
@@ -107,18 +140,28 @@
       "name": "Extract Block IDs",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1140, 0]
+      "position": [
+        1140,
+        0
+      ]
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
             {
               "id": "has-widget",
               "leftValue": "={{ $json.widget_found }}",
               "rightValue": true,
-              "operator": { "type": "boolean", "operation": "equals" }
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
             }
           ],
           "combinator": "and"
@@ -129,7 +172,10 @@
       "name": "Widget Found?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1360, 0]
+      "position": [
+        1360,
+        0
+      ]
     },
     {
       "parameters": {
@@ -138,14 +184,30 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "User-Agent", "value": "={{ $json.user_agent }}" },
-            { "name": "Referer", "value": "={{ $json.site_url }}" },
-            { "name": "Accept", "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
-            { "name": "Accept-Language", "value": "en-US,en;q=0.9" }
+            {
+              "name": "User-Agent",
+              "value": "={{ $json.user_agent }}"
+            },
+            {
+              "name": "Referer",
+              "value": "={{ $json.site_url }}"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9"
+            }
           ]
         },
         "options": {
-          "response": { "response": { "responseFormat": "text" } },
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
           "proxy": "={{ $json.proxy_url }}",
           "timeout": 30000
         }
@@ -154,7 +216,10 @@
       "name": "Fetch Widget Render",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1580, -60],
+      "position": [
+        1580,
+        -60
+      ],
       "onError": "continueRegularOutput"
     },
     {
@@ -165,7 +230,10 @@
       "name": "Parse Teasers from Render",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1800, -60]
+      "position": [
+        1800,
+        -60
+      ]
     },
     {
       "parameters": {
@@ -177,9 +245,15 @@
       "name": "Save Positions",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [2020, 0],
+      "position": [
+        2020,
+        0
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -192,9 +266,15 @@
       "name": "Save No Widget",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [2020, 120],
+      "position": [
+        2020,
+        120
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -207,9 +287,15 @@
       "name": "Notify No Targets",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [700, 200],
+      "position": [
+        700,
+        200
+      ],
       "credentials": {
-        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
       }
     },
     {
@@ -222,9 +308,15 @@
       "name": "Fetch Known Competitors",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [2020, -180],
+      "position": [
+        2020,
+        -180
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -235,7 +327,10 @@
       "name": "Split Teasers for Resolve",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2240, -180]
+      "position": [
+        2240,
+        -180
+      ]
     },
     {
       "parameters": {
@@ -245,7 +340,10 @@
       "name": "Rate Limit Wait",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2680, -300]
+      "position": [
+        2680,
+        -300
+      ]
     },
     {
       "parameters": {
@@ -254,10 +352,22 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "User-Agent", "value": "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.64 Mobile Safari/537.36" },
-            { "name": "Accept", "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
-            { "name": "Accept-Language", "value": "en-US,en;q=0.9" },
-            { "name": "Referer", "value": "={{ $json.site_url }}" }
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.64 Mobile Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9"
+            },
+            {
+              "name": "Referer",
+              "value": "={{ $json.site_url }}"
+            }
           ]
         },
         "options": {
@@ -269,27 +379,42 @@
           },
           "proxy": "={{ $json.proxy_url }}",
           "timeout": 20000,
-          "response": { "response": { "fullResponse": true, "responseFormat": "text" } }
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          }
         }
       },
       "id": "resolve-landing-url",
       "name": "Resolve Landing URL",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2900, -300],
+      "position": [
+        2900,
+        -300
+      ],
       "onError": "continueRegularOutput",
       "retryOnFail": false
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
           "conditions": [
             {
               "id": "needs-resolve",
               "leftValue": "={{ $json.needs_resolve }}",
               "rightValue": true,
-              "operator": { "type": "boolean", "operation": "equals" }
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
             }
           ],
           "combinator": "and"
@@ -300,7 +425,10 @@
       "name": "Needs Resolve?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [2460, -180]
+      "position": [
+        2460,
+        -180
+      ]
     },
     {
       "parameters": {
@@ -310,7 +438,10 @@
       "name": "Extract Landing URL",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3120, -300]
+      "position": [
+        3120,
+        -300
+      ]
     },
     {
       "parameters": {
@@ -322,9 +453,15 @@
       "name": "Save Competitors",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [3340, -180],
+      "position": [
+        3340,
+        -180
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -336,7 +473,10 @@
       "name": "Loop Over Renders",
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [1470, -60]
+      "position": [
+        1470,
+        -60
+      ]
     },
     {
       "parameters": {
@@ -346,78 +486,232 @@
       "name": "Merge Render HTML",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1690, -60]
+      "position": [
+        1690,
+        -60
+      ]
     }
   ],
   "connections": {
     "Every 2 Hours": {
-      "main": [[ { "node": "Get Scan Targets", "type": "main", "index": 0 } ]]
-    },
-    "Called by Orchestrator": {
-      "main": [[ { "node": "Get Scan Targets", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Get Scan Targets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Get Scan Targets": {
-      "main": [[ { "node": "Has Targets?", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Has Targets?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Has Targets?": {
       "main": [
-        [ { "node": "Prepare Scan Requests", "type": "main", "index": 0 } ],
-        [ { "node": "Notify No Targets", "type": "main", "index": 0 } ]
+        [
+          {
+            "node": "Prepare Scan Requests",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify No Targets",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Prepare Scan Requests": {
-      "main": [[ { "node": "Fetch Page via Proxy", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Fetch Page via Proxy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Page via Proxy": {
-      "main": [[ { "node": "Extract Block IDs", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Extract Block IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Extract Block IDs": {
-      "main": [[ { "node": "Widget Found?", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Widget Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Widget Found?": {
       "main": [
-        [ { "node": "Loop Over Renders", "type": "main", "index": 0 } ],
-        [ { "node": "Save No Widget", "type": "main", "index": 0 } ]
+        [
+          {
+            "node": "Loop Over Renders",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save No Widget",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Loop Over Renders": {
       "main": [
-        [ { "node": "Fetch Widget Render", "type": "main", "index": 0 } ],
-        [ { "node": "Merge Render HTML", "type": "main", "index": 0 } ]
+        [
+          {
+            "node": "Fetch Widget Render",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Render HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Fetch Widget Render": {
-      "main": [[ { "node": "Loop Over Renders", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Loop Over Renders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Merge Render HTML": {
-      "main": [[ { "node": "Parse Teasers from Render", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Parse Teasers from Render",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Parse Teasers from Render": {
-      "main": [[
-        { "node": "Save Positions", "type": "main", "index": 0 },
-        { "node": "Fetch Known Competitors", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Save Positions",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Known Competitors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Split Teasers for Resolve": {
-      "main": [[ { "node": "Needs Resolve?", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Needs Resolve?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Needs Resolve?": {
       "main": [
-        [ { "node": "Rate Limit Wait", "type": "main", "index": 0 } ],
-        [ { "node": "Save Competitors", "type": "main", "index": 0 } ]
+        [
+          {
+            "node": "Rate Limit Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Competitors",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Rate Limit Wait": {
-      "main": [[ { "node": "Resolve Landing URL", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Resolve Landing URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Resolve Landing URL": {
-      "main": [[ { "node": "Extract Landing URL", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Extract Landing URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Extract Landing URL": {
-      "main": [[ { "node": "Save Competitors", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Save Competitors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Known Competitors": {
-      "main": [[ { "node": "Split Teasers for Resolve", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Split Teasers for Resolve",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -426,7 +720,12 @@
     "callerPolicy": "workflowsFromSameOwner"
   },
   "staticData": null,
-  "tags": [{ "name": "scraper", "id": "tag-scraper" }],
+  "tags": [
+    {
+      "name": "scraper",
+      "id": "tag-scraper"
+    }
+  ],
   "pinData": {},
   "versionId": "4"
 }

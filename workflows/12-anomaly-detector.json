@@ -16,15 +16,10 @@
       "name": "Every Hour",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [0, 0]
-    },
-    {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [0, 150]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
@@ -36,9 +31,15 @@
       "name": "Fetch Stats Comparison",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [250, 75],
+      "position": [
+        250,
+        75
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -49,7 +50,10 @@
       "name": "Detect Anomalies v2",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [500, 75]
+      "position": [
+        500,
+        75
+      ]
     },
     {
       "parameters": {
@@ -61,21 +65,34 @@
       "name": "Save Anomalies",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [750, -50],
+      "position": [
+        750,
+        -50
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
       "parameters": {
         "conditions": {
-          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
           "conditions": [
             {
               "id": "should-pause",
               "leftValue": "={{ $json.should_pause }}",
               "rightValue": "true",
-              "operator": { "type": "string", "operation": "equals" }
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
             }
           ],
           "combinator": "and"
@@ -86,7 +103,10 @@
       "name": "Should Pause Teaser?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [750, 100]
+      "position": [
+        750,
+        100
+      ]
     },
     {
       "parameters": {
@@ -103,9 +123,15 @@
       "name": "Pause Anomaly Ad",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1000, 0],
+      "position": [
+        1000,
+        0
+      ],
       "credentials": {
-        "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
       },
       "onError": "continueRegularOutput"
     },
@@ -119,9 +145,15 @@
       "name": "Update Teaser State",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1250, 0],
+      "position": [
+        1250,
+        0
+      ],
       "credentials": {
-        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
       }
     },
     {
@@ -132,7 +164,10 @@
       "name": "Format Alert",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [750, 300]
+      "position": [
+        750,
+        300
+      ]
     },
     {
       "parameters": {
@@ -144,40 +179,95 @@
       "name": "Send Alert",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1000, 300],
+      "position": [
+        1000,
+        300
+      ],
       "credentials": {
-        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
+        "telegramApi": {
+          "id": "telegram-cred",
+          "name": "Telegram Bot"
+        }
       }
     }
   ],
   "connections": {
     "Every Hour": {
-      "main": [[ { "node": "Fetch Stats Comparison", "type": "main", "index": 0 } ]]
-    },
-    "Called by Orchestrator": {
-      "main": [[ { "node": "Fetch Stats Comparison", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Fetch Stats Comparison",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Stats Comparison": {
-      "main": [[ { "node": "Detect Anomalies v2", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Detect Anomalies v2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Detect Anomalies v2": {
-      "main": [[
-        { "node": "Save Anomalies", "type": "main", "index": 0 },
-        { "node": "Should Pause Teaser?", "type": "main", "index": 0 },
-        { "node": "Format Alert", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "Save Anomalies",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Should Pause Teaser?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Format Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Should Pause Teaser?": {
       "main": [
-        [ { "node": "Pause Anomaly Ad", "type": "main", "index": 0 } ],
+        [
+          {
+            "node": "Pause Anomaly Ad",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     },
     "Pause Anomaly Ad": {
-      "main": [[ { "node": "Update Teaser State", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Update Teaser State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Format Alert": {
-      "main": [[ { "node": "Send Alert", "type": "main", "index": 0 } ]]
+      "main": [
+        [
+          {
+            "node": "Send Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -187,8 +277,14 @@
   },
   "staticData": null,
   "tags": [
-    { "name": "reporting", "id": "tag-reporting" },
-    { "name": "safety", "id": "tag-safety" }
+    {
+      "name": "reporting",
+      "id": "tag-reporting"
+    },
+    {
+      "name": "safety",
+      "id": "tag-safety"
+    }
   ],
   "pinData": {},
   "versionId": "2"
