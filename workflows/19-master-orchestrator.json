@@ -238,7 +238,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Weekly optimization sequence\nconst weeklyWorkflows = [\n  '14 - Coefficient Tuner (OS/Browser/ISP)',\n  '18 - Time Targeting Optimizer'\n];\n\nreturn weeklyWorkflows.map(w => ({ json: { workflow: w, reason: 'Weekly optimization' } }));"
+        "jsCode": "// Weekly optimization sequence\nconst weeklyWorkflows = [\n  '18 - Time Targeting Optimizer'\n];\n\nreturn weeklyWorkflows.map(w => ({ json: { workflow: w, reason: 'Weekly optimization' } }));"
       },
       "id": "weekly-sequence",
       "name": "Weekly Optimization Sequence",
@@ -268,7 +268,7 @@
     {
       "parameters": {
         "chatId": "591828204",
-        "text": "=📅 WEEKLY OPTIMIZATION LAUNCHED\n\nRunning:\n- Coefficient Tuner (OS/Browser/ISP)\n- Time Targeting Optimizer\n\nResults will be reported individually.",
+        "text": "=📅 WEEKLY OPTIMIZATION LAUNCHED\n\nRunning:\n- Time Targeting Optimizer\n\nResults will be reported individually.",
         "additionalFields": {}
       },
       "id": "notify-weekly",
