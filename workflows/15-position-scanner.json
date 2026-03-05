@@ -326,6 +326,28 @@
       "credentials": {
         "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
       }
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-pages",
+      "name": "Loop Over Proxies",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [810, 0]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-renders",
+      "name": "Loop Over Renders",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1470, -60]
     }
   ],
   "connections": {
@@ -345,22 +367,34 @@
       ]
     },
     "Prepare Scan Requests": {
-      "main": [[ { "node": "Fetch Page via Proxy", "type": "main", "index": 0 } ]]
+      "main": [[ { "node": "Loop Over Proxies", "type": "main", "index": 0 } ]]
+    },
+    "Loop Over Proxies": {
+      "main": [
+        [ { "node": "Fetch Page via Proxy", "type": "main", "index": 0 } ],
+        [ { "node": "Extract Block IDs", "type": "main", "index": 0 } ]
+      ]
     },
     "Fetch Page via Proxy": {
-      "main": [[ { "node": "Extract Block IDs", "type": "main", "index": 0 } ]]
+      "main": [[ { "node": "Loop Over Proxies", "type": "main", "index": 0 } ]]
     },
     "Extract Block IDs": {
       "main": [[ { "node": "Widget Found?", "type": "main", "index": 0 } ]]
     },
     "Widget Found?": {
       "main": [
-        [ { "node": "Fetch Widget Render", "type": "main", "index": 0 } ],
+        [ { "node": "Loop Over Renders", "type": "main", "index": 0 } ],
         [ { "node": "Save No Widget", "type": "main", "index": 0 } ]
       ]
     },
+    "Loop Over Renders": {
+      "main": [
+        [ { "node": "Fetch Widget Render", "type": "main", "index": 0 } ],
+        [ { "node": "Parse Teasers from Render", "type": "main", "index": 0 } ]
+      ]
+    },
     "Fetch Widget Render": {
-      "main": [[ { "node": "Parse Teasers from Render", "type": "main", "index": 0 } ]]
+      "main": [[ { "node": "Loop Over Renders", "type": "main", "index": 0 } ]]
     },
     "Parse Teasers from Render": {
       "main": [[
