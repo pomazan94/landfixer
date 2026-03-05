@@ -44,17 +44,32 @@
       "name": "Fetch Geo Stats (7 days)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [220, 0],
+      "position": [220, -50],
       "credentials": {
         "httpHeaderAuth": { "id": "o0swcMSqweTNOUhw", "name": "Geozo" }
       }
     },
     {
       "parameters": {
-        "jsCode": "const statsRaw = $('Fetch Geo Stats (7 days)').first().json;\nconst stats = statsRaw?.data?.result?.data || statsRaw?.data || (Array.isArray(statsRaw) ? statsRaw : []);\n\nif (!Array.isArray(stats) || stats.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No geo stats data' } }];\n}\n\n// Flatten stats into rows for DB insert\nconst results = [];\nstats.forEach(d => {\n  const adId = d.ad_id;\n  const country = d.country_code;\n  if (!adId || !country) return;\n\n  const spend = Number(d.money) || 0;\n  const revenue = Number(d.postbacks_confirmed_money) || 0;\n  const roi = spend > 0 ? Math.round((revenue - spend) / spend * 10000) / 100 : 0;\n\n  results.push({\n    json: {\n      ad_id: adId,\n      country_code: country,\n      shows: Number(d.shows_count) || 0,\n      clicks: Number(d.clicks_count) || 0,\n      spend: Math.round(spend * 100) / 100,\n      revenue: Math.round(revenue * 100) / 100,\n      roi: roi\n    }\n  });\n});\n\nreturn results;"
+        "operation": "executeQuery",
+        "query": "SELECT source_suffix2 AS geo, param5 AS ad_id, COUNT(*) AS total_leads, SUM(CASE WHEN status = 'Depositor' THEN 1 ELSE 0 END) AS depositors, ROUND(SUM(CASE WHEN status = 'Depositor' THEN cost ELSE 0 END), 2) AS crm_revenue FROM leads WHERE param5 IS NOT NULL AND param5 != '' AND param5 REGEXP '^[0-9]+$' AND source_suffix2 IS NOT NULL AND source_suffix2 != '' AND created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) GROUP BY source_suffix2, param5",
+        "options": {}
       },
-      "id": "parse-stats",
-      "name": "Parse Geo Stats",
+      "id": "fetch-crm-geo",
+      "name": "Fetch CRM Leads by Geo",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [220, 100],
+      "credentials": {
+        "mySql": { "id": "mysql-crm", "name": "MySQL CRM" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const statsRaw = $('Fetch Geo Stats (7 days)').first().json;\nconst crmItems = $('Fetch CRM Leads by Geo').all().map(i => i.json);\n\nconst stats = statsRaw?.data?.result?.data || statsRaw?.data || (Array.isArray(statsRaw) ? statsRaw : []);\n\nif (!Array.isArray(stats) || stats.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No geo stats data' } }];\n}\n\n// Build CRM map: ad_id+geo -> {leads, depositors, revenue}\nconst crmMap = {};\ncrmItems.forEach(row => {\n  const key = `${row.ad_id}_${(row.geo || '').toUpperCase()}`;\n  crmMap[key] = {\n    leads: Number(row.total_leads) || 0,\n    depositors: Number(row.depositors) || 0,\n    revenue: Number(row.crm_revenue) || 0\n  };\n});\n\nconst results = [];\nstats.forEach(d => {\n  const adId = d.ad_id;\n  const country = d.country_code;\n  if (!adId || !country) return;\n\n  const spend = Number(d.money) || 0;\n  const key = `${adId}_${country.toUpperCase()}`;\n  const crm = crmMap[key] || { leads: 0, depositors: 0, revenue: 0 };\n  const roi = spend > 0 ? Math.round((crm.revenue - spend) / spend * 10000) / 100 : 0;\n  const cpl = crm.leads > 0 ? Math.round(spend / crm.leads * 100) / 100 : 0;\n\n  results.push({\n    json: {\n      ad_id: adId,\n      country_code: country,\n      shows: Number(d.shows_count) || 0,\n      clicks: Number(d.clicks_count) || 0,\n      spend: Math.round(spend * 100) / 100,\n      revenue: Math.round(crm.revenue * 100) / 100,\n      leads: crm.leads,\n      depositors: crm.depositors,\n      cpl: cpl,\n      roi: roi\n    }\n  });\n});\n\nreturn results;"
+      },
+      "id": "merge-stats",
+      "name": "Merge Geozo + CRM",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [480, 0]
@@ -86,20 +101,27 @@
   "connections": {
     "Daily at 02:00": {
       "main": [[
-        { "node": "Fetch Geo Stats (7 days)", "type": "main", "index": 0 }
+        { "node": "Fetch Geo Stats (7 days)", "type": "main", "index": 0 },
+        { "node": "Fetch CRM Leads by Geo", "type": "main", "index": 0 }
       ]]
     },
     "Called by Orchestrator": {
       "main": [[
-        { "node": "Fetch Geo Stats (7 days)", "type": "main", "index": 0 }
+        { "node": "Fetch Geo Stats (7 days)", "type": "main", "index": 0 },
+        { "node": "Fetch CRM Leads by Geo", "type": "main", "index": 0 }
       ]]
     },
     "Fetch Geo Stats (7 days)": {
       "main": [[
-        { "node": "Parse Geo Stats", "type": "main", "index": 0 }
+        { "node": "Merge Geozo + CRM", "type": "main", "index": 0 }
       ]]
     },
-    "Parse Geo Stats": {
+    "Fetch CRM Leads by Geo": {
+      "main": [[
+        { "node": "Merge Geozo + CRM", "type": "main", "index": 0 }
+      ]]
+    },
+    "Merge Geozo + CRM": {
       "main": [[
         { "node": "Log Geo Stats", "type": "main", "index": 0 }
       ]]
@@ -115,5 +137,5 @@
     { "name": "data-collector", "id": "tag-collector" }
   ],
   "pinData": {},
-  "versionId": "2"
+  "versionId": "3"
 }
