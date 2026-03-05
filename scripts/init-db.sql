@@ -181,15 +181,30 @@ CREATE TABLE IF NOT EXISTS content_queue (
 -- Конкуренты (данные из скрапинга)
 CREATE TABLE IF NOT EXISTS competitors (
     id SERIAL PRIMARY KEY,
+    media_id INTEGER,
     site_url TEXT,
     title TEXT NOT NULL,
     image_url TEXT,
     destination_url TEXT,
     position INTEGER,
+    block_id INTEGER,
+    landing_domain TEXT,
+    geozo_ad_id INTEGER,
+    geozo_adgroup_id INTEGER,
+    geozo_site_id INTEGER,
+    country_code VARCHAR(5),
+    cost DECIMAL(10, 4),
     first_seen_at TIMESTAMP DEFAULT NOW(),
     last_seen_at TIMESTAMP DEFAULT NOW(),
     times_seen INTEGER DEFAULT 1
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_competitors_site_title
+  ON competitors (site_url, title);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_competitors_media_id
+  ON competitors (media_id)
+  WHERE media_id IS NOT NULL;
 
 -- Аномалии
 CREATE TABLE IF NOT EXISTS anomalies (
