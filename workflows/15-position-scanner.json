@@ -89,7 +89,8 @@
         "options": {
           "response": { "response": { "responseFormat": "text" } },
           "proxy": "={{ $json.proxy_url }}",
-          "timeout": 30000
+          "timeout": 30000,
+          "batching": { "batch": { "batchSize": 1 } }
         }
       },
       "id": "fetch-page",
@@ -147,7 +148,8 @@
         "options": {
           "response": { "response": { "responseFormat": "text" } },
           "proxy": "={{ $json.proxy_url }}",
-          "timeout": 30000
+          "timeout": 30000,
+          "batching": { "batch": { "batchSize": 1 } }
         }
       },
       "id": "fetch-render",
