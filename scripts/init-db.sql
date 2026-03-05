@@ -96,6 +96,19 @@ CREATE TABLE IF NOT EXISTS bid_history (
     changed_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Целевые сайты для сканирования позиций (per geo + proxy)
+CREATE TABLE IF NOT EXISTS scan_targets (
+    id SERIAL PRIMARY KEY,
+    site_url TEXT NOT NULL,
+    country_code VARCHAR(5) NOT NULL,
+    proxy_url TEXT,              -- socks5://user:pass@host:port или http://host:port
+    proxy_type VARCHAR(20) DEFAULT 'socks5',  -- socks5, http, adguard
+    is_active BOOLEAN DEFAULT TRUE,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(site_url, country_code)
+);
+
 -- Позиции тизеров на площадках
 CREATE TABLE IF NOT EXISTS position_tracking (
     id SERIAL PRIMARY KEY,
@@ -338,6 +351,7 @@ CREATE INDEX IF NOT EXISTS idx_balance_history_time ON balance_history(collected
 CREATE INDEX IF NOT EXISTS idx_bid_history_ad ON bid_history(ad_id);
 CREATE INDEX IF NOT EXISTS idx_bid_history_changed ON bid_history(changed_at);
 CREATE INDEX IF NOT EXISTS idx_position_tracking_time ON position_tracking(scanned_at);
+CREATE INDEX IF NOT EXISTS idx_scan_targets_active ON scan_targets(is_active, country_code);
 CREATE INDEX IF NOT EXISTS idx_teasers_status ON teasers(status);
 CREATE INDEX IF NOT EXISTS idx_teasers_state ON teasers(state);
 CREATE INDEX IF NOT EXISTS idx_teasers_state_changed ON teasers(state_changed_at);

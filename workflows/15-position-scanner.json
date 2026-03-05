@@ -16,44 +16,62 @@
       "name": "Every 2 Hours",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [
-        0,
-        0
-      ]
+      "position": [0, 0]
+    },
+    {
+      "parameters": {},
+      "id": "sub-workflow-trigger",
+      "name": "Called by Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [0, 150]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT DISTINCT site_url FROM position_tracking\nUNION\nSELECT unnest(ARRAY[\n  'https://example-news-site.com',\n  'https://example-blog.com'\n]) AS site_url\nLIMIT 20;",
+        "query": "SELECT id, site_url, country_code, proxy_url, proxy_type FROM scan_targets WHERE is_active = TRUE ORDER BY country_code, site_url",
         "options": {}
       },
-      "id": "get-target-sites",
-      "name": "Get Target Sites",
+      "id": "get-targets",
+      "name": "Get Scan Targets",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [
-        220,
-        0
-      ],
+      "position": [250, 75],
       "credentials": {
-        "postgres": {
-          "id": "postgres-cred",
-          "name": "PostgreSQL"
-        }
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
       }
     },
     {
       "parameters": {
-        "jsCode": "const sites = $input.all().map(i => i.json.site_url).filter(Boolean);\n\nif (sites.length === 0) {\n  return [{ json: { skip: true, reason: 'No target sites configured' } }];\n}\n\n// User-Agent rotation pool\nconst userAgents = [\n  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',\n  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1'\n];\n\n// Referer rotation\nconst referers = [\n  'https://www.google.com/',\n  'https://yandex.ru/',\n  'https://www.bing.com/',\n  'https://dzen.ru/',\n  ''\n];\n\nreturn sites.map(site => {\n  const ua = userAgents[Math.floor(Math.random() * userAgents.length)];\n  const ref = referers[Math.floor(Math.random() * referers.length)];\n\n  return {\n    json: {\n      site_url: site,\n      user_agent: ua,\n      referer: ref\n    }\n  };\n});"
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "has-targets",
+              "leftValue": "={{ $json.site_url }}",
+              "rightValue": "",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-targets-check",
+      "name": "Has Targets?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 75]
+    },
+    {
+      "parameters": {
+        "jsCode": "const targets = $input.all().map(i => i.json);\n\n// User-Agent rotation\nconst userAgents = [\n  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',\n  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1'\n];\n\nconst referers = [\n  'https://www.google.com/',\n  'https://yandex.ru/',\n  'https://www.bing.com/',\n  'https://dzen.ru/',\n  ''\n];\n\nreturn targets.map(t => ({\n  json: {\n    target_id: t.id,\n    site_url: t.site_url,\n    country_code: t.country_code,\n    proxy_url: t.proxy_url || '',\n    proxy_type: t.proxy_type || 'socks5',\n    user_agent: userAgents[Math.floor(Math.random() * userAgents.length)],\n    referer: referers[Math.floor(Math.random() * referers.length)]\n  }\n}));"
       },
       "id": "prepare-requests",
       "name": "Prepare Scan Requests",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        440,
-        0
-      ]
+      "position": [700, 0]
     },
     {
       "parameters": {
@@ -62,31 +80,15 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "User-Agent",
-              "value": "={{ $json.user_agent }}"
-            },
-            {
-              "name": "Referer",
-              "value": "={{ $json.referer }}"
-            },
-            {
-              "name": "Accept",
-              "value": "text/html,application/xhtml+xml"
-            },
-            {
-              "name": "Accept-Language",
-              "value": "ru-RU,ru;q=0.9,en-US;q=0.8"
-            }
+            { "name": "User-Agent", "value": "={{ $json.user_agent }}" },
+            { "name": "Referer", "value": "={{ $json.referer }}" },
+            { "name": "Accept", "value": "text/html,application/xhtml+xml" },
+            { "name": "Accept-Language", "value": "ru-RU,ru;q=0.9,en-US;q=0.8" }
           ]
         },
         "options": {
-          "response": {
-            "response": {
-              "responseFormat": "text"
-            }
-          },
-          "proxy": "",
+          "response": { "response": { "responseFormat": "text" } },
+          "proxy": "={{ $json.proxy_url }}",
           "timeout": 30000
         }
       },
@@ -94,147 +96,74 @@
       "name": "Fetch Page via Proxy",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        660,
-        0
-      ]
+      "position": [920, 0],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "const html = $input.first().json.data || $input.first().json.body || '';\nconst siteUrl = $('Prepare Scan Requests').first().json.site_url;\n\n// Parse Geozo widget teasers from HTML\n// Look for common Geozo widget patterns\nconst teasers = [];\n\n// Pattern 1: data-geozo or class containing geozo\nconst widgetRegex = /class=[\"'][^\"']*geozo[^\"']*[\"'][^>]*>([\\s\\S]*?)<\\/div>/gi;\nlet widgetMatch;\nwhile ((widgetMatch = widgetRegex.exec(html)) !== null) {\n  const widgetHtml = widgetMatch[1];\n  // Extract individual teasers from widget\n  const teaserRegex = /<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>([\\s\\S]*?)<\\/a>/gi;\n  let teaserMatch;\n  let position = 0;\n  while ((teaserMatch = teaserRegex.exec(widgetHtml)) !== null) {\n    position++;\n    const url = teaserMatch[1];\n    const content = teaserMatch[2];\n    // Extract title from content\n    const titleMatch = content.match(/<[^>]*class=[\"'][^\"']*title[^\"']*[\"'][^>]*>([^<]+)/i)\n      || content.match(/>([^<]{20,})</)\n      || [null, content.replace(/<[^>]+>/g, '').trim().substring(0, 120)];\n    const title = (titleMatch[1] || '').trim();\n    if (title.length > 5) {\n      teasers.push({ position, title, url, source: siteUrl });\n    }\n  }\n}\n\n// Pattern 2: iframe-based widgets\nconst iframeRegex = /src=[\"']([^\"']*geozo[^\"']*)[\"']/gi;\nlet iframeMatch;\nwhile ((iframeMatch = iframeRegex.exec(html)) !== null) {\n  teasers.push({ position: 0, title: '[iframe widget detected]', url: iframeMatch[1], source: siteUrl });\n}\n\n// If no widget found, try general native ad patterns\nif (teasers.length === 0) {\n  const nativeAdRegex = /<div[^>]*class=[\"'][^\"']*(?:teaser|native|widget|recommend)[^\"']*[\"'][^>]*>[\\s\\S]*?<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>[\\s\\S]*?<\\/a>/gi;\n  let nativeMatch;\n  let pos = 0;\n  while ((nativeMatch = nativeAdRegex.exec(html)) !== null && pos < 20) {\n    pos++;\n    teasers.push({ position: pos, title: '[native ad detected]', url: nativeMatch[1], source: siteUrl });\n  }\n}\n\nreturn [{\n  json: {\n    site_url: siteUrl,\n    teasers_found: teasers.length,\n    teasers: teasers,\n    scanned_at: $now.toISO()\n  }\n}];"
+        "jsCode": "const input = $input.first().json;\nconst html = input.data || input.body || (typeof input === 'string' ? input : '');\nconst scanReq = $('Prepare Scan Requests').first().json;\nconst siteUrl = scanReq.site_url;\nconst geo = scanReq.country_code;\n\n// Check for error\nif (input.error || input.code >= 400) {\n  return [{ json: {\n    site_url: siteUrl,\n    country_code: geo,\n    teasers_found: 0,\n    teasers: [],\n    error: input.error || `HTTP ${input.code || 'unknown'}`,\n    scanned_at: $now.toISO()\n  }}];\n}\n\nconst teasers = [];\n\n// Pattern 1: Geozo widget blocks (class contains geozo)\nconst widgetRegex = /class=[\"'][^\"']*geozo[^\"']*[\"'][^>]*>([\\s\\S]*?)<\\/div>/gi;\nlet widgetMatch;\nwhile ((widgetMatch = widgetRegex.exec(html)) !== null) {\n  const widgetHtml = widgetMatch[1];\n  const teaserRegex = /<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>([\\s\\S]*?)<\\/a>/gi;\n  let teaserMatch;\n  let position = 0;\n  while ((teaserMatch = teaserRegex.exec(widgetHtml)) !== null) {\n    position++;\n    const url = teaserMatch[1];\n    const content = teaserMatch[2];\n    const titleMatch = content.match(/<[^>]*class=[\"'][^\"']*title[^\"']*[\"'][^>]*>([^<]+)/i)\n      || content.match(/>([^<]{20,})</)\n      || [null, content.replace(/<[^>]+>/g, '').trim().substring(0, 120)];\n    const title = (titleMatch[1] || '').trim();\n    if (title.length > 5) {\n      teasers.push({ position, title, url, source: siteUrl });\n    }\n  }\n}\n\n// Pattern 2: Geozo iframes\nconst iframeRegex = /src=[\"']([^\"']*geozo[^\"']*)[\"']/gi;\nlet iframeMatch;\nwhile ((iframeMatch = iframeRegex.exec(html)) !== null) {\n  teasers.push({ position: 0, title: '[iframe widget]', url: iframeMatch[1], source: siteUrl });\n}\n\n// Pattern 3: Generic native ad blocks\nif (teasers.length === 0) {\n  const nativeAdRegex = /<div[^>]*class=[\"'][^\"']*(?:teaser|native|widget|recommend)[^\"']*[\"'][^>]*>[\\s\\S]*?<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>[\\s\\S]*?<\\/a>/gi;\n  let nativeMatch;\n  let pos = 0;\n  while ((nativeMatch = nativeAdRegex.exec(html)) !== null && pos < 20) {\n    pos++;\n    teasers.push({ position: pos, title: '[native ad]', url: nativeMatch[1], source: siteUrl });\n  }\n}\n\nreturn [{\n  json: {\n    site_url: siteUrl,\n    country_code: geo,\n    teasers_found: teasers.length,\n    teasers: teasers,\n    scanned_at: $now.toISO()\n  }\n}];"
       },
       "id": "parse-positions",
       "name": "Parse Teaser Positions",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        880,
-        0
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const scanResult = $input.first().json;\nconst teasers = scanResult.teasers || [];\n\nif (teasers.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No teasers found on page' } }];\n}\n\n// TODO: Match our teasers by title similarity or URL pattern\n// This requires knowing our teaser titles from the DB\n// For now, store all found teasers for analysis\n\nreturn [{\n  json: {\n    site_url: scanResult.site_url,\n    total_teasers: scanResult.teasers_found,\n    teasers: teasers,\n    scanned_at: scanResult.scanned_at\n  }\n}];"
-      },
-      "id": "analyze-positions",
-      "name": "Analyze Our Positions",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1100,
-        0
-      ]
+      "position": [1140, 0]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO position_tracking (site_url, total_teasers_in_block, competitor_titles)\nVALUES (\n  '{{ $json.site_url }}',\n  {{ $json.total_teasers }},\n  '{{ JSON.stringify($json.teasers) }}'::jsonb\n);",
+        "query": "INSERT INTO position_tracking (site_url, ad_id, position, total_teasers_in_block, competitor_titles)\nVALUES (\n  '{{ $json.site_url.replace(/'/g, \"''\") }}',\n  NULL,\n  NULL,\n  {{ $json.teasers_found }},\n  '{{ JSON.stringify($json.teasers).replace(/'/g, \"''\") }}'::jsonb\n);",
         "options": {}
       },
       "id": "save-positions",
       "name": "Save Positions",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [
-        1320,
-        0
-      ],
+      "position": [1360, 0],
       "credentials": {
-        "postgres": {
-          "id": "postgres-cred",
-          "name": "PostgreSQL"
-        }
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
       }
     },
     {
-      "parameters": {},
-      "id": "sub-workflow-trigger",
-      "name": "Called by Orchestrator",
-      "type": "n8n-nodes-base.executeWorkflowTrigger",
-      "typeVersion": 1,
-      "position": [
-        0,
-        150
-      ]
+      "parameters": {
+        "chatId": "591828204",
+        "text": "=No scan targets configured!\n\nAdd sites to scan_targets table:\nINSERT INTO scan_targets (site_url, country_code, proxy_url, proxy_type)\nVALUES ('https://example.com', 'KZ', 'socks5://user:pass@host:1080', 'socks5');",
+        "additionalFields": {}
+      },
+      "id": "notify-no-targets",
+      "name": "Notify No Targets",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [700, 200],
+      "credentials": {
+        "telegramApi": { "id": "telegram-cred", "name": "Telegram Bot" }
+      }
     }
   ],
   "connections": {
     "Every 2 Hours": {
-      "main": [
-        [
-          {
-            "node": "Get Target Sites",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Get Scan Targets", "type": "main", "index": 0 } ]]
     },
-    "Get Target Sites": {
+    "Called by Orchestrator": {
+      "main": [[ { "node": "Get Scan Targets", "type": "main", "index": 0 } ]]
+    },
+    "Get Scan Targets": {
+      "main": [[ { "node": "Has Targets?", "type": "main", "index": 0 } ]]
+    },
+    "Has Targets?": {
       "main": [
-        [
-          {
-            "node": "Prepare Scan Requests",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [ { "node": "Prepare Scan Requests", "type": "main", "index": 0 } ],
+        [ { "node": "Notify No Targets", "type": "main", "index": 0 } ]
       ]
     },
     "Prepare Scan Requests": {
-      "main": [
-        [
-          {
-            "node": "Fetch Page via Proxy",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Fetch Page via Proxy", "type": "main", "index": 0 } ]]
     },
     "Fetch Page via Proxy": {
-      "main": [
-        [
-          {
-            "node": "Parse Teaser Positions",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Parse Teaser Positions", "type": "main", "index": 0 } ]]
     },
     "Parse Teaser Positions": {
-      "main": [
-        [
-          {
-            "node": "Analyze Our Positions",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Analyze Our Positions": {
-      "main": [
-        [
-          {
-            "node": "Save Positions",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Called by Orchestrator": {
-      "main": [
-        [
-          {
-            "node": "Get Target Sites",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[ { "node": "Save Positions", "type": "main", "index": 0 } ]]
     }
   },
   "settings": {
@@ -243,12 +172,7 @@
     "callerPolicy": "workflowsFromSameOwner"
   },
   "staticData": null,
-  "tags": [
-    {
-      "name": "scraper",
-      "id": "tag-scraper"
-    }
-  ],
+  "tags": [{ "name": "scraper", "id": "tag-scraper" }],
   "pinData": {},
-  "versionId": "1"
+  "versionId": "2"
 }
