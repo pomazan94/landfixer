@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS geo_stats (
     money DECIMAL(12, 4) DEFAULT 0,
     postbacks_confirmed_money DECIMAL(12, 4) DEFAULT 0,
     roi DECIMAL(10, 2) DEFAULT 0,
-    collected_at TIMESTAMP DEFAULT NOW()
+    collected_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE (ad_id, country_code, date)
 );
 
 -- Статистика по блокам (площадкам)
