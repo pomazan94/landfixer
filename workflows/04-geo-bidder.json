@@ -133,7 +133,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO geo_stats (ad_id, country_code, date, shows, clicks, money, postbacks_confirmed_money, roi)\nVALUES (\n  {{ $json.ad_id }},\n  '{{ $json.country_code }}',\n  CURRENT_DATE,\n  {{ $json.shows }},\n  {{ $json.clicks }},\n  {{ $json.spend }},\n  {{ $json.revenue }},\n  {{ $json.roi }}\n)\nON CONFLICT (ad_id, country_code, date) DO UPDATE SET\n  shows = EXCLUDED.shows,\n  clicks = EXCLUDED.clicks,\n  money = EXCLUDED.money,\n  postbacks_confirmed_money = EXCLUDED.postbacks_confirmed_money,\n  roi = EXCLUDED.roi;",
+        "query": "INSERT INTO geo_stats (ad_id, country_code, date, shows, clicks, money, postbacks_confirmed_money, roi)\nVALUES (\n  {{ $json.ad_id }},\n  '{{ $json.country_code }}',\n  CURRENT_DATE - INTERVAL '1 day',\n  {{ $json.shows }},\n  {{ $json.clicks }},\n  {{ $json.spend }},\n  {{ $json.revenue }},\n  {{ $json.roi }}\n)\nON CONFLICT (ad_id, country_code, date) DO UPDATE SET\n  shows = EXCLUDED.shows,\n  clicks = EXCLUDED.clicks,\n  money = EXCLUDED.money,\n  postbacks_confirmed_money = EXCLUDED.postbacks_confirmed_money,\n  roi = EXCLUDED.roi;",
         "options": {}
       },
       "id": "log-to-db",

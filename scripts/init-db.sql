@@ -111,7 +111,8 @@ CREATE TABLE block_stats (
     ctr DECIMAL(8, 4) DEFAULT 0,
     roi DECIMAL(10, 2) DEFAULT 0,
     classification VARCHAR(20) DEFAULT 'yellow',
-    collected_at TIMESTAMP DEFAULT NOW()
+    collected_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(block_id, date)
 );
 
 CREATE TABLE balance_history (
@@ -338,12 +339,14 @@ CREATE INDEX idx_ad_stats_ad_date ON ad_stats(ad_id, date);
 CREATE INDEX idx_ad_stats_date ON ad_stats(date);
 CREATE INDEX idx_geo_stats_date ON geo_stats(date);
 CREATE INDEX idx_block_stats_date ON block_stats(date);
+CREATE INDEX idx_block_stats_block ON block_stats(block_id);
 CREATE INDEX idx_balance_history_time ON balance_history(collected_at);
 CREATE INDEX idx_bid_history_ad ON bid_history(ad_id);
 CREATE INDEX idx_bid_history_changed ON bid_history(changed_at);
 CREATE INDEX idx_position_tracking_time ON position_tracking(scanned_at);
 CREATE INDEX idx_scan_targets_active ON scan_targets(is_active, country_code);
 CREATE UNIQUE INDEX idx_scan_targets_site_geo_proxy ON scan_targets(site_url, country_code, proxy_url) WHERE proxy_url IS NOT NULL;
+CREATE INDEX idx_teasers_ad_id ON teasers(ad_id);
 CREATE INDEX idx_teasers_status ON teasers(status);
 CREATE INDEX idx_teasers_state ON teasers(state);
 CREATE INDEX idx_teasers_state_changed ON teasers(state_changed_at);
@@ -355,7 +358,8 @@ CREATE INDEX idx_teaser_state_log_time ON teaser_state_log(created_at);
 CREATE INDEX idx_bid_expectations_ad ON bid_expectations(ad_id);
 CREATE INDEX idx_bid_expectations_unchecked ON bid_expectations(checked, created_at);
 CREATE INDEX idx_bid_rollback_unchecked ON bid_rollback_snapshots(rollback_triggered, created_at);
-CREATE INDEX idx_emergency_state_active ON emergency_state(is_active);
+CREATE UNIQUE INDEX idx_emergency_state_active ON emergency_state(is_active) WHERE is_active = TRUE;
+CREATE INDEX idx_emergency_state_active_all ON emergency_state(is_active);
 CREATE UNIQUE INDEX idx_competitors_site_title ON competitors(site_url, title);
 CREATE UNIQUE INDEX idx_competitors_media_id ON competitors(media_id) WHERE media_id IS NOT NULL;
 

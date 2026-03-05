@@ -219,7 +219,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO daily_pnl (date, total_spend, total_revenue, gross_profit, roi_percent, balance_end)\nVALUES (\n  '{{ $json.date }}',\n  {{ $json.total_spend }},\n  {{ $json.total_revenue }},\n  {{ $json.total_profit }},\n  {{ $json.total_roi }},\n  {{ $json.balance }}\n)\nON CONFLICT (date) DO UPDATE SET\n  total_spend = EXCLUDED.total_spend,\n  total_revenue = EXCLUDED.total_revenue,\n  gross_profit = EXCLUDED.gross_profit,\n  roi_percent = EXCLUDED.roi_percent,\n  balance_end = EXCLUDED.balance_end;",
+        "query": "INSERT INTO daily_pnl (date, total_spend, total_revenue, gross_profit, roi_percent, balance_end, balance_start)\nVALUES (\n  '{{ $json.date }}',\n  {{ $json.total_spend }},\n  {{ $json.total_revenue }},\n  {{ $json.total_profit }},\n  {{ $json.total_roi }},\n  {{ $json.balance }},\n  (SELECT balance FROM balance_history WHERE collected_at >= CURRENT_DATE ORDER BY collected_at ASC LIMIT 1)\n)\nON CONFLICT (date) DO UPDATE SET\n  total_spend = EXCLUDED.total_spend,\n  total_revenue = EXCLUDED.total_revenue,\n  gross_profit = EXCLUDED.gross_profit,\n  roi_percent = EXCLUDED.roi_percent,\n  balance_end = EXCLUDED.balance_end,\n  balance_start = COALESCE(EXCLUDED.balance_start, daily_pnl.balance_start);",
         "options": {}
       },
       "id": "save-pnl",

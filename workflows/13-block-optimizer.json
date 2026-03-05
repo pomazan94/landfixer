@@ -180,7 +180,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO block_stats (block_id, date, classification)\nSELECT b.block_id, CURRENT_DATE, b.classification\nFROM jsonb_array_elements('{{ JSON.stringify([...$json.blacklist_blocks.map(id => ({block_id: id, classification: 'red'})), ...$json.whitelist_blocks.map(id => ({block_id: id, classification: 'green'}))]) }}'::jsonb) AS b(val)\nCROSS JOIN LATERAL (\n  SELECT (val->>'block_id')::int as block_id, val->>'classification' as classification\n) b\nON CONFLICT DO NOTHING;",
+        "query": "INSERT INTO block_stats (block_id, date, classification)\nSELECT (elem->>'block_id')::int, CURRENT_DATE, elem->>'classification'\nFROM jsonb_array_elements('{{ JSON.stringify([...$json.blacklist_blocks.map(function(id){return {block_id: id, classification: \"red\"}}), ...$json.whitelist_blocks.map(function(id){return {block_id: id, classification: \"green\"}})]) }}'::jsonb) AS elem\nWHERE (elem->>'block_id') IS NOT NULL\nON CONFLICT (block_id, date) DO UPDATE SET\n  classification = EXCLUDED.classification;",
         "options": {}
       },
       "id": "log-to-db",
