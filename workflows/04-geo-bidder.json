@@ -66,13 +66,50 @@
     },
     {
       "parameters": {
-        "jsCode": "const statsRaw = $('Fetch Geo Stats (7 days)').first().json;\nconst crmItems = $('Fetch CRM Leads by Geo').all().map(i => i.json);\n\nconst stats = statsRaw?.data?.result?.data || statsRaw?.data || (Array.isArray(statsRaw) ? statsRaw : []);\n\nif (!Array.isArray(stats) || stats.length === 0) {\n  return [{ json: { action: 'NONE', reason: 'No geo stats data' } }];\n}\n\n// Build CRM map: ad_id+geo -> {leads, depositors, revenue}\nconst crmMap = {};\ncrmItems.forEach(row => {\n  const key = `${row.ad_id}_${(row.geo || '').toUpperCase()}`;\n  crmMap[key] = {\n    leads: Number(row.total_leads) || 0,\n    depositors: Number(row.depositors) || 0,\n    revenue: Number(row.crm_revenue) || 0\n  };\n});\n\nconst results = [];\nstats.forEach(d => {\n  const adId = d.ad_id;\n  const country = d.country_code;\n  if (!adId || !country) return;\n\n  const spend = Number(d.money) || 0;\n  const key = `${adId}_${country.toUpperCase()}`;\n  const crm = crmMap[key] || { leads: 0, depositors: 0, revenue: 0 };\n  const roi = spend > 0 ? Math.round((crm.revenue - spend) / spend * 10000) / 100 : 0;\n  const cpl = crm.leads > 0 ? Math.round(spend / crm.leads * 100) / 100 : 0;\n\n  results.push({\n    json: {\n      ad_id: adId,\n      country_code: country,\n      shows: Number(d.shows_count) || 0,\n      clicks: Number(d.clicks_count) || 0,\n      spend: Math.round(spend * 100) / 100,\n      revenue: Math.round(crm.revenue * 100) / 100,\n      leads: crm.leads,\n      depositors: crm.depositors,\n      cpl: cpl,\n      roi: roi\n    }\n  });\n});\n\nreturn results;"
+        "mode": "combine",
+        "mergeByFields": {
+          "values": []
+        },
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "wait-for-both",
+      "name": "Wait For Both",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [420, 25]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Debug: inspect what's in each input\nconst geozoItems = $('Fetch Geo Stats (7 days)').all();\nconst crmItems = $('Fetch CRM Leads by Geo').all().map(i => i.json);\n\n// Try to find the stats array from Geozo API response\n// The HTTP node returns parsed JSON. Structure could be:\n// 1. {data: {result: {data: [...]}}} - nested\n// 2. {result: {data: [...]}} - semi-nested\n// 3. [{...}, {...}] - items already split by n8n\n// 4. {data: [...]} - simple wrapper\nlet stats = [];\n\nif (geozoItems.length === 1) {\n  // Single item = entire API response as one object\n  const raw = geozoItems[0].json;\n  stats = raw?.data?.result?.data\n    || raw?.result?.data\n    || raw?.data\n    || (Array.isArray(raw) ? raw : []);\n} else if (geozoItems.length > 1) {\n  // Multiple items = n8n already split the array\n  // Check if first item looks like a stat row (has ad_id)\n  if (geozoItems[0].json?.ad_id || geozoItems[0].json?.country_code) {\n    stats = geozoItems.map(i => i.json);\n  } else {\n    // Try nested on first item\n    const raw = geozoItems[0].json;\n    stats = raw?.data?.result?.data || raw?.result?.data || raw?.data || [];\n  }\n}\n\nif (!Array.isArray(stats) || stats.length === 0) {\n  // Return debug info so we can see what the API returned\n  const raw = geozoItems[0]?.json || {};\n  const keys = Object.keys(raw);\n  const sample = JSON.stringify(raw).slice(0, 500);\n  return [{ json: {\n    action: 'DEBUG_NO_STATS',\n    geozo_items_count: geozoItems.length,\n    first_item_keys: keys,\n    first_item_sample: sample,\n    crm_items_count: crmItems.length\n  } }];\n}\n\n// Build CRM map: ad_id+geo -> {leads, depositors, revenue}\nconst crmMap = {};\ncrmItems.forEach(row => {\n  const key = `${row.ad_id}_${(row.geo || '').toUpperCase()}`;\n  crmMap[key] = {\n    leads: Number(row.total_leads) || 0,\n    depositors: Number(row.depositors) || 0,\n    revenue: Number(row.crm_revenue) || 0\n  };\n});\n\nconst results = [];\nstats.forEach(d => {\n  const adId = d.ad_id;\n  const country = d.country_code;\n  if (!adId || !country) return;\n\n  const spend = Number(d.money) || 0;\n  const key = `${adId}_${country.toUpperCase()}`;\n  const crm = crmMap[key] || { leads: 0, depositors: 0, revenue: 0 };\n  const roi = spend > 0 ? Math.round((crm.revenue - spend) / spend * 10000) / 100 : 0;\n  const cpl = crm.leads > 0 ? Math.round(spend / crm.leads * 100) / 100 : 0;\n\n  results.push({\n    json: {\n      ad_id: adId,\n      country_code: country,\n      shows: Number(d.shows_count) || 0,\n      clicks: Number(d.clicks_count) || 0,\n      spend: Math.round(spend * 100) / 100,\n      revenue: Math.round(crm.revenue * 100) / 100,\n      leads: crm.leads,\n      depositors: crm.depositors,\n      cpl: cpl,\n      roi: roi\n    }\n  });\n});\n\n// Add debug first item for verification\nconst debugItem = stats[0] || {};\nresults.unshift({ json: {\n  _debug: true,\n  _stats_count: stats.length,\n  _crm_count: crmItems.length,\n  _first_stat_keys: Object.keys(debugItem),\n  _first_stat_sample: JSON.stringify(debugItem).slice(0, 300),\n  ad_id: 0,\n  country_code: 'DEBUG',\n  shows: 0, clicks: 0, spend: 0, revenue: 0, leads: 0, depositors: 0, cpl: 0, roi: 0\n} });\n\nreturn results;"
       },
       "id": "merge-stats",
       "name": "Merge Geozo + CRM",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [480, 0]
+      "position": [620, 25]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "not-debug",
+              "leftValue": "={{ $json._debug }}",
+              "rightValue": "true",
+              "operator": { "type": "string", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-debug",
+      "name": "Filter Debug Row",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [820, 25]
     },
     {
       "parameters": {
@@ -84,7 +121,7 @@
       "name": "Log Geo Stats",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [700, 0],
+      "position": [1020, -25],
       "credentials": {
         "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
       }
@@ -113,18 +150,29 @@
     },
     "Fetch Geo Stats (7 days)": {
       "main": [[
-        { "node": "Merge Geozo + CRM", "type": "main", "index": 0 }
+        { "node": "Wait For Both", "type": "main", "index": 0 }
       ]]
     },
     "Fetch CRM Leads by Geo": {
+      "main": [[
+        { "node": "Wait For Both", "type": "main", "index": 1 }
+      ]]
+    },
+    "Wait For Both": {
       "main": [[
         { "node": "Merge Geozo + CRM", "type": "main", "index": 0 }
       ]]
     },
     "Merge Geozo + CRM": {
       "main": [[
-        { "node": "Log Geo Stats", "type": "main", "index": 0 }
+        { "node": "Filter Debug Row", "type": "main", "index": 0 }
       ]]
+    },
+    "Filter Debug Row": {
+      "main": [
+        [{ "node": "Log Geo Stats", "type": "main", "index": 0 }],
+        []
+      ]
     }
   },
   "settings": {
@@ -137,5 +185,5 @@
     { "name": "data-collector", "id": "tag-collector" }
   ],
   "pinData": {},
-  "versionId": "3"
+  "versionId": "4"
 }
