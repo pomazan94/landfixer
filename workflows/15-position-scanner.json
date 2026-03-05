@@ -65,7 +65,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const targets = $input.all().map(i => i.json);\n\n// User-Agent rotation\nconst userAgents = [\n  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',\n  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',\n  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1'\n];\n\nconst referers = [\n  'https://www.google.com/',\n  'https://yandex.ru/',\n  'https://www.bing.com/',\n  'https://dzen.ru/',\n  ''\n];\n\nreturn targets.map(t => ({\n  json: {\n    target_id: t.id,\n    site_url: t.site_url,\n    country_code: t.country_code,\n    proxy_url: t.proxy_url || '',\n    proxy_type: t.proxy_type || 'socks5',\n    user_agent: userAgents[Math.floor(Math.random() * userAgents.length)],\n    referer: referers[Math.floor(Math.random() * referers.length)]\n  }\n}));"
+        "jsCode": "const targets = $input.all().map(i => i.json);\n\n// Mobile User-Agents only — widget renders only on mobile\nconst mobileUAs = [\n  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.3 Mobile/15E148 Safari/604.1',\n  'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.64 Mobile Safari/537.36',\n  'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.64 Mobile Safari/537.36',\n  'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'\n];\n\nconst referers = [\n  'https://www.google.com/',\n  'https://yandex.ru/',\n  'https://www.bing.com/',\n  'https://dzen.ru/',\n  ''\n];\n\nreturn targets.map(t => ({\n  json: {\n    target_id: t.id,\n    site_url: t.site_url,\n    country_code: t.country_code,\n    proxy_url: t.proxy_url || '',\n    proxy_type: t.proxy_type || 'socks5',\n    user_agent: mobileUAs[Math.floor(Math.random() * mobileUAs.length)],\n    referer: referers[Math.floor(Math.random() * referers.length)]\n  }\n}));"
       },
       "id": "prepare-requests",
       "name": "Prepare Scan Requests",
@@ -101,25 +101,98 @@
     },
     {
       "parameters": {
-        "jsCode": "const input = $input.first().json;\nconst html = input.data || input.body || (typeof input === 'string' ? input : '');\nconst scanReq = $('Prepare Scan Requests').first().json;\nconst siteUrl = scanReq.site_url;\nconst geo = scanReq.country_code;\n\nif (input.error || input.code >= 400) {\n  return [{ json: {\n    site_url: siteUrl,\n    country_code: geo,\n    widget_found: false,\n    block_ids: [],\n    script_urls: [],\n    error: input.error || `HTTP ${input.code || 'unknown'}`,\n    scanned_at: $now.toISO()\n  }}];\n}\n\n// --- Find Geozo widget integration ---\n\n// 1. Find data-gz-block IDs\nconst blockIds = [];\nconst blockRegex = /data-gz-block=[\"']([^\"']+)[\"']/gi;\nlet blockMatch;\nwhile ((blockMatch = blockRegex.exec(html)) !== null) {\n  blockIds.push(blockMatch[1]);\n}\n\n// 2. Find Geozo CDN script URLs\nconst scriptUrls = [];\nconst scriptRegex = /src=[\"']([^\"']*cdn\\.geozo\\.com[^\"']*)[\"']/gi;\nlet scriptMatch;\nwhile ((scriptMatch = scriptRegex.exec(html)) !== null) {\n  scriptUrls.push(scriptMatch[1]);\n}\n\n// 3. Find Geozo iframes\nconst iframes = [];\nconst iframeRegex = /src=[\"']([^\"']*geozo[^\"']*)[\"']/gi;\nlet iframeMatch;\nwhile ((iframeMatch = iframeRegex.exec(html)) !== null) {\n  if (!iframeMatch[1].includes('cdn.geozo.com')) {\n    iframes.push(iframeMatch[1]);\n  }\n}\n\nconst widgetFound = blockIds.length > 0 || scriptUrls.length > 0 || iframes.length > 0;\n\nreturn [{\n  json: {\n    site_url: siteUrl,\n    country_code: geo,\n    widget_found: widgetFound,\n    block_ids: blockIds,\n    script_urls: scriptUrls,\n    iframes: iframes,\n    scanned_at: $now.toISO()\n  }\n}];"
+        "jsCode": "const input = $input.first().json;\nconst html = input.data || input.body || (typeof input === 'string' ? input : '');\nconst scanReq = $('Prepare Scan Requests').first().json;\nconst siteUrl = scanReq.site_url;\nconst geo = scanReq.country_code;\nconst proxyUrl = scanReq.proxy_url;\nconst userAgent = scanReq.user_agent;\n\nif (input.error || input.code >= 400) {\n  return [{ json: {\n    site_url: siteUrl,\n    country_code: geo,\n    widget_found: false,\n    block_ids: [],\n    error: input.error || `HTTP ${input.code || 'unknown'}`,\n    scanned_at: $now.toISO()\n  }}];\n}\n\n// Find data-gz-block UUIDs\nconst blockIds = [];\nconst blockRegex = /data-gz-block=[\"']([^\"']+)[\"']/gi;\nlet m;\nwhile ((m = blockRegex.exec(html)) !== null) {\n  blockIds.push(m[1]);\n}\n\n// Generate surfer_uuid for render API\nconst surferUuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {\n  const r = Math.random() * 16 | 0;\n  return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);\n});\n\nif (blockIds.length === 0) {\n  return [{ json: {\n    site_url: siteUrl,\n    country_code: geo,\n    widget_found: false,\n    block_ids: [],\n    render_url: '',\n    proxy_url: proxyUrl,\n    user_agent: userAgent,\n    scanned_at: $now.toISO()\n  }}];\n}\n\n// Build render API URL for first block\nconst blockUuid = blockIds[0];\nconst renderUrl = `https://render.sustainablyaware.com/v5/render?surfer_uuid=${surferUuid}&referrer=${encodeURIComponent(siteUrl)}&pre_referrer=${encodeURIComponent(siteUrl)}&time_zone=3&page_load_uuid=${surferUuid}&page_depth=1&block_uuid=${blockUuid}&refresh_depth=1`;\n\nreturn [{ json: {\n  site_url: siteUrl,\n  country_code: geo,\n  widget_found: true,\n  block_ids: blockIds,\n  render_url: renderUrl,\n  proxy_url: proxyUrl,\n  user_agent: userAgent,\n  scanned_at: $now.toISO()\n}}];"
       },
-      "id": "parse-positions",
-      "name": "Parse Teaser Positions",
+      "id": "extract-block-ids",
+      "name": "Extract Block IDs",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1140, 0]
     },
     {
       "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "has-widget",
+              "leftValue": "={{ $json.widget_found }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "widget-found-check",
+      "name": "Widget Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1360, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.render_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "User-Agent", "value": "={{ $json.user_agent }}" },
+            { "name": "Referer", "value": "={{ $json.site_url }}" },
+            { "name": "Accept", "value": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+            { "name": "Accept-Language", "value": "en-US,en;q=0.9" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "text" } },
+          "proxy": "={{ $json.proxy_url }}",
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-render",
+      "name": "Fetch Widget Render",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1580, -60],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst renderHtml = input.data || input.body || (typeof input === 'string' ? input : '');\nconst blockData = $('Extract Block IDs').first().json;\nconst siteUrl = blockData.site_url;\nconst geo = blockData.country_code;\n\nif (!renderHtml || renderHtml.length < 50) {\n  return [{ json: {\n    site_url: siteUrl,\n    country_code: geo,\n    widget_found: true,\n    block_ids: blockData.block_ids,\n    teasers_found: 0,\n    teasers: [],\n    error: 'Render API returned empty or short response',\n    scanned_at: blockData.scanned_at\n  }}];\n}\n\nconst teasers = [];\n\n// Parse teaser titles from rendered HTML\n// Pattern: <div class=\"block-*-media__title\">TITLE</div>\nconst titleRegex = /class=[\"'][^\"']*media__title[\"'][^>]*>\\s*([\\s\\S]*?)\\s*<\\/div>/gi;\nlet titleMatch;\nlet position = 0;\nwhile ((titleMatch = titleRegex.exec(renderHtml)) !== null) {\n  position++;\n  const title = titleMatch[1].replace(/<[^>]+>/g, '').trim();\n  if (title.length > 5) {\n    teasers.push({ position, title });\n  }\n}\n\n// Also extract click URLs to match with our ads\nconst clickUrls = [];\nconst clickRegex = /href=[\"'](https:\\/\\/render\\.sustainablyaware\\.com\\/v1\\/direct\\/click[^\"']*)[\"']/gi;\nlet clickMatch;\nwhile ((clickMatch = clickRegex.exec(renderHtml)) !== null) {\n  clickUrls.push(clickMatch[1]);\n}\n\n// Extract media/ad IDs from click URLs\nfor (let i = 0; i < teasers.length && i < clickUrls.length; i++) {\n  const mediaMatch = clickUrls[i].match(/media=(\\d+)/);\n  if (mediaMatch) {\n    teasers[i].media_id = mediaMatch[1];\n  }\n  teasers[i].click_url = clickUrls[i];\n}\n\nreturn [{ json: {\n  site_url: siteUrl,\n  country_code: geo,\n  widget_found: true,\n  block_ids: blockData.block_ids,\n  teasers_found: teasers.length,\n  teasers: teasers,\n  scanned_at: blockData.scanned_at\n}}];"
+      },
+      "id": "parse-teasers",
+      "name": "Parse Teasers from Render",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1800, -60]
+    },
+    {
+      "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO position_tracking (site_url, ad_id, position, total_teasers_in_block, competitor_titles)\nVALUES (\n  '{{ $json.site_url.replace(/'/g, \"''\") }}',\n  NULL,\n  NULL,\n  {{ $json.block_ids.length }},\n  '{{ JSON.stringify({ widget_found: $json.widget_found, block_ids: $json.block_ids, script_urls: $json.script_urls, iframes: $json.iframes || [], country_code: $json.country_code }).replace(/'/g, \"''\") }}'::jsonb\n);",
+        "query": "INSERT INTO position_tracking (site_url, ad_id, position, total_teasers_in_block, competitor_titles)\nVALUES (\n  '{{ $json.site_url.replace(/'/g, \"''\") }}',\n  NULL,\n  NULL,\n  {{ $json.teasers_found }},\n  '{{ JSON.stringify({ block_ids: $json.block_ids, teasers: $json.teasers, country_code: $json.country_code }).replace(/'/g, \"''\") }}'::jsonb\n);",
         "options": {}
       },
       "id": "save-positions",
       "name": "Save Positions",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1360, 0],
+      "position": [2020, 0],
+      "credentials": {
+        "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO position_tracking (site_url, ad_id, position, total_teasers_in_block, competitor_titles)\nVALUES (\n  '{{ $json.site_url.replace(/'/g, \"''\") }}',\n  NULL,\n  NULL,\n  0,\n  '{{ JSON.stringify({ widget_found: false, block_ids: [], country_code: $json.country_code, error: $json.error || \"no widget\" }).replace(/'/g, \"''\") }}'::jsonb\n);",
+        "options": {}
+      },
+      "id": "save-no-widget",
+      "name": "Save No Widget",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2020, 120],
       "credentials": {
         "postgres": { "id": "postgres-cred", "name": "PostgreSQL" }
       }
@@ -160,9 +233,21 @@
       "main": [[ { "node": "Fetch Page via Proxy", "type": "main", "index": 0 } ]]
     },
     "Fetch Page via Proxy": {
-      "main": [[ { "node": "Parse Teaser Positions", "type": "main", "index": 0 } ]]
+      "main": [[ { "node": "Extract Block IDs", "type": "main", "index": 0 } ]]
     },
-    "Parse Teaser Positions": {
+    "Extract Block IDs": {
+      "main": [[ { "node": "Widget Found?", "type": "main", "index": 0 } ]]
+    },
+    "Widget Found?": {
+      "main": [
+        [ { "node": "Fetch Widget Render", "type": "main", "index": 0 } ],
+        [ { "node": "Save No Widget", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Fetch Widget Render": {
+      "main": [[ { "node": "Parse Teasers from Render", "type": "main", "index": 0 } ]]
+    },
+    "Parse Teasers from Render": {
       "main": [[ { "node": "Save Positions", "type": "main", "index": 0 } ]]
     }
   },
@@ -174,5 +259,5 @@
   "staticData": null,
   "tags": [{ "name": "scraper", "id": "tag-scraper" }],
   "pinData": {},
-  "versionId": "2"
+  "versionId": "3"
 }
