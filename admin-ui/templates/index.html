@@ -864,23 +864,11 @@ const BOT_INTENT_RU = {
 let _treeFilter = {};
 
 function filterTree(btn) {
-  // Update active button state
-  const group = btn.closest('.btn-group');
-  const allGroups = btn.closest('div').querySelectorAll('.btn-group');
-  // If clicking "Все" - deactivate all other groups
-  const filter = JSON.parse(btn.dataset.filter);
-  const isAll = Object.keys(filter).length === 0;
-
-  allGroups.forEach(g => {
-    g.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
-  });
+  // Deactivate ALL filter buttons across both groups
+  document.querySelectorAll('#filter-geozo .btn, #filter-state .btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  if (isAll) {
-    // "Все" selected, no filter
-    loadTeasersTree({});
-  } else {
-    loadTeasersTree(filter);
-  }
+  const filter = JSON.parse(btn.dataset.filter);
+  loadTeasersTree(Object.keys(filter).length ? filter : {});
 }
 
 async function loadTeasersTree(filter) {
