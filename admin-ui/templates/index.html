@@ -938,21 +938,29 @@ async function loadTeasersTree(filter) {
           </div>
           <div>
             <table style="font-size:12px;">
-              <tr><th style="width:60px">Ad ID</th><th>Заголовок</th><th style="width:90px">Geozo</th><th style="width:80px">Бот</th><th style="width:100px">План бота</th><th style="width:60px">Ставка</th><th style="width:80px">Сегодня</th><th style="width:90px">Действия</th></tr>
+              <tr><th style="width:40px"></th><th style="width:60px">Ad ID</th><th>Заголовок</th><th style="width:80px">Geozo</th><th style="width:70px">Бот</th><th style="width:90px">План бота</th><th style="width:55px">Ставка</th><th style="width:65px">Показы</th><th style="width:55px">Клики</th><th style="width:45px">CTR</th><th style="width:55px">Лиды</th><th style="width:65px">Расход</th><th style="width:55px">ROI</th><th style="width:80px">Действия</th></tr>
               ${ads.map(t => {
                 const gzCol = GEOZO_STATUS_COLOR[t.geozo_status_id] || 'gray';
                 const gzName = GEOZO_STATUS_MAP[t.geozo_status_id] || 'N/A';
                 const stCol = {active:'green',testing:'blue',created:'gray',paused_high_cpl:'orange',stopped:'red',banned:'red',dead:'gray'}[t.state]||'gray';
                 const intentLabel = t.bot_intent ? (BOT_INTENT_RU[t.bot_intent] || t.bot_intent) : '-';
                 const intentTitle = t.bot_intent_reason || '';
+                const imgSrc = t.image_square_path || t.image_horizontal_path || '';
+                const hasStats = t.today_spend != null;
                 return `<tr>
+                  <td>${imgSrc ? '<img src="'+esc(imgSrc)+'" style="width:36px;height:36px;object-fit:cover;border-radius:4px;cursor:pointer;" onclick="window.open(this.src)" title="Открыть изображение">' : '<div style="width:36px;height:36px;background:var(--bg2);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text2);">N/A</div>'}</td>
                   <td><strong>${t.ad_id||'-'}</strong></td>
-                  <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(t.title||'')}">${esc(t.title||'-')}</td>
+                  <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(t.title||'')}">${esc(t.title||'-')}</td>
                   <td><span class="badge badge-${gzCol}">${gzName}</span></td>
                   <td><span class="badge badge-${stCol}">${stateRu(t.state)}</span></td>
                   <td title="${esc(intentTitle)}"><span style="font-size:11px;${t.bot_intent?'font-weight:600;':''}">${intentLabel}</span></td>
                   <td>$${fmt(t.bid,4)}</td>
-                  <td style="font-size:11px;">${t.today_spend!=null ? '$'+fmt(t.today_spend)+' <span style=\"color:'+(t.today_roi>=0?'var(--green)':'var(--red)')+'\">'+(t.today_roi>=0?'+':'')+fmt(t.today_roi,1)+'%</span>' : '-'}</td>
+                  <td style="font-size:11px;">${hasStats ? (t.today_confirmed_shows||t.today_shows||0) : '-'}</td>
+                  <td style="font-size:11px;">${hasStats ? (t.today_clicks||0) : '-'}</td>
+                  <td style="font-size:11px;">${hasStats ? fmt(t.today_ctr||0,2)+'%' : '-'}</td>
+                  <td style="font-size:11px;">${hasStats ? (t.today_leads||0) : '-'}</td>
+                  <td style="font-size:11px;">${hasStats ? '$'+fmt(t.today_spend) : '-'}</td>
+                  <td style="font-size:11px;">${hasStats ? '<span style="color:'+(t.today_roi>=0?'var(--green)':'var(--red)') +'">'+(t.today_roi>=0?'+':'')+fmt(t.today_roi,1)+'%</span>' : '-'}</td>
                   <td>
                     <select style="width:80px;padding:2px;font-size:10px;" onchange="changeState(${t.id},this.value)">
                       <option value="">...</option>
