@@ -852,8 +852,8 @@ async function deleteGeo(id) {
 // ============================================
 // TEASERS — Hierarchical Tree View
 // ============================================
-const GEOZO_STATUS_MAP = {1:'Обработан',2:'На модерации',3:'Забанен',4:'Остановлен',5:'Запущен',41:'Бюджет кончился',42:'Приостановлен'};
-const GEOZO_STATUS_COLOR = {1:'gray',2:'blue',3:'red',4:'red',5:'green',41:'orange',42:'orange'};
+const GEOZO_STATUS_MAP = {1:'Обработан',2:'Модерация',3:'Забанен',4:'Остановлен',5:'Запущен',6:'Архив',7:'Удалён',8:'Черновик',9:'Пауза',10:'Ожидает',41:'Бюджет',42:'Приостановлен',43:'Аккаунт'};
+const GEOZO_STATUS_COLOR = {1:'gray',2:'blue',3:'red',4:'red',5:'green',6:'gray',7:'gray',8:'gray',9:'orange',10:'blue',41:'orange',42:'orange',43:'red'};
 const BOT_INTENT_RU = {
   raise_bid:'Повысить ставку', lower_bid:'Снизить ставку', stop_ad:'Остановить',
   monitor:'Наблюдение', warmup:'Прогрев', scale:'Масштабировать',
@@ -915,7 +915,7 @@ async function loadTeasersTree(filter) {
           <div>
             <strong style="font-size:14px;">${esc(campName)}</strong>
             <span style="font-size:11px;color:var(--text2);margin-left:4px;">#${cid}</span>
-            <span style="font-size:11px;color:var(--text2);margin-left:8px;">${campAds} тизеров, ${campActive} активных</span>
+            <span style="font-size:11px;color:var(--text2);margin-left:8px;">${campAds} тизеров, <span style="color:${campActive > 0 ? 'var(--green)' : 'var(--text2)'}">${campActive} активных</span></span>
           </div>
           <div style="font-size:12px;display:flex;gap:12px;">
             ${campSpend ? '<span>Расход: '+campSpend+'</span>' : ''}
@@ -955,7 +955,7 @@ async function loadTeasersTree(filter) {
               </tr>
               ${ads.map(t => {
                 const gzCol = GEOZO_STATUS_COLOR[t.geozo_status_id] || 'gray';
-                const gzName = GEOZO_STATUS_MAP[t.geozo_status_id] || 'N/A';
+                const gzName = GEOZO_STATUS_MAP[t.geozo_status_id] || (t.geozo_status_id ? 'ID:'+t.geozo_status_id : '—');
                 const stCol = {active:'green',testing:'blue',created:'gray',paused_high_cpl:'orange',stopped:'red',banned:'red',dead:'gray'}[t.state]||'gray';
                 const imgSrc = t.image_square_path || t.image_horizontal_path || '';
                 const hasToday = t.today_spend != null;
