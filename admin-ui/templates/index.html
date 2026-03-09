@@ -112,6 +112,12 @@ textarea { resize:vertical; min-height:60px; }
 .badge-purple { background:rgba(167,139,250,.15); color:var(--purple); }
 .badge-gray { background:rgba(139,144,160,.15); color:var(--text2); }
 
+/* Tree collapse */
+.collapsed { display:none !important; }
+.camp-body table { width:100%; }
+.camp-body table th { text-align:left; padding:4px 6px; font-size:11px; color:var(--text2); border-bottom:1px solid var(--border); }
+.camp-body table td { padding:4px 6px; border-bottom:1px solid rgba(255,255,255,0.03); }
+
 /* Alert banner */
 .alert-banner { padding:12px 16px; border-radius:var(--radius); margin-bottom:16px; font-size:13px; display:flex; align-items:center; gap:8px; }
 .alert-danger { background:rgba(248,113,113,.15); border:1px solid rgba(248,113,113,.3); color:var(--red); }
@@ -310,19 +316,24 @@ textarea { resize:vertical; min-height:60px; }
     <!-- TEASERS -->
     <div class="section" id="sec-teasers">
       <h2 style="margin-bottom:4px;font-size:20px;">Тизеры</h2>
-      <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Все объявления бота. Можно фильтровать по статусу и вручную менять состояние (активация, пауза, стоп).</p>
-      <div class="btn-group">
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers()">Все</button>
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers('active')">Активные</button>
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers('testing')">Тест</button>
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers('paused_high_cpl')">Пауза CPL</button>
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers('stopped')">Остановлены</button>
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers('created')">Созданы</button>
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers('banned')">Забанены</button>
+      <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Все объявления аккаунта Geozo. Иерархия: Кампания &rarr; Группа &rarr; Тизеры. Показан текущий план бота для каждого тизера.</p>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <div class="btn-group">
+          <button class="btn btn-sm btn-outline" onclick="loadTeasersTree()">Все</button>
+          <button class="btn btn-sm btn-outline" onclick="loadTeasersTree({geozo_status:5})">Запущены</button>
+          <button class="btn btn-sm btn-outline" onclick="loadTeasersTree({geozo_status:4})">Остановлены</button>
+          <button class="btn btn-sm btn-outline" onclick="loadTeasersTree({geozo_status:3})">Забанены</button>
+          <button class="btn btn-sm btn-outline" onclick="loadTeasersTree({geozo_status:2})">На модерации</button>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-sm btn-outline" onclick="loadTeasersTree({state:'active'})">Бот: Актив</button>
+          <button class="btn btn-sm btn-outline" onclick="loadTeasersTree({state:'testing'})">Бот: Тест</button>
+          <button class="btn btn-sm btn-outline" onclick="loadTeasersTree({state:'paused_high_cpl'})">Бот: Пауза</button>
+          <button class="btn btn-sm btn-outline" onclick="loadTeasersTree({state:'stopped'})">Бот: Стоп</button>
+        </div>
+        <span style="color:var(--text2);font-size:11px;" id="teasers-count"></span>
       </div>
-      <div class="card">
-        <div class="table-wrap" id="teasers-table"><div class="loading">Загрузка...</div></div>
-      </div>
+      <div id="teasers-tree"><div class="loading">Загрузка...</div></div>
     </div>
 
     <!-- BID HISTORY -->
@@ -506,7 +517,7 @@ function loadSection(sec) {
     'schedules': () => loadConfig('schedules'),
     'general-cfg': () => { ['general','default_payout','dead_creative','rollback','anomaly','position'].forEach(loadConfig); },
     'geo-payouts': loadGeoPayouts,
-    'teasers': () => loadTeasers(),
+    'teasers': () => loadTeasersTree(),
     'bid-history': loadBidHistory,
     'anomalies': () => loadAnomalies(false),
     'block-lists': () => loadBlockLists(),
@@ -839,49 +850,140 @@ async function deleteGeo(id) {
 }
 
 // ============================================
-// TEASERS
+// TEASERS — Hierarchical Tree View
 // ============================================
-async function loadTeasers(state) {
+const GEOZO_STATUS_MAP = {1:'Обработан',2:'На модерации',3:'Забанен',4:'Остановлен',5:'Запущен',41:'Бюджет кончился',42:'Приостановлен'};
+const GEOZO_STATUS_COLOR = {1:'gray',2:'blue',3:'red',4:'red',5:'green',41:'orange',42:'orange'};
+const BOT_INTENT_RU = {
+  raise_bid:'Повысить ставку', lower_bid:'Снизить ставку', stop_ad:'Остановить',
+  monitor:'Наблюдение', warmup:'Прогрев', scale:'Масштабировать',
+  pause:'Пауза', remoderate:'Ремодерация', kill:'Убить креатив'
+};
+
+let _treeFilter = {};
+
+async function loadTeasersTree(filter) {
+  _treeFilter = filter || {};
+  const container = $('teasers-tree');
+  container.innerHTML = '<div class="loading">Загрузка...</div>';
   try {
-    const d = await api('teasers', { limit: 100, state: state || undefined });
-    const rows = d.data || [];
-    $('teasers-table').innerHTML = rows.length ? `<table>
-      <tr><th>ID</th><th>Ad ID</th><th>Заголовок</th><th>Статус</th><th>Ставка</th><th>Фаза</th><th>Эскалация</th><th>Всего расход</th><th>Сегодня</th><th>Действия</th></tr>
-      ${rows.map(t => {
-        const stCol = {active:'green',testing:'blue',created:'gray',paused_high_cpl:'orange',stopped:'red',banned:'red',dead:'gray'}[t.state]||'gray';
-        return `<tr>
-          <td>${t.id}</td>
-          <td><strong>${t.ad_id||'-'}</strong></td>
-          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(t.title||'').replace(/"/g,'&quot;')}">${t.title||'-'}</td>
-          <td><span class="badge badge-${stCol}">${stateRu(t.state)}</span></td>
-          <td>$${fmt(t.bid,4)}</td>
-          <td>${t.warmup_phase != null ? 'P'+t.warmup_phase : '-'}</td>
-          <td>${t.escalation_level||0}</td>
-          <td>$${fmt(t.total_spend_lifetime)}</td>
-          <td style="font-size:11px;">${t.today_spend != null ? '$'+fmt(t.today_spend)+' | '+fmt(t.today_roi,1)+'%' : '-'}</td>
-          <td>
-            <select style="width:90px;padding:2px 4px;font-size:11px;" onchange="changeState(${t.id},this.value)">
-              <option value="">Изменить статус...</option>
-              <option value="active">Активный</option>
-              <option value="paused">Пауза</option>
-              <option value="stopped">Остановлен</option>
-              <option value="testing">Тестирование</option>
-            </select>
-          </td>
-        </tr>`;
-      }).join('')}
-    </table><div style="padding:8px;color:var(--text2);font-size:12px;">Показано ${rows.length} из ${d.total}</div>` : '<div style="padding:12px;color:var(--text2);">Тизеры не найдены</div>';
+    // Fetch both tree structure and teasers
+    const [tree, tData] = await Promise.all([
+      api('campaigns_tree'),
+      api('teasers', { limit: 500, ..._treeFilter })
+    ]);
+
+    const campaigns = tree.campaigns || [];
+    const groups = tree.groups || [];
+    const teasers = tData.data || [];
+
+    $('teasers-count').textContent = `Всего тизеров: ${teasers.length}`;
+
+    if (teasers.length === 0) {
+      container.innerHTML = '<div style="padding:16px;color:var(--text2);">Тизеры не найдены. Запустите синхронизацию (06 - Ads Sync).</div>';
+      return;
+    }
+
+    // Group teasers by campaign > group
+    const byCampaign = {};
+    for (const t of teasers) {
+      const cid = t.campaign_id || 0;
+      const gid = t.ad_group_id || 0;
+      if (!byCampaign[cid]) byCampaign[cid] = {};
+      if (!byCampaign[cid][gid]) byCampaign[cid][gid] = [];
+      byCampaign[cid][gid].push(t);
+    }
+
+    // Campaign name map
+    const campMap = {};
+    campaigns.forEach(c => { campMap[c.campaign_id] = c; });
+    const groupMap = {};
+    groups.forEach(g => { groupMap[g.ad_group_id] = g; });
+
+    let html = '';
+    for (const [cid, groupsObj] of Object.entries(byCampaign)) {
+      const camp = campMap[cid] || {};
+      const campName = camp.name || teasers.find(t => t.campaign_name)?.campaign_name || 'Campaign #' + cid;
+      const campSpend = camp.today_spend ? '$' + fmt(camp.today_spend) : '';
+      const campProfit = camp.today_profit ? (camp.today_profit >= 0 ? '+' : '') + '$' + fmt(camp.today_profit) : '';
+      const campAds = camp.total_ads || Object.values(groupsObj).flat().length;
+      const campActive = camp.active_ads || 0;
+
+      html += `<div class="card" style="margin-bottom:12px;">
+        <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;border-bottom:1px solid var(--border);" onclick="this.parentElement.querySelector('.camp-body').classList.toggle('collapsed')">
+          <div>
+            <strong style="font-size:14px;">Campaign #${cid}: ${esc(campName)}</strong>
+            <span style="font-size:11px;color:var(--text2);margin-left:8px;">${campAds} тизеров, ${campActive} активных</span>
+          </div>
+          <div style="font-size:12px;display:flex;gap:12px;">
+            ${campSpend ? '<span>Расход: '+campSpend+'</span>' : ''}
+            ${campProfit ? '<span style="color:'+(parseFloat(camp.today_profit)>=0?'var(--green)':'var(--red)')+'">P&L: '+campProfit+'</span>' : ''}
+          </div>
+        </div>
+        <div class="camp-body">`;
+
+      for (const [gid, ads] of Object.entries(groupsObj)) {
+        const grp = groupMap[gid] || {};
+        const grpName = grp.name || ads[0]?.group_name || 'Group #' + gid;
+        const grpSpend = grp.today_spend ? '$' + fmt(grp.today_spend) : '';
+
+        html += `<div style="margin:0 8px;border-bottom:1px solid var(--border);">
+          <div style="padding:8px 6px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;background:rgba(255,255,255,0.02);" onclick="this.nextElementSibling.classList.toggle('collapsed')">
+            <div>
+              <span style="color:var(--text2);font-size:11px;">Group #${gid}:</span>
+              <strong style="font-size:13px;margin-left:4px;">${esc(grpName)}</strong>
+              <span class="badge badge-gray" style="margin-left:6px;font-size:10px;">${ads.length} ads</span>
+            </div>
+            <div style="font-size:11px;color:var(--text2);">${grpSpend ? 'Расход: '+grpSpend : ''}</div>
+          </div>
+          <div>
+            <table style="font-size:12px;">
+              <tr><th style="width:60px">Ad ID</th><th>Заголовок</th><th style="width:90px">Geozo</th><th style="width:80px">Бот</th><th style="width:100px">План бота</th><th style="width:60px">Ставка</th><th style="width:80px">Сегодня</th><th style="width:90px">Действия</th></tr>
+              ${ads.map(t => {
+                const gzCol = GEOZO_STATUS_COLOR[t.geozo_status_id] || 'gray';
+                const gzName = GEOZO_STATUS_MAP[t.geozo_status_id] || 'N/A';
+                const stCol = {active:'green',testing:'blue',created:'gray',paused_high_cpl:'orange',stopped:'red',banned:'red',dead:'gray'}[t.state]||'gray';
+                const intentLabel = t.bot_intent ? (BOT_INTENT_RU[t.bot_intent] || t.bot_intent) : '-';
+                const intentTitle = t.bot_intent_reason || '';
+                return `<tr>
+                  <td><strong>${t.ad_id||'-'}</strong></td>
+                  <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(t.title||'')}">${esc(t.title||'-')}</td>
+                  <td><span class="badge badge-${gzCol}">${gzName}</span></td>
+                  <td><span class="badge badge-${stCol}">${stateRu(t.state)}</span></td>
+                  <td title="${esc(intentTitle)}"><span style="font-size:11px;${t.bot_intent?'font-weight:600;':''}">${intentLabel}</span></td>
+                  <td>$${fmt(t.bid,4)}</td>
+                  <td style="font-size:11px;">${t.today_spend!=null ? '$'+fmt(t.today_spend)+' <span style=\"color:'+(t.today_roi>=0?'var(--green)':'var(--red)')+'\">'+(t.today_roi>=0?'+':'')+fmt(t.today_roi,1)+'%</span>' : '-'}</td>
+                  <td>
+                    <select style="width:80px;padding:2px;font-size:10px;" onchange="changeState(${t.id},this.value)">
+                      <option value="">...</option>
+                      <option value="active">Активный</option>
+                      <option value="paused">Пауза</option>
+                      <option value="stopped">Стоп</option>
+                      <option value="testing">Тест</option>
+                    </select>
+                  </td>
+                </tr>`;
+              }).join('')}
+            </table>
+          </div>
+        </div>`;
+      }
+      html += '</div></div>';
+    }
+    container.innerHTML = html;
   } catch (e) {
-    $('teasers-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+    container.innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
 }
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 async function changeState(id, state) {
   if (!state) return;
   try {
     await api('teaser_state', { id, state });
     toast('Статус изменён: ' + stateRu(state));
-    loadTeasers();
+    loadTeasersTree(_treeFilter);
   } catch (e) { toast(e.message, 'error'); }
 }
 

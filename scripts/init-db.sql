@@ -28,10 +28,38 @@ DROP TABLE IF EXISTS ad_stats CASCADE;
 DROP TABLE IF EXISTS geo_payouts CASCADE;
 DROP TABLE IF EXISTS accounts CASCADE;
 DROP TABLE IF EXISTS teasers CASCADE;
+DROP TABLE IF EXISTS ad_groups CASCADE;
+DROP TABLE IF EXISTS campaigns CASCADE;
 
 -- ============================================
 -- TABLES
 -- ============================================
+
+CREATE TABLE campaigns (
+    id SERIAL PRIMARY KEY,
+    campaign_id INTEGER NOT NULL UNIQUE,
+    name VARCHAR(255),
+    campaign_type_id INTEGER,
+    traffic_source_id INTEGER,
+    status VARCHAR(50) DEFAULT 'unknown',
+    daily_money_limit DECIMAL(12,2) DEFAULT 0,
+    total_money_limit DECIMAL(12,2) DEFAULT 0,
+    synced_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE ad_groups (
+    id SERIAL PRIMARY KEY,
+    ad_group_id INTEGER NOT NULL UNIQUE,
+    campaign_id INTEGER NOT NULL,
+    name VARCHAR(255),
+    status VARCHAR(50) DEFAULT 'unknown',
+    ad_count INTEGER DEFAULT 0,
+    ad_started_count INTEGER DEFAULT 0,
+    auto_start_ads BOOLEAN DEFAULT FALSE,
+    synced_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW()
+);
 
 CREATE TABLE teasers (
     id SERIAL PRIMARY KEY,
@@ -49,6 +77,10 @@ CREATE TABLE teasers (
     remoderation_attempts INTEGER DEFAULT 0,
     generation_source VARCHAR(50),
     ab_test_group VARCHAR(50),
+    geozo_status_id INTEGER,
+    short_description TEXT,
+    bot_intent VARCHAR(100),
+    bot_intent_reason TEXT,
     -- State machine
     state VARCHAR(30) DEFAULT 'created',
     state_changed_at TIMESTAMP DEFAULT NOW(),
@@ -471,7 +503,13 @@ CREATE INDEX idx_bid_history_changed ON bid_history(changed_at);
 CREATE INDEX idx_position_tracking_time ON position_tracking(scanned_at);
 CREATE INDEX idx_scan_targets_active ON scan_targets(is_active, country_code);
 CREATE UNIQUE INDEX idx_scan_targets_site_geo_proxy ON scan_targets(site_url, country_code, proxy_url) WHERE proxy_url IS NOT NULL;
+CREATE INDEX idx_campaigns_campaign_id ON campaigns(campaign_id);
+CREATE INDEX idx_ad_groups_ad_group_id ON ad_groups(ad_group_id);
+CREATE INDEX idx_ad_groups_campaign_id ON ad_groups(campaign_id);
 CREATE INDEX idx_teasers_ad_id ON teasers(ad_id);
+CREATE UNIQUE INDEX idx_teasers_ad_id_uniq ON teasers(ad_id) WHERE ad_id IS NOT NULL;
+CREATE INDEX idx_teasers_ad_group_id ON teasers(ad_group_id);
+CREATE INDEX idx_teasers_campaign_id ON teasers(campaign_id);
 CREATE INDEX idx_teasers_status ON teasers(status);
 CREATE INDEX idx_teasers_state ON teasers(state);
 CREATE INDEX idx_teasers_state_changed ON teasers(state_changed_at);

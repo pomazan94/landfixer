@@ -1,0 +1,119 @@
+{
+  "name": "06 - Ads Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every 30 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Paginate through all ads from Geozo API\n// /v1/advertiser/ads/all returns all ads with campaign/group info\nconst allAds = [];\nlet page = 1;\nconst perPage = 100;\nlet hasMore = true;\n\nwhile (hasMore && page <= 50) {\n  const resp = await this.helpers.httpRequestWithAuthentication.call(this, 'httpHeaderAuth', {\n    method: 'GET',\n    url: 'https://api.geozo.com/v1/advertiser/ads/all',\n    qs: {\n      count: perPage,\n      page: page,\n      'order_by[0][column]': 'id',\n      'order_by[0][direction]': 'desc'\n    },\n    json: true\n  });\n\n  const data = resp?.data || [];\n  if (data.length === 0) {\n    hasMore = false;\n    break;\n  }\n\n  allAds.push(...data);\n\n  // Check pagination\n  const meta = resp?.meta || {};\n  if (meta.current_page && meta.last_page && meta.current_page >= meta.last_page) {\n    hasMore = false;\n  } else if (data.length < perPage) {\n    hasMore = false;\n  }\n  page++;\n}\n\n// Extract unique campaigns and groups\nconst campaignsMap = {};\nconst groupsMap = {};\n\nfor (const ad of allAds) {\n  // Campaign\n  if (ad.campaign_id && !campaignsMap[ad.campaign_id]) {\n    campaignsMap[ad.campaign_id] = {\n      campaign_id: ad.campaign_id,\n      name: ad.campaign_name || 'Campaign ' + ad.campaign_id,\n      campaign_type_id: ad.campaign_type_id || null\n    };\n  }\n\n  // Group\n  if (ad.ad_group_id && !groupsMap[ad.ad_group_id]) {\n    groupsMap[ad.ad_group_id] = {\n      ad_group_id: ad.ad_group_id,\n      campaign_id: ad.campaign_id,\n      name: ad.group_ad_name || 'Group ' + ad.ad_group_id\n    };\n  }\n}\n\nreturn [{\n  json: {\n    ads: allAds,\n    campaigns: Object.values(campaignsMap),\n    groups: Object.values(groupsMap),\n    total_fetched: allAds.length,\n    pages_fetched: page - 1\n  }\n}];"
+      },
+      "id": "fetch-all-ads",
+      "name": "Fetch All Ads from Geozo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o0swcMSqweTNOUhw",
+          "name": "Geozo"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst campaigns = data.campaigns || [];\nconst groups = data.groups || [];\nconst ads = data.ads || [];\n\n// Geozo status mapping\nconst GEOZO_STATUS = {\n  1: 'processed', 2: 'moderation', 3: 'banned',\n  4: 'stopped', 5: 'started', 41: 'budget_ended', 42: 'suspended'\n};\n\n// Build SQL for campaigns upsert\nconst campaignSqls = campaigns.map(c => {\n  const name = (c.name || '').replace(/'/g, \"''\");\n  return `INSERT INTO campaigns (campaign_id, name, campaign_type_id, synced_at)\n    VALUES (${c.campaign_id}, '${name}', ${c.campaign_type_id || 'NULL'}, NOW())\n    ON CONFLICT (campaign_id) DO UPDATE SET\n      name = EXCLUDED.name,\n      campaign_type_id = COALESCE(EXCLUDED.campaign_type_id, campaigns.campaign_type_id),\n      synced_at = NOW()`;\n});\n\n// Build SQL for groups upsert\nconst groupSqls = groups.map(g => {\n  const name = (g.name || '').replace(/'/g, \"''\");\n  return `INSERT INTO ad_groups (ad_group_id, campaign_id, name, synced_at)\n    VALUES (${g.ad_group_id}, ${g.campaign_id}, '${name}', NOW())\n    ON CONFLICT (ad_group_id) DO UPDATE SET\n      campaign_id = EXCLUDED.campaign_id,\n      name = EXCLUDED.name,\n      synced_at = NOW()`;\n});\n\n// Build SQL for ads upsert\nconst adSqls = ads.filter(a => a.id).map(a => {\n  const title = (a.title || '').replace(/'/g, \"''\");\n  const url = (a.url || a.original_url || '').replace(/'/g, \"''\");\n  const shortDesc = (a.short_description || '').replace(/'/g, \"''\");\n  const statusId = a.status_id || null;\n  const status = GEOZO_STATUS[statusId] || 'unknown';\n  \n  // Get bid from bids array if available\n  let bid = null;\n  if (a.bids && Array.isArray(a.bids)) {\n    // Get first leaf bid value\n    const findBid = (obj) => {\n      if (obj.bid) return parseFloat(obj.bid);\n      if (obj.children) {\n        for (const child of Object.values(obj.children)) {\n          const b = findBid(child);\n          if (b) return b;\n        }\n      }\n      return null;\n    };\n    for (const b of a.bids) {\n      bid = findBid(b);\n      if (bid) break;\n    }\n  }\n\n  // Image URLs\n  const imgSquare = a.media_contents?.['1:1']?.url || a.media_contents?.original_square?.url || null;\n  const imgHoriz = a.media_contents?.['16:9']?.url || a.media_contents?.original_horizontal_16x9?.url || null;\n\n  return `INSERT INTO teasers (ad_id, ad_group_id, campaign_id, title, original_url, short_description, geozo_status_id, status, bid, image_square_path, image_horizontal_path, updated_at)\n    VALUES (\n      ${a.id},\n      ${a.ad_group_id || 'NULL'},\n      ${a.campaign_id || 'NULL'},\n      '${title}',\n      '${url}',\n      '${shortDesc}',\n      ${statusId || 'NULL'},\n      '${status}',\n      ${bid || 'NULL'},\n      ${imgSquare ? \"'\" + imgSquare.replace(/'/g, \"''\") + \"'\" : 'NULL'},\n      ${imgHoriz ? \"'\" + imgHoriz.replace(/'/g, \"''\") + \"'\" : 'NULL'},\n      NOW()\n    )\n    ON CONFLICT (ad_id) WHERE ad_id IS NOT NULL DO UPDATE SET\n      ad_group_id = EXCLUDED.ad_group_id,\n      campaign_id = EXCLUDED.campaign_id,\n      title = EXCLUDED.title,\n      original_url = EXCLUDED.original_url,\n      short_description = EXCLUDED.short_description,\n      geozo_status_id = EXCLUDED.geozo_status_id,\n      bid = COALESCE(EXCLUDED.bid, teasers.bid),\n      image_square_path = COALESCE(EXCLUDED.image_square_path, teasers.image_square_path),\n      image_horizontal_path = COALESCE(EXCLUDED.image_horizontal_path, teasers.image_horizontal_path),\n      updated_at = NOW()`;\n});\n\n// Combine all SQL\nconst allSql = [...campaignSqls, ...groupSqls, ...adSqls];\n\n// Update ad_groups counts\nconst countSql = `UPDATE ad_groups ag SET\n  ad_count = (SELECT COUNT(*) FROM teasers t WHERE t.ad_group_id = ag.ad_group_id),\n  ad_started_count = (SELECT COUNT(*) FROM teasers t WHERE t.ad_group_id = ag.ad_group_id AND t.geozo_status_id = 5)`;\n\nallSql.push(countSql);\n\nconst sql = allSql.join(';\\n') + \";\\nSELECT 'ok' as result, \" + ads.length + \" as ads_synced, \" + campaigns.length + \" as campaigns_synced, \" + groups.length + \" as groups_synced\";\n\nreturn [{ json: { sql, stats: { ads: ads.length, campaigns: campaigns.length, groups: groups.length } } }];"
+      },
+      "id": "build-sql",
+      "name": "Build Upsert SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}",
+        "options": {}
+      },
+      "id": "execute-sync",
+      "name": "Sync to PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [660, 0],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 30 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Fetch All Ads from Geozo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch All Ads from Geozo": {
+      "main": [
+        [
+          {
+            "node": "Build Upsert SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Upsert SQL": {
+      "main": [
+        [
+          {
+            "node": "Sync to PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "monitoring",
+      "id": "tag-monitoring"
+    },
+    {
+      "name": "mvp",
+      "id": "tag-mvp"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1"
+}
