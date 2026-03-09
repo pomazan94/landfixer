@@ -1191,13 +1191,32 @@ async function sha256(text) {
   return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, '0')).join('');
 }
 
+// Извлечь result из любого формата ответа n8n
+function extractResult(resp) {
+  if (!resp) return null;
+  if (resp.result) return resp.result;
+  if (resp.data) {
+    if (Array.isArray(resp.data)) {
+      for (const item of resp.data) {
+        if (item.result) return item.result;
+      }
+    } else if (resp.data.result) return resp.data.result;
+  }
+  // Пройти по всем ключам первого уровня
+  for (const v of Object.values(resp)) {
+    if (typeof v === 'object' && v && v.result) return v.result;
+  }
+  return null;
+}
+
 async function doLogin() {
   const pwd = $('login-password').value;
   if (!pwd) return;
   const hash = await sha256(pwd);
   try {
     const resp = await api('login', { password_hash: hash });
-    const result = (resp.data && resp.data[0] && resp.data[0].result) || resp.result;
+    console.log('Login response:', JSON.stringify(resp));
+    const result = extractResult(resp);
     if (result === 'ok') {
       sessionStorage.setItem('auth', hash);
       showApp();
@@ -1207,6 +1226,7 @@ async function doLogin() {
       $('login-password').focus();
     }
   } catch (e) {
+    console.error('Login error:', e);
     $('login-error').textContent = 'Ошибка подключения';
     $('login-error').style.display = 'block';
   }
@@ -1250,7 +1270,7 @@ async function doChangePassword() {
   const newHash = await sha256(newPwd);
   try {
     const resp = await api('change_password', { old_hash: oldHash, new_hash: newHash });
-    const result = (resp.data && resp.data[0] && resp.data[0].result) || resp.result;
+    const result = extractResult(resp);
     if (result === 'ok') {
       sessionStorage.setItem('auth', newHash);
       closeModal();
@@ -1269,7 +1289,7 @@ async function doChangePassword() {
   if (saved) {
     try {
       const resp = await api('login', { password_hash: saved });
-      const result = (resp.data && resp.data[0] && resp.data[0].result) || resp.result;
+      const result = extractResult(resp);
       if (result === 'ok') { showApp(); return; }
     } catch (e) {}
     sessionStorage.removeItem('auth');
