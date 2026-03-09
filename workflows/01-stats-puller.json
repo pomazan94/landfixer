@@ -23,6 +23,27 @@
     },
     {
       "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT value::int as lookback_days FROM bot_config WHERE category = 'smart_bidder' AND key = 'stats_lookback_days' LIMIT 1",
+        "options": {}
+      },
+      "id": "get-config",
+      "name": "Get Lookback Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        220,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
         "method": "GET",
         "url": "https://api.geozo.com/v1/advertiser/stats/tmp_with_postbacks",
         "authentication": "genericCredentialType",
@@ -32,7 +53,7 @@
           "parameters": [
             {
               "name": "filters[date_from]",
-              "value": "={{ $now.format('yyyy-MM-dd') }}"
+              "value": "={{ $now.minus({ days: $('Get Lookback Config').first().json.lookback_days || 3 }).format('yyyy-MM-dd') }}"
             },
             {
               "name": "filters[date_to]",
@@ -41,6 +62,10 @@
             {
               "name": "groups[0]",
               "value": "ad_id"
+            },
+            {
+              "name": "groups[1]",
+              "value": "date"
             },
             {
               "name": "order_by[0][column]",
@@ -69,7 +94,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        220,
+        440,
         0
       ],
       "credentials": {
@@ -81,14 +106,46 @@
     },
     {
       "parameters": {
-        "jsCode": "const raw = $input.first().json;\nconst statsData = raw?.data?.result?.data || raw?.data || (Array.isArray(raw) ? raw : []);\n\nif (!Array.isArray(statsData)) {\n  return [{ json: { error: 'No stats data received', raw: raw } }];\n}\n\nconst results = statsData.map(d => {\n  const spend = d.money || 0;\n  const revenue = d.postbacks_confirmed_money || 0;\n  const clicks = d.clicks_count || 0;\n  const shows = d.shows_count || 0;\n  const confirmedShows = d.confirmed_shows_count || 0;\n  const postbacks = d.postbacks_total_count || 0;\n\n  const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n  const profit = revenue - spend;\n  const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n  const cpc = clicks > 0 ? (spend / clicks) : 0;\n\n  let status = 'HOLD';\n  let alertLevel = null;\n\n  if (roi > 100) {\n    status = 'PROFIT_HIGH';\n    alertLevel = 'green';\n  } else if (roi > 50) {\n    status = 'PROFIT';\n    alertLevel = 'green';\n  } else if (roi > 0) {\n    status = 'MARGINAL';\n  } else if (roi > -30) {\n    status = 'LOSING';\n    alertLevel = 'yellow';\n  } else if (roi > -50) {\n    status = 'BURNING';\n    alertLevel = 'orange';\n  } else if (spend > 3) {\n    status = 'CRITICAL';\n    alertLevel = 'red';\n  }\n\n  return {\n    json: {\n      ad_id: d.ad_id,\n      date: d.date || $now.toFormat('yyyy-MM-dd'),\n      shows: shows,\n      confirmed_shows: confirmedShows,\n      clicks: clicks,\n      money: Math.round(spend * 10000) / 10000,\n      postbacks_count: postbacks,\n      postbacks_confirmed_money: Math.round(revenue * 10000) / 10000,\n      ctr: Math.round(ctr * 10000) / 10000,\n      cpc: Math.round(cpc * 10000) / 10000,\n      roi: Math.round(roi * 100) / 100,\n      profit: Math.round(profit * 10000) / 10000,\n      status: status,\n      alertLevel: alertLevel\n    }\n  };\n});\n\nreturn results;"
+        "jsCode": "const raw = $input.first().json;\n\n// Geozo API response: { result: { data: [...], pagination: {...}, total_result: {...} } }\n// or sometimes wrapped differently by n8n HTTP node\nlet statsData = [];\n\nif (raw?.result?.data && Array.isArray(raw.result.data)) {\n  statsData = raw.result.data;\n} else if (raw?.data?.result?.data && Array.isArray(raw.data.result.data)) {\n  statsData = raw.data.result.data;\n} else if (raw?.data && Array.isArray(raw.data)) {\n  statsData = raw.data;\n} else if (Array.isArray(raw)) {\n  statsData = raw;\n}\n\nif (statsData.length === 0) {\n  // Return a single item so workflow continues but DB gets nothing\n  return [{ json: { _empty: true, _raw_keys: Object.keys(raw || {}), _raw_sample: JSON.stringify(raw).substring(0, 500) } }];\n}\n\nconst results = statsData\n  .filter(d => d.ad_id && d.ad_id > 0)\n  .map(d => {\n    const spend = parseFloat(d.money) || parseFloat(d.total_expenses) || 0;\n    const revenue = parseFloat(d.postbacks_confirmed_money) || 0;\n    const clicks = parseInt(d.clicks_count) || 0;\n    const shows = parseInt(d.shows_count) || 0;\n    const confirmedShows = parseInt(d.confirmed_shows_count) || 0;\n    const postbacks = parseInt(d.postbacks_total_count) || 0;\n\n    const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n    const profit = revenue - spend;\n    const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n    const cpc = clicks > 0 ? (spend / clicks) : 0;\n\n    // Date: from API grouping, or fallback to today\n    const date = d.date || $now.toFormat('yyyy-MM-dd');\n\n    let status = 'HOLD';\n    let alertLevel = null;\n\n    if (roi > 100) {\n      status = 'PROFIT_HIGH';\n      alertLevel = 'green';\n    } else if (roi > 50) {\n      status = 'PROFIT';\n      alertLevel = 'green';\n    } else if (roi > 0) {\n      status = 'MARGINAL';\n    } else if (roi > -30) {\n      status = 'LOSING';\n      alertLevel = 'yellow';\n    } else if (roi > -50) {\n      status = 'BURNING';\n      alertLevel = 'orange';\n    } else if (spend > 3) {\n      status = 'CRITICAL';\n      alertLevel = 'red';\n    }\n\n    return {\n      json: {\n        ad_id: parseInt(d.ad_id),\n        date: date,\n        shows: shows,\n        confirmed_shows: confirmedShows,\n        clicks: clicks,\n        money: Math.round(spend * 10000) / 10000,\n        postbacks_count: postbacks,\n        postbacks_confirmed_money: Math.round(revenue * 10000) / 10000,\n        ctr: Math.round(ctr * 10000) / 10000,\n        cpc: Math.round(cpc * 10000) / 10000,\n        roi: Math.round(roi * 100) / 100,\n        profit: Math.round(profit * 10000) / 10000,\n        status: status,\n        alertLevel: alertLevel\n      }\n    };\n  });\n\nreturn results.length > 0 ? results : [{ json: { _empty: true } }];"
       },
       "id": "calculate-metrics",
       "name": "Calculate ROI & Metrics",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        440,
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-data",
+              "leftValue": "={{ $json._empty }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-data-check",
+      "name": "Has Data?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
         0
       ]
     },
@@ -103,7 +160,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        660,
+        1100,
         -100
       ],
       "credentials": {
@@ -141,20 +198,20 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        660,
+        1100,
         100
       ]
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst alerts = items.filter(i => i.json.alertLevel);\n\nif (alerts.length === 0) return [];\n\nconst redAlerts = alerts.filter(i => i.json.alertLevel === 'red');\nconst greenAlerts = alerts.filter(i => i.json.alertLevel === 'green');\nconst yellowAlerts = alerts.filter(i => i.json.alertLevel === 'yellow' || i.json.alertLevel === 'orange');\n\nlet message = `📊 GEOZO STATS ALERT ${$now.toFormat('dd.MM.yyyy HH:mm')}\\n\\n`;\n\nif (redAlerts.length > 0) {\n  message += `🔴 CRITICAL (ROI < -50%, spend > $3):\\n`;\n  redAlerts.slice(0, 5).forEach(a => {\n    message += `  Ad #${a.json.ad_id}: ROI ${a.json.roi}%, Spend $${a.json.money}, Profit $${a.json.profit}\\n`;\n  });\n  message += `\\n`;\n}\n\nif (yellowAlerts.length > 0) {\n  message += `🟡 WARNING (Losing money):\\n`;\n  yellowAlerts.slice(0, 5).forEach(a => {\n    message += `  Ad #${a.json.ad_id}: ROI ${a.json.roi}%, Spend $${a.json.money}\\n`;\n  });\n  message += `\\n`;\n}\n\nif (greenAlerts.length > 0) {\n  message += `🟢 PROFIT:\\n`;\n  greenAlerts.slice(0, 5).forEach(a => {\n    message += `  Ad #${a.json.ad_id}: ROI ${a.json.roi}%, Profit $${a.json.profit}\\n`;\n  });\n}\n\nmessage += `\\n📈 Total ads analyzed: ${items.length}`;\nmessage += `\\n🔴 Critical: ${redAlerts.length} | 🟡 Warning: ${yellowAlerts.length} | 🟢 Profit: ${greenAlerts.length}`;\n\nreturn [{ json: { message } }];"
+        "jsCode": "const items = $input.all();\nconst alerts = items.filter(i => i.json.alertLevel);\n\nif (alerts.length === 0) return [];\n\n// Only alert for today's stats\nconst today = $now.toFormat('yyyy-MM-dd');\nconst todayAlerts = alerts.filter(i => i.json.date === today);\nif (todayAlerts.length === 0) return [];\n\nconst redAlerts = todayAlerts.filter(i => i.json.alertLevel === 'red');\nconst greenAlerts = todayAlerts.filter(i => i.json.alertLevel === 'green');\nconst yellowAlerts = todayAlerts.filter(i => i.json.alertLevel === 'yellow' || i.json.alertLevel === 'orange');\n\nlet message = `📊 GEOZO STATS ${$now.toFormat('dd.MM.yyyy HH:mm')}\\n\\n`;\n\nif (redAlerts.length > 0) {\n  message += `🔴 КРИТИЧЕСКИЕ (ROI < -50%, расход > $3):\\n`;\n  redAlerts.slice(0, 5).forEach(a => {\n    message += `  Ad #${a.json.ad_id}: ROI ${a.json.roi}%, Расход $${a.json.money}, P&L $${a.json.profit}\\n`;\n  });\n  message += `\\n`;\n}\n\nif (yellowAlerts.length > 0) {\n  message += `🟡 ВНИМАНИЕ (убыток):\\n`;\n  yellowAlerts.slice(0, 5).forEach(a => {\n    message += `  Ad #${a.json.ad_id}: ROI ${a.json.roi}%, Расход $${a.json.money}\\n`;\n  });\n  message += `\\n`;\n}\n\nif (greenAlerts.length > 0) {\n  message += `🟢 ПРИБЫЛЬ:\\n`;\n  greenAlerts.slice(0, 5).forEach(a => {\n    message += `  Ad #${a.json.ad_id}: ROI ${a.json.roi}%, P&L $${a.json.profit}\\n`;\n  });\n}\n\nmessage += `\\n📈 Всего объявлений за сегодня: ${todayAlerts.length}`;\nmessage += `\\n🔴 Крит: ${redAlerts.length} | 🟡 Внимание: ${yellowAlerts.length} | 🟢 Прибыль: ${greenAlerts.length}`;\n\nreturn [{ json: { message } }];"
       },
       "id": "format-alert",
       "name": "Format Alert Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        880,
+        1320,
         100
       ]
     },
@@ -171,7 +228,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1100,
+        1540,
         100
       ],
       "credentials": {
@@ -184,6 +241,17 @@
   ],
   "connections": {
     "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Lookback Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Lookback Config": {
       "main": [
         [
           {
@@ -206,6 +274,17 @@
       ]
     },
     "Calculate ROI & Metrics": {
+      "main": [
+        [
+          {
+            "node": "Has Data?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Data?": {
       "main": [
         [
           {
@@ -262,5 +341,5 @@
     }
   ],
   "pinData": {},
-  "versionId": "1"
+  "versionId": "2"
 }
