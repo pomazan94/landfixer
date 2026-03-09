@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GEOZO Bot - Admin Panel</title>
+<title>GEOZO Bot — Панель управления</title>
 <style>
 :root {
   --bg: #0f1117;
@@ -148,50 +148,75 @@ textarea { resize:vertical; min-height:60px; }
 ::-webkit-scrollbar { width:6px; }
 ::-webkit-scrollbar-track { background:var(--bg); }
 ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+/* Login */
+.login-screen { display:flex; align-items:center; justify-content:center; min-height:100vh; background:var(--bg); }
+.login-box { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:32px; width:360px; text-align:center; }
+.login-box h1 { font-size:20px; color:var(--accent); margin-bottom:4px; }
+.login-box p { color:var(--text2); font-size:13px; margin-bottom:24px; }
+.login-box input { width:100%; padding:10px 14px; background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-size:14px; margin-bottom:12px; outline:none; }
+.login-box input:focus { border-color:var(--accent); }
+.login-box .btn { width:100%; padding:10px; font-size:14px; }
+.login-error { color:var(--red); font-size:13px; margin-top:8px; display:none; }
 </style>
 </head>
 <body>
-<div class="app">
+
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="login-screen">
+  <div class="login-box">
+    <h1>GEOZO Bot</h1>
+    <p>Management Panel</p>
+    <input type="password" id="login-password" placeholder="Пароль" autofocus onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn" onclick="doLogin()">Войти</button>
+    <div class="login-error" id="login-error">Неверный пароль</div>
+  </div>
+</div>
+
+<!-- APP (hidden until auth) -->
+<div class="app" id="app" style="display:none">
   <!-- SIDEBAR -->
   <nav class="sidebar">
-    <h1>GEOZO Bot<span>Management Panel</span></h1>
-    <div class="nav-item active" data-section="dashboard">Dashboard</div>
-    <div class="nav-section">Configuration</div>
-    <div class="nav-item" data-section="smart-bidder">Smart Bidder</div>
-    <div class="nav-item" data-section="time-multipliers">Time Multipliers</div>
-    <div class="nav-item" data-section="warmup">Warmup Phases</div>
-    <div class="nav-item" data-section="roi-class">ROI Classification</div>
-    <div class="nav-item" data-section="emergency-cfg">Emergency Controller</div>
-    <div class="nav-item" data-section="schedules">Workflow Schedules</div>
-    <div class="nav-item" data-section="general-cfg">General Settings</div>
-    <div class="nav-section">Data Management</div>
-    <div class="nav-item" data-section="geo-payouts">Geo Payouts</div>
-    <div class="nav-item" data-section="teasers">Teasers</div>
-    <div class="nav-item" data-section="bid-history">Bid History</div>
-    <div class="nav-item" data-section="anomalies">Anomalies</div>
-    <div class="nav-item" data-section="block-lists">Block Lists</div>
-    <div class="nav-item" data-section="scan-targets">Scan Targets</div>
-    <div class="nav-item" data-section="ab-tests">A/B Tests</div>
-    <div class="nav-section">Controls</div>
-    <div class="nav-item" data-section="emergency-ctrl">Emergency Control</div>
-    <div class="nav-item" data-section="locks">Workflow Locks</div>
-    <div class="nav-item" data-section="daily-pnl">Daily P&L</div>
+    <h1 style="display:flex;align-items:center;justify-content:space-between;">
+      <span>GEOZO Bot<span style="display:block;font-size:11px;font-weight:normal;color:var(--text2)">Панель управления</span></span>
+      <span onclick="logout()" style="cursor:pointer;font-size:12px;color:var(--text2);font-weight:normal;" title="Выйти">&#x2716;</span>
+    </h1>
+    <div class="nav-item active" data-section="dashboard">Дашборд</div>
+    <div class="nav-section">Конфигурация</div>
+    <div class="nav-item" data-section="smart-bidder">Умный биддер</div>
+    <div class="nav-item" data-section="time-multipliers">Мультипликаторы времени</div>
+    <div class="nav-item" data-section="warmup">Фазы прогрева</div>
+    <div class="nav-item" data-section="roi-class">Классификация ROI</div>
+    <div class="nav-item" data-section="emergency-cfg">Аварийный контроллер</div>
+    <div class="nav-item" data-section="schedules">Расписания</div>
+    <div class="nav-item" data-section="general-cfg">Общие настройки</div>
+    <div class="nav-section">Данные</div>
+    <div class="nav-item" data-section="geo-payouts">Гео и выплаты</div>
+    <div class="nav-item" data-section="teasers">Тизеры</div>
+    <div class="nav-item" data-section="bid-history">История ставок</div>
+    <div class="nav-item" data-section="anomalies">Аномалии</div>
+    <div class="nav-item" data-section="block-lists">Блок-листы</div>
+    <div class="nav-item" data-section="scan-targets">Цели сканирования</div>
+    <div class="nav-item" data-section="ab-tests">A/B Тесты</div>
+    <div class="nav-section">Управление</div>
+    <div class="nav-item" data-section="emergency-ctrl">Экстренный режим</div>
+    <div class="nav-item" data-section="locks">Блокировки</div>
+    <div class="nav-item" data-section="daily-pnl">P&L по дням</div>
   </nav>
 
   <!-- MAIN -->
   <main class="main">
     <!-- DASHBOARD -->
     <div class="section active" id="sec-dashboard">
-      <h2 style="margin-bottom:16px;font-size:20px;">Dashboard</h2>
+      <h2 style="margin-bottom:16px;font-size:20px;">Дашборд</h2>
       <div id="emergency-banner"></div>
       <div class="grid grid-4" id="dash-stats"></div>
       <div class="grid grid-2" style="margin-top:16px;">
         <div class="card">
-          <h2>Teaser States</h2>
+          <h2>Статусы тизеров</h2>
           <div id="dash-teasers"></div>
         </div>
         <div class="card">
-          <h2>Recent Bid Changes</h2>
+          <h2>Последние изменения ставок</h2>
           <div id="dash-bids"></div>
         </div>
       </div>
@@ -200,210 +225,210 @@ textarea { resize:vertical; min-height:60px; }
     <!-- SMART BIDDER CONFIG -->
     <div class="section" id="sec-smart-bidder">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Smart Bidder Configuration</h2>
-        <button class="btn btn-primary" onclick="saveCategory('smart_bidder')">Save Changes</button>
+        <h2 style="font-size:20px;">Настройки умного биддера</h2>
+        <button class="btn btn-primary" onclick="saveCategory('smart_bidder')">Сохранить</button>
       </div>
-      <div class="card" id="cfg-smart_bidder"><div class="loading">Loading...</div></div>
+      <div class="card" id="cfg-smart_bidder"><div class="loading">Загрузка...</div></div>
     </div>
 
     <!-- TIME MULTIPLIERS -->
     <div class="section" id="sec-time-multipliers">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Time-of-Day Multipliers</h2>
-        <button class="btn btn-primary" onclick="saveCategory('time_multipliers')">Save Changes</button>
+        <h2 style="font-size:20px;">Мультипликаторы по времени суток</h2>
+        <button class="btn btn-primary" onclick="saveCategory('time_multipliers')">Сохранить</button>
       </div>
-      <div class="card" id="cfg-time_multipliers"><div class="loading">Loading...</div></div>
+      <div class="card" id="cfg-time_multipliers"><div class="loading">Загрузка...</div></div>
     </div>
 
     <!-- WARMUP -->
     <div class="section" id="sec-warmup">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Warmup Phase Settings</h2>
-        <button class="btn btn-primary" onclick="saveCategory('warmup')">Save Changes</button>
+        <h2 style="font-size:20px;">Настройки фаз прогрева</h2>
+        <button class="btn btn-primary" onclick="saveCategory('warmup')">Сохранить</button>
       </div>
-      <div class="card" id="cfg-warmup"><div class="loading">Loading...</div></div>
+      <div class="card" id="cfg-warmup"><div class="loading">Загрузка...</div></div>
     </div>
 
     <!-- ROI CLASSIFICATION -->
     <div class="section" id="sec-roi-class">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">ROI Classification Thresholds</h2>
-        <button class="btn btn-primary" onclick="saveCategory('roi_classification')">Save Changes</button>
+        <h2 style="font-size:20px;">Пороги классификации ROI</h2>
+        <button class="btn btn-primary" onclick="saveCategory('roi_classification')">Сохранить</button>
       </div>
-      <div class="card" id="cfg-roi_classification"><div class="loading">Loading...</div></div>
+      <div class="card" id="cfg-roi_classification"><div class="loading">Загрузка...</div></div>
     </div>
 
     <!-- EMERGENCY CONFIG -->
     <div class="section" id="sec-emergency-cfg">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Emergency Controller Settings</h2>
-        <button class="btn btn-primary" onclick="saveMultiCategory(['emergency','balance'])">Save Changes</button>
+        <h2 style="font-size:20px;">Настройки аварийного контроллера</h2>
+        <button class="btn btn-primary" onclick="saveMultiCategory(['emergency','balance'])">Сохранить</button>
       </div>
-      <div class="card"><h2>Emergency Thresholds</h2><div id="cfg-emergency"><div class="loading">Loading...</div></div></div>
-      <div class="card"><h2>Balance Watchdog</h2><div id="cfg-balance"><div class="loading">Loading...</div></div></div>
+      <div class="card"><h2>Аварийные пороги</h2><div id="cfg-emergency"><div class="loading">Загрузка...</div></div></div>
+      <div class="card"><h2>Наблюдатель баланса</h2><div id="cfg-balance"><div class="loading">Загрузка...</div></div></div>
     </div>
 
     <!-- SCHEDULES -->
     <div class="section" id="sec-schedules">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Workflow Schedules</h2>
-        <button class="btn btn-primary" onclick="saveCategory('schedules')">Save Changes</button>
+        <h2 style="font-size:20px;">Расписания воркфлоу</h2>
+        <button class="btn btn-primary" onclick="saveCategory('schedules')">Сохранить</button>
       </div>
-      <div class="card" id="cfg-schedules"><div class="loading">Loading...</div></div>
+      <div class="card" id="cfg-schedules"><div class="loading">Загрузка...</div></div>
     </div>
 
     <!-- GENERAL CONFIG -->
     <div class="section" id="sec-general-cfg">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">General Settings</h2>
-        <button class="btn btn-primary" onclick="saveMultiCategory(['general','default_payout','dead_creative','rollback','anomaly','position'])">Save Changes</button>
+        <h2 style="font-size:20px;">Общие настройки</h2>
+        <button class="btn btn-primary" onclick="saveMultiCategory(['general','default_payout','dead_creative','rollback','anomaly','position'])">Сохранить</button>
       </div>
-      <div class="card"><h2>General</h2><div id="cfg-general"><div class="loading">Loading...</div></div></div>
-      <div class="card"><h2>Default Geo Payout (Fallback)</h2><div id="cfg-default_payout"><div class="loading">Loading...</div></div></div>
-      <div class="card"><h2>Dead Creative Detection</h2><div id="cfg-dead_creative"><div class="loading">Loading...</div></div></div>
-      <div class="card"><h2>Rollback Settings</h2><div id="cfg-rollback"><div class="loading">Loading...</div></div></div>
-      <div class="card"><h2>Anomaly Detector</h2><div id="cfg-anomaly"><div class="loading">Loading...</div></div></div>
-      <div class="card"><h2>Position Tracking</h2><div id="cfg-position"><div class="loading">Loading...</div></div></div>
+      <div class="card"><h2>Общее</h2><div id="cfg-general"><div class="loading">Загрузка...</div></div></div>
+      <div class="card"><h2>Выплаты по умолчанию (фоллбэк)</h2><div id="cfg-default_payout"><div class="loading">Загрузка...</div></div></div>
+      <div class="card"><h2>Детекция мёртвых креативов</h2><div id="cfg-dead_creative"><div class="loading">Загрузка...</div></div></div>
+      <div class="card"><h2>Настройки отката</h2><div id="cfg-rollback"><div class="loading">Загрузка...</div></div></div>
+      <div class="card"><h2>Детектор аномалий</h2><div id="cfg-anomaly"><div class="loading">Загрузка...</div></div></div>
+      <div class="card"><h2>Трекинг позиций</h2><div id="cfg-position"><div class="loading">Загрузка...</div></div></div>
     </div>
 
     <!-- GEO PAYOUTS -->
     <div class="section" id="sec-geo-payouts">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Geo Payouts</h2>
-        <button class="btn btn-primary" onclick="showAddGeo()">+ Add Geo</button>
+        <h2 style="font-size:20px;">Гео и выплаты</h2>
+        <button class="btn btn-primary" onclick="showAddGeo()">+ Добавить гео</button>
       </div>
       <div class="card">
-        <div class="table-wrap" id="geo-table"><div class="loading">Loading...</div></div>
+        <div class="table-wrap" id="geo-table"><div class="loading">Загрузка...</div></div>
       </div>
     </div>
 
     <!-- TEASERS -->
     <div class="section" id="sec-teasers">
-      <h2 style="margin-bottom:16px;font-size:20px;">Teasers</h2>
+      <h2 style="margin-bottom:16px;font-size:20px;">Тизеры</h2>
       <div class="btn-group">
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers()">All</button>
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers('active')">Active</button>
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers('testing')">Testing</button>
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers('paused_high_cpl')">Paused CPL</button>
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers('stopped')">Stopped</button>
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers('created')">Created</button>
-        <button class="btn btn-sm btn-outline" onclick="loadTeasers('banned')">Banned</button>
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers()">Все</button>
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers('active')">Активные</button>
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers('testing')">Тест</button>
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers('paused_high_cpl')">Пауза CPL</button>
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers('stopped')">Остановлены</button>
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers('created')">Созданы</button>
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers('banned')">Забанены</button>
       </div>
       <div class="card">
-        <div class="table-wrap" id="teasers-table"><div class="loading">Loading...</div></div>
+        <div class="table-wrap" id="teasers-table"><div class="loading">Загрузка...</div></div>
       </div>
     </div>
 
     <!-- BID HISTORY -->
     <div class="section" id="sec-bid-history">
-      <h2 style="margin-bottom:16px;font-size:20px;">Bid History</h2>
+      <h2 style="margin-bottom:16px;font-size:20px;">История ставок</h2>
       <div style="display:flex;gap:8px;margin-bottom:12px;">
-        <input type="number" id="bh-ad-id" placeholder="Filter by Ad ID" style="width:200px;">
-        <button class="btn btn-sm btn-primary" onclick="loadBidHistory()">Filter</button>
-        <button class="btn btn-sm btn-outline" onclick="document.getElementById('bh-ad-id').value='';loadBidHistory()">Clear</button>
+        <input type="number" id="bh-ad-id" placeholder="Фильтр по Ad ID" style="width:200px;">
+        <button class="btn btn-sm btn-primary" onclick="loadBidHistory()">Найти</button>
+        <button class="btn btn-sm btn-outline" onclick="document.getElementById('bh-ad-id').value='';loadBidHistory()">Сбросить</button>
       </div>
       <div class="card">
-        <div class="table-wrap" id="bid-history-table"><div class="loading">Loading...</div></div>
+        <div class="table-wrap" id="bid-history-table"><div class="loading">Загрузка...</div></div>
       </div>
     </div>
 
     <!-- ANOMALIES -->
     <div class="section" id="sec-anomalies">
-      <h2 style="margin-bottom:16px;font-size:20px;">Anomalies</h2>
+      <h2 style="margin-bottom:16px;font-size:20px;">Аномалии</h2>
       <div class="tabs" id="anomaly-tabs">
-        <div class="tab active" onclick="loadAnomalies(false)">Open</div>
-        <div class="tab" onclick="loadAnomalies(true)">Resolved</div>
+        <div class="tab active" onclick="loadAnomalies(false)">Открытые</div>
+        <div class="tab" onclick="loadAnomalies(true)">Решённые</div>
       </div>
       <div class="card">
-        <div class="table-wrap" id="anomalies-table"><div class="loading">Loading...</div></div>
+        <div class="table-wrap" id="anomalies-table"><div class="loading">Загрузка...</div></div>
       </div>
     </div>
 
     <!-- BLOCK LISTS -->
     <div class="section" id="sec-block-lists">
-      <h2 style="margin-bottom:16px;font-size:20px;">Block Lists (Whitelist/Blacklist)</h2>
+      <h2 style="margin-bottom:16px;font-size:20px;">Блок-листы</h2>
       <div class="tabs" id="bl-tabs">
-        <div class="tab active" onclick="loadBlockLists()">All</div>
-        <div class="tab" onclick="loadBlockLists('whitelist')">Whitelist</div>
-        <div class="tab" onclick="loadBlockLists('blacklist')">Blacklist</div>
+        <div class="tab active" onclick="loadBlockLists()">Все</div>
+        <div class="tab" onclick="loadBlockLists('whitelist')">Белый список</div>
+        <div class="tab" onclick="loadBlockLists('blacklist')">Чёрный список</div>
       </div>
       <div class="card">
-        <div class="table-wrap" id="block-lists-table"><div class="loading">Loading...</div></div>
+        <div class="table-wrap" id="block-lists-table"><div class="loading">Загрузка...</div></div>
       </div>
     </div>
 
     <!-- SCAN TARGETS -->
     <div class="section" id="sec-scan-targets">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Scan Targets</h2>
-        <button class="btn btn-primary" onclick="showAddScanTarget()">+ Add Target</button>
+        <h2 style="font-size:20px;">Цели сканирования</h2>
+        <button class="btn btn-primary" onclick="showAddScanTarget()">+ Добавить цель</button>
       </div>
       <div class="card">
-        <div class="table-wrap" id="scan-targets-table"><div class="loading">Loading...</div></div>
+        <div class="table-wrap" id="scan-targets-table"><div class="loading">Загрузка...</div></div>
       </div>
     </div>
 
     <!-- AB TESTS -->
     <div class="section" id="sec-ab-tests">
-      <h2 style="margin-bottom:16px;font-size:20px;">A/B Tests</h2>
+      <h2 style="margin-bottom:16px;font-size:20px;">A/B Тесты</h2>
       <div class="card">
-        <div class="table-wrap" id="ab-tests-table"><div class="loading">Loading...</div></div>
+        <div class="table-wrap" id="ab-tests-table"><div class="loading">Загрузка...</div></div>
       </div>
     </div>
 
     <!-- EMERGENCY CONTROL -->
     <div class="section" id="sec-emergency-ctrl">
-      <h2 style="margin-bottom:16px;font-size:20px;">Emergency Control Panel</h2>
+      <h2 style="margin-bottom:16px;font-size:20px;">Панель экстренного управления</h2>
       <div class="grid grid-2">
         <div class="card">
-          <h2 style="color:var(--red);">Emergency Stop</h2>
-          <p style="color:var(--text2);font-size:13px;margin-bottom:12px;">Activates emergency mode - all bid changes are frozen and optionally all ads are paused.</p>
+          <h2 style="color:var(--red);">Экстренная остановка</h2>
+          <p style="color:var(--text2);font-size:13px;margin-bottom:12px;">Активирует аварийный режим — все изменения ставок заморожены, объявления на паузе.</p>
           <div class="form-group">
-            <label>Reason</label>
-            <input type="text" id="emg-reason" value="Manual activation via admin UI">
+            <label>Причина</label>
+            <input type="text" id="emg-reason" value="Ручная активация через панель">
           </div>
           <div class="form-group">
-            <label>Auto-deactivate after (hours)</label>
+            <label>Автоотключение через (часы)</label>
             <input type="number" id="emg-hours" value="2" min="0.5" max="24" step="0.5">
           </div>
           <div class="btn-group">
-            <button class="btn btn-danger" onclick="activateEmergency()">ACTIVATE EMERGENCY</button>
-            <button class="btn btn-success" onclick="deactivateEmergency()">DEACTIVATE</button>
+            <button class="btn btn-danger" onclick="activateEmergency()">ВКЛЮЧИТЬ АВАРИЙНЫЙ</button>
+            <button class="btn btn-success" onclick="deactivateEmergency()">ОТКЛЮЧИТЬ</button>
           </div>
           <div id="emg-status" style="margin-top:12px;"></div>
         </div>
         <div class="card">
-          <h2 style="color:var(--orange);">Conservative Mode</h2>
-          <p style="color:var(--text2);font-size:13px;margin-bottom:12px;">Only bid decreases are allowed. No bid raises. Prevents spending runaway.</p>
+          <h2 style="color:var(--orange);">Консервативный режим</h2>
+          <p style="color:var(--text2);font-size:13px;margin-bottom:12px;">Разрешены только снижения ставок. Повышения заблокированы. Защита от перерасхода.</p>
           <div class="form-group">
-            <label>Duration (minutes)</label>
+            <label>Длительность (минуты)</label>
             <input type="number" id="cons-minutes" value="30" min="5" max="1440" step="5">
           </div>
           <div class="btn-group">
-            <button class="btn btn-warning" onclick="activateConservative()">ACTIVATE CONSERVATIVE</button>
-            <button class="btn btn-success" onclick="deactivateConservative()">DEACTIVATE</button>
+            <button class="btn btn-warning" onclick="activateConservative()">ВКЛЮЧИТЬ КОНСЕРВАТИВНЫЙ</button>
+            <button class="btn btn-success" onclick="deactivateConservative()">ОТКЛЮЧИТЬ</button>
           </div>
         </div>
       </div>
       <div class="card" style="margin-top:16px;">
-        <h2>Emergency History</h2>
-        <div id="emg-history"><div class="loading">Loading...</div></div>
+        <h2>История аварийных режимов</h2>
+        <div id="emg-history"><div class="loading">Загрузка...</div></div>
       </div>
     </div>
 
     <!-- WORKFLOW LOCKS -->
     <div class="section" id="sec-locks">
-      <h2 style="margin-bottom:16px;font-size:20px;">Active Workflow Locks</h2>
+      <h2 style="margin-bottom:16px;font-size:20px;">Активные блокировки</h2>
       <div class="card">
-        <div class="table-wrap" id="locks-table"><div class="loading">Loading...</div></div>
+        <div class="table-wrap" id="locks-table"><div class="loading">Загрузка...</div></div>
       </div>
     </div>
 
     <!-- DAILY PNL -->
     <div class="section" id="sec-daily-pnl">
-      <h2 style="margin-bottom:16px;font-size:20px;">Daily P&L</h2>
+      <h2 style="margin-bottom:16px;font-size:20px;">P&L по дням</h2>
       <div class="card">
-        <div class="table-wrap" id="pnl-table"><div class="loading">Loading...</div></div>
+        <div class="table-wrap" id="pnl-table"><div class="loading">Загрузка...</div></div>
       </div>
     </div>
   </main>
@@ -506,10 +531,10 @@ async function loadDashboard() {
     // Emergency banner
     let banner = '';
     if (em) {
-      banner = `<div class="alert-banner alert-danger">EMERGENCY MODE ACTIVE: ${em.trigger_reason || 'Unknown'} (since ${fmtDate(em.activated_at)})</div>`;
+      banner = `<div class="alert-banner alert-danger">АВАРИЙНЫЙ РЕЖИМ: ${em.trigger_reason || 'Неизвестно'} (с ${fmtDate(em.activated_at)})</div>`;
     }
     if (cm) {
-      banner += `<div class="alert-banner alert-warning">CONSERVATIVE MODE: ${cm.locked_by} (expires ${fmtDate(cm.expires_at)})</div>`;
+      banner += `<div class="alert-banner alert-warning">КОНСЕРВАТИВНЫЙ РЕЖИМ: ${cm.locked_by} (до ${fmtDate(cm.expires_at)})</div>`;
     }
     $('emergency-banner').innerHTML = banner;
 
@@ -520,10 +545,10 @@ async function loadDashboard() {
     const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;
 
     $('dash-stats').innerHTML = `
-      <div class="stat blue"><div class="label">Balance</div><div class="value">$${fmt(b.balance)}</div><div class="sub">${fmt(b.spend_rate_per_hour)}/h | ${fmt(b.hours_remaining,1)}h left</div></div>
-      <div class="stat ${spend > 0 ? 'orange' : ''}"><div class="label">Today Spend</div><div class="value">$${fmt(spend)}</div><div class="sub">${s.total_ads || 0} ads tracked</div></div>
-      <div class="stat ${profit >= 0 ? 'green' : 'red'}"><div class="label">Today Profit</div><div class="value">$${fmt(profit)}</div><div class="sub">ROI: ${fmt(roi,1)}%</div></div>
-      <div class="stat purple"><div class="label">Bid Changes 24h</div><div class="value">${bc || 0}</div><div class="sub">Anomalies open: ${ao || 0}</div></div>
+      <div class="stat blue"><div class="label">Баланс</div><div class="value">$${fmt(b.balance)}</div><div class="sub">${fmt(b.spend_rate_per_hour)}/ч | ${fmt(b.hours_remaining,1)}ч осталось</div></div>
+      <div class="stat ${spend > 0 ? 'orange' : ''}"><div class="label">Расход сегодня</div><div class="value">$${fmt(spend)}</div><div class="sub">${s.total_ads || 0} объявлений</div></div>
+      <div class="stat ${profit >= 0 ? 'green' : 'red'}"><div class="label">Прибыль сегодня</div><div class="value">$${fmt(profit)}</div><div class="sub">ROI: ${fmt(roi,1)}%</div></div>
+      <div class="stat purple"><div class="label">Ставки за 24ч</div><div class="value">${bc || 0}</div><div class="sub">Аномалий: ${ao || 0}</div></div>
     `;
 
     // Teaser counts
@@ -548,9 +573,9 @@ async function loadDashboard() {
         <span>#${b.ad_id} <span style="color:var(--${dir})">${arrow} $${fmt(b.old_bid,4)}&rarr;$${fmt(b.new_bid,4)}</span></span>
         <span style="color:var(--text2)">${fmtDate(b.changed_at)}</span>
       </div>`;
-    }).join('') : '<div style="color:var(--text2);padding:12px;">No bid changes yet</div>';
+    }).join('') : '<div style="color:var(--text2);padding:12px;">Нет изменений ставок</div>';
   } catch (e) {
-    $('dash-stats').innerHTML = `<div class="alert-banner alert-danger">Error loading dashboard: ${e.message}</div>`;
+    $('dash-stats').innerHTML = `<div class="alert-banner alert-danger">Ошибка загрузки дашборда: ${e.message}</div>`;
   }
 }
 
@@ -569,7 +594,7 @@ async function loadConfig(category) {
   if (!el) return;
   const items = configData[category] || [];
   if (items.length === 0) {
-    el.innerHTML = '<div style="color:var(--text2);padding:8px;">No configuration items</div>';
+    el.innerHTML = '<div style="color:var(--text2);padding:8px;">Нет параметров</div>';
     return;
   }
   el.innerHTML = items.map(c => `
@@ -613,12 +638,12 @@ async function saveCategory(category) {
     }
   });
   if (updates.length === 0) {
-    toast('No changes to save', 'error');
+    toast('Нет изменений для сохранения', 'error');
     return;
   }
   try {
     await api('config_update', { updates });
-    toast(`Saved ${updates.length} changes`);
+    toast(`Сохранено: ${updates.length} изменений`);
     // Refresh original values
     updates.forEach(u => {
       const input = $('cfg-val-' + u.id);
@@ -629,7 +654,7 @@ async function saveCategory(category) {
     });
     await loadAllConfig();
   } catch (e) {
-    toast('Error: ' + e.message, 'error');
+    toast('Ошибка: ' + e.message, 'error');
   }
 }
 
@@ -645,19 +670,19 @@ async function saveMultiCategory(categories) {
     });
   });
   if (updates.length === 0) {
-    toast('No changes to save', 'error');
+    toast('Нет изменений для сохранения', 'error');
     return;
   }
   try {
     await api('config_update', { updates });
-    toast(`Saved ${updates.length} changes`);
+    toast(`Сохранено: ${updates.length} изменений`);
     updates.forEach(u => {
       const input = $('cfg-val-' + u.id);
       if (input) { input.dataset.original = u.value; input.closest('.cfg-row').classList.remove('cfg-changed'); }
     });
     await loadAllConfig();
   } catch (e) {
-    toast('Error: ' + e.message, 'error');
+    toast('Ошибка: ' + e.message, 'error');
   }
 }
 
@@ -669,7 +694,7 @@ async function loadGeoPayouts() {
     const resp = await api('geo_list');
     const data = resp.data || [];
     $('geo-table').innerHTML = `<table>
-      <tr><th>Code</th><th>Country</th><th>Geo ID</th><th>Vertical</th><th>Avg Payout</th><th>Approval</th><th>Max CPL</th><th>Min Bid</th><th>Max Bid</th><th>Active</th><th>Actions</th></tr>
+      <tr><th>Код</th><th>Страна</th><th>Geo ID</th><th>Вертикаль</th><th>Ср. выплата</th><th>Апрув</th><th>Макс CPL</th><th>Мин ставка</th><th>Макс ставка</th><th>Актив</th><th>Действия</th></tr>
       ${data.map(g => `<tr>
         <td><strong>${g.country_code}</strong></td>
         <td>${g.country_name || ''}</td>
@@ -680,8 +705,8 @@ async function loadGeoPayouts() {
         <td><strong>$${fmt(g.max_cpl)}</strong></td>
         <td>$${fmt(g.min_bid,4)}</td>
         <td>$${fmt(g.max_bid,4)}</td>
-        <td>${g.is_active ? '<span class="badge badge-green">Yes</span>' : '<span class="badge badge-red">No</span>'}</td>
-        <td><button class="btn btn-sm btn-outline" onclick="editGeo(${g.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteGeo(${g.id})">Del</button></td>
+        <td>${g.is_active ? '<span class="badge badge-green">Да</span>' : '<span class="badge badge-red">Нет</span>'}</td>
+        <td><button class="btn btn-sm btn-outline" onclick="editGeo(${g.id})">Ред.</button> <button class="btn btn-sm btn-danger" onclick="deleteGeo(${g.id})">Удл.</button></td>
       </tr>`).join('')}
     </table>`;
   } catch (e) {
@@ -691,18 +716,18 @@ async function loadGeoPayouts() {
 
 function showAddGeo() {
   $('modal-content').innerHTML = `
-    <h2>Add Geo Payout</h2>
-    <div class="form-group"><label>Country Code (2 letters)</label><input type="text" id="ng-cc" maxlength="5" placeholder="US"></div>
-    <div class="form-group"><label>Country Name</label><input type="text" id="ng-name" placeholder="United States"></div>
+    <h2>Добавить гео</h2>
+    <div class="form-group"><label>Код страны (2 буквы)</label><input type="text" id="ng-cc" maxlength="5" placeholder="US"></div>
+    <div class="form-group"><label>Название страны</label><input type="text" id="ng-name" placeholder="United States"></div>
     <div class="form-group"><label>Geo ID (Geozo)</label><input type="number" id="ng-geoid" placeholder="240"></div>
-    <div class="form-group"><label>Vertical</label><input type="text" id="ng-vert" value="crypto"></div>
-    <div class="form-group"><label>Avg Payout ($)</label><input type="number" id="ng-payout" step="1" placeholder="1400"></div>
-    <div class="form-group"><label>Avg Approval Rate</label><input type="number" id="ng-approval" step="0.001" placeholder="0.055"></div>
-    <div class="form-group"><label>Min Bid ($)</label><input type="number" id="ng-minbid" step="0.001" value="0.03"></div>
-    <div class="form-group"><label>Max Bid ($)</label><input type="number" id="ng-maxbid" step="0.001" value="0.15"></div>
+    <div class="form-group"><label>Вертикаль</label><input type="text" id="ng-vert" value="crypto"></div>
+    <div class="form-group"><label>Ср. выплата ($)</label><input type="number" id="ng-payout" step="1" placeholder="1400"></div>
+    <div class="form-group"><label>Ср. апрув</label><input type="number" id="ng-approval" step="0.001" placeholder="0.055"></div>
+    <div class="form-group"><label>Мин ставка ($)</label><input type="number" id="ng-minbid" step="0.001" value="0.03"></div>
+    <div class="form-group"><label>Макс ставка ($)</label><input type="number" id="ng-maxbid" step="0.001" value="0.15"></div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="addGeo()">Add</button>
+      <button class="btn btn-outline" onclick="closeModal()">Отмена</button>
+      <button class="btn btn-primary" onclick="addGeo()">Добавить</button>
     </div>`;
   $('modal').classList.add('show');
 }
@@ -720,7 +745,7 @@ async function addGeo() {
       max_bid: parseFloat($('ng-maxbid').value),
     }});
     closeModal();
-    toast('Geo added');
+    toast('Гео добавлено');
     loadGeoPayouts();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -730,19 +755,19 @@ async function editGeo(id) {
   const g = (resp.data || []).find(x => x.id === id);
   if (!g) return;
   $('modal-content').innerHTML = `
-    <h2>Edit ${g.country_code} - ${g.country_name}</h2>
-    <div class="form-group"><label>Country Name</label><input type="text" id="eg-name" value="${g.country_name||''}"></div>
+    <h2>Редактировать ${g.country_code} - ${g.country_name}</h2>
+    <div class="form-group"><label>Название страны</label><input type="text" id="eg-name" value="${g.country_name||''}"></div>
     <div class="form-group"><label>Geo ID</label><input type="number" id="eg-geoid" value="${g.geo_id||''}"></div>
-    <div class="form-group"><label>Vertical</label><input type="text" id="eg-vert" value="${g.vertical||'crypto'}"></div>
-    <div class="form-group"><label>Avg Payout ($)</label><input type="number" id="eg-payout" step="1" value="${g.avg_payout}"></div>
-    <div class="form-group"><label>Avg Approval Rate</label><input type="number" id="eg-approval" step="0.001" value="${g.avg_approval}"></div>
-    <div class="form-group"><label>Min Bid ($)</label><input type="number" id="eg-minbid" step="0.001" value="${g.min_bid}"></div>
-    <div class="form-group"><label>Max Bid ($)</label><input type="number" id="eg-maxbid" step="0.001" value="${g.max_bid}"></div>
-    <div class="form-group"><label>Active</label><select id="eg-active"><option value="true" ${g.is_active?'selected':''}>Yes</option><option value="false" ${!g.is_active?'selected':''}>No</option></select></div>
-    <div class="form-group"><label>Notes</label><textarea id="eg-notes">${g.notes||''}</textarea></div>
+    <div class="form-group"><label>Вертикаль</label><input type="text" id="eg-vert" value="${g.vertical||'crypto'}"></div>
+    <div class="form-group"><label>Ср. выплата ($)</label><input type="number" id="eg-payout" step="1" value="${g.avg_payout}"></div>
+    <div class="form-group"><label>Ср. апрув</label><input type="number" id="eg-approval" step="0.001" value="${g.avg_approval}"></div>
+    <div class="form-group"><label>Мин ставка ($)</label><input type="number" id="eg-minbid" step="0.001" value="${g.min_bid}"></div>
+    <div class="form-group"><label>Макс ставка ($)</label><input type="number" id="eg-maxbid" step="0.001" value="${g.max_bid}"></div>
+    <div class="form-group"><label>Активно</label><select id="eg-active"><option value="true" ${g.is_active?'selected':''}>Да</option><option value="false" ${!g.is_active?'selected':''}>Нет</option></select></div>
+    <div class="form-group"><label>Заметки</label><textarea id="eg-notes">${g.notes||''}</textarea></div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="saveGeo(${id})">Save</button>
+      <button class="btn btn-outline" onclick="closeModal()">Отмена</button>
+      <button class="btn btn-primary" onclick="saveGeo(${id})">Сохранить</button>
     </div>`;
   $('modal').classList.add('show');
 }
@@ -761,16 +786,16 @@ async function saveGeo(id) {
       notes: $('eg-notes').value,
     }});
     closeModal();
-    toast('Geo updated');
+    toast('Гео обновлено');
     loadGeoPayouts();
   } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deleteGeo(id) {
-  if (!confirm('Delete this geo payout?')) return;
+  if (!confirm('Удалить это гео?')) return;
   try {
     await api('geo_delete', { id });
-    toast('Geo deleted');
+    toast('Гео удалено');
     loadGeoPayouts();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -783,7 +808,7 @@ async function loadTeasers(state) {
     const d = await api('teasers', { limit: 100, state: state || undefined });
     const rows = d.data || [];
     $('teasers-table').innerHTML = rows.length ? `<table>
-      <tr><th>ID</th><th>Ad ID</th><th>Title</th><th>State</th><th>Bid</th><th>Warmup</th><th>Esc.Lvl</th><th>Spend</th><th>Today</th><th>Actions</th></tr>
+      <tr><th>ID</th><th>Ad ID</th><th>Заголовок</th><th>Статус</th><th>Ставка</th><th>Прогрев</th><th>Ур.эск.</th><th>Расход</th><th>Сегодня</th><th>Действия</th></tr>
       ${rows.map(t => {
         const stCol = {active:'green',testing:'blue',created:'gray',paused_high_cpl:'orange',stopped:'red',banned:'red',dead:'gray'}[t.state]||'gray';
         return `<tr>
@@ -798,16 +823,16 @@ async function loadTeasers(state) {
           <td style="font-size:11px;">${t.today_spend != null ? '$'+fmt(t.today_spend)+' | '+fmt(t.today_roi,1)+'%' : '-'}</td>
           <td>
             <select style="width:90px;padding:2px 4px;font-size:11px;" onchange="changeState(${t.id},this.value)">
-              <option value="">Change...</option>
-              <option value="active">Active</option>
-              <option value="paused">Paused</option>
-              <option value="stopped">Stopped</option>
-              <option value="testing">Testing</option>
+              <option value="">Сменить...</option>
+              <option value="active">Активный</option>
+              <option value="paused">Пауза</option>
+              <option value="stopped">Стоп</option>
+              <option value="testing">Тест</option>
             </select>
           </td>
         </tr>`;
       }).join('')}
-    </table><div style="padding:8px;color:var(--text2);font-size:12px;">Showing ${rows.length} of ${d.total}</div>` : '<div style="padding:12px;color:var(--text2);">No teasers found</div>';
+    </table><div style="padding:8px;color:var(--text2);font-size:12px;">Показано ${rows.length} из ${d.total}</div>` : '<div style="padding:12px;color:var(--text2);">Тизеры не найдены</div>';
   } catch (e) {
     $('teasers-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
@@ -817,7 +842,7 @@ async function changeState(id, state) {
   if (!state) return;
   try {
     await api('teaser_state', { id, state });
-    toast('State changed to ' + state);
+    toast('Статус изменён на ' + state);
     loadTeasers();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -831,7 +856,7 @@ async function loadBidHistory() {
     const resp = await api('bid_history', { limit: 100, ad_id: adId ? parseInt(adId) : undefined });
     const data = resp.data || [];
     $('bid-history-table').innerHTML = data.length ? `<table>
-      <tr><th>Time</th><th>Ad ID</th><th>Old Bid</th><th>New Bid</th><th>Change</th><th>Rule</th><th>Reason</th></tr>
+      <tr><th>Время</th><th>Ad ID</th><th>Старая ставка</th><th>Новая ставка</th><th>Изменение</th><th>Правило</th><th>Причина</th></tr>
       ${data.map(b => {
         const pct = b.old_bid > 0 ? ((b.new_bid - b.old_bid)/b.old_bid*100).toFixed(1) : '0';
         const col = b.new_bid > b.old_bid ? 'green' : (b.new_bid < b.old_bid ? 'red' : 'gray');
@@ -845,7 +870,7 @@ async function loadBidHistory() {
           <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(b.reason||'').replace(/"/g,'&quot;')}">${b.reason||'-'}</td>
         </tr>`;
       }).join('')}
-    </table>` : '<div style="padding:12px;color:var(--text2);">No bid history</div>';
+    </table>` : '<div style="padding:12px;color:var(--text2);">Нет истории ставок</div>';
   } catch (e) {
     $('bid-history-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
@@ -862,7 +887,7 @@ async function loadAnomalies(resolved) {
     const resp = await api('anomalies', { resolved });
     const data = resp.data || [];
     $('anomalies-table').innerHTML = data.length ? `<table>
-      <tr><th>Time</th><th>Ad ID</th><th>Type</th><th>Severity</th><th>Metric</th><th>Expected</th><th>Actual</th><th>Dev%</th><th>Actions</th></tr>
+      <tr><th>Время</th><th>Ad ID</th><th>Тип</th><th>Критичность</th><th>Метрика</th><th>Ожидалось</th><th>Фактически</th><th>Откл.%</th><th>Действия</th></tr>
       ${data.map(a => `<tr>
         <td style="white-space:nowrap;">${fmtDate(a.detected_at)}</td>
         <td>${a.ad_id||'-'}</td>
@@ -872,9 +897,9 @@ async function loadAnomalies(resolved) {
         <td>${fmt(a.expected_value)}</td>
         <td>${fmt(a.actual_value)}</td>
         <td style="color:var(--red)">${fmt(a.deviation_percent,1)}%</td>
-        <td>${!a.resolved ? `<button class="btn btn-sm btn-success" onclick="resolveAnomaly(${a.id})">Resolve</button>` : `<span class="badge badge-green">Resolved</span>`}</td>
+        <td>${!a.resolved ? `<button class="btn btn-sm btn-success" onclick="resolveAnomaly(${a.id})">Решить</button>` : `<span class="badge badge-green">Решено</span>`}</td>
       </tr>`).join('')}
-    </table>` : '<div style="padding:12px;color:var(--text2);">No anomalies</div>';
+    </table>` : '<div style="padding:12px;color:var(--text2);">Нет аномалий</div>';
   } catch (e) {
     $('anomalies-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
@@ -883,7 +908,7 @@ async function loadAnomalies(resolved) {
 async function resolveAnomaly(id) {
   try {
     await api('anomaly_resolve', { id });
-    toast('Anomaly resolved');
+    toast('Аномалия решена');
     loadAnomalies(false);
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -899,7 +924,7 @@ async function loadBlockLists(type) {
     const resp = await api('block_lists', { type: type || undefined });
     const data = resp.data || [];
     $('block-lists-table').innerHTML = data.length ? `<table>
-      <tr><th>Block ID</th><th>Type</th><th>Ad Group</th><th>Reason</th><th>ROI</th><th>Added</th><th>Actions</th></tr>
+      <tr><th>Block ID</th><th>Тип</th><th>Группа</th><th>Причина</th><th>ROI</th><th>Добавлен</th><th>Действия</th></tr>
       ${data.map(b => `<tr>
         <td><strong>${b.block_id}</strong></td>
         <td><span class="badge badge-${b.list_type==='whitelist'?'green':'red'}">${b.list_type}</span></td>
@@ -907,19 +932,19 @@ async function loadBlockLists(type) {
         <td>${b.reason||'-'}</td>
         <td>${fmt(b.roi_at_decision,1)}%</td>
         <td>${fmtDate(b.added_at)}</td>
-        <td><button class="btn btn-sm btn-danger" onclick="deleteBlockList(${b.id})">Remove</button></td>
+        <td><button class="btn btn-sm btn-danger" onclick="deleteBlockList(${b.id})">Удалить</button></td>
       </tr>`).join('')}
-    </table>` : '<div style="padding:12px;color:var(--text2);">No block list entries</div>';
+    </table>` : '<div style="padding:12px;color:var(--text2);">Блок-листы пусты</div>';
   } catch (e) {
     $('block-lists-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
 }
 
 async function deleteBlockList(id) {
-  if (!confirm('Remove from block list?')) return;
+  if (!confirm('Удалить из блок-листа?')) return;
   try {
     await api('block_list_delete', { id });
-    toast('Removed');
+    toast('Удалено');
     loadBlockLists();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -932,21 +957,21 @@ async function loadScanTargets() {
     const resp = await api('scan_targets');
     const data = resp.data || [];
     $('scan-targets-table').innerHTML = data.length ? `<table>
-      <tr><th>ID</th><th>Site URL</th><th>Country</th><th>Proxy</th><th>Type</th><th>Active</th><th>Notes</th><th>Actions</th></tr>
+      <tr><th>ID</th><th>URL сайта</th><th>Страна</th><th>Прокси</th><th>Тип</th><th>Актив</th><th>Заметки</th><th>Действия</th></tr>
       ${data.map(s => `<tr>
         <td>${s.id}</td>
         <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;">${s.site_url}</td>
         <td>${s.country_code}</td>
         <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">${s.proxy_url||'-'}</td>
         <td>${s.proxy_type||'-'}</td>
-        <td>${s.is_active ? '<span class="badge badge-green">Yes</span>' : '<span class="badge badge-red">No</span>'}</td>
+        <td>${s.is_active ? '<span class="badge badge-green">Да</span>' : '<span class="badge badge-red">Нет</span>'}</td>
         <td>${s.notes||'-'}</td>
         <td>
-          <button class="btn btn-sm btn-outline" onclick="toggleScanTarget(${s.id},${!s.is_active})">${s.is_active?'Disable':'Enable'}</button>
-          <button class="btn btn-sm btn-danger" onclick="deleteScanTarget(${s.id})">Del</button>
+          <button class="btn btn-sm btn-outline" onclick="toggleScanTarget(${s.id},${!s.is_active})">${s.is_active?'Выкл':'Вкл'}</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteScanTarget(${s.id})">Удл.</button>
         </td>
       </tr>`).join('')}
-    </table>` : '<div style="padding:12px;color:var(--text2);">No scan targets</div>';
+    </table>` : '<div style="padding:12px;color:var(--text2);">Нет целей сканирования</div>';
   } catch (e) {
     $('scan-targets-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
@@ -954,15 +979,15 @@ async function loadScanTargets() {
 
 function showAddScanTarget() {
   $('modal-content').innerHTML = `
-    <h2>Add Scan Target</h2>
-    <div class="form-group"><label>Site URL</label><input type="text" id="st-url" placeholder="https://example.com"></div>
-    <div class="form-group"><label>Country Code</label><input type="text" id="st-cc" maxlength="5" placeholder="GB"></div>
-    <div class="form-group"><label>Proxy URL (optional)</label><input type="text" id="st-proxy" placeholder="socks5://user:pass@host:port"></div>
-    <div class="form-group"><label>Proxy Type</label><select id="st-ptype"><option>socks5</option><option>http</option><option>https</option></select></div>
-    <div class="form-group"><label>Notes</label><textarea id="st-notes"></textarea></div>
+    <h2>Добавить цель сканирования</h2>
+    <div class="form-group"><label>URL сайта</label><input type="text" id="st-url" placeholder="https://example.com"></div>
+    <div class="form-group"><label>Код страны</label><input type="text" id="st-cc" maxlength="5" placeholder="GB"></div>
+    <div class="form-group"><label>Прокси URL (опционально)</label><input type="text" id="st-proxy" placeholder="socks5://user:pass@host:port"></div>
+    <div class="form-group"><label>Тип прокси</label><select id="st-ptype"><option>socks5</option><option>http</option><option>https</option></select></div>
+    <div class="form-group"><label>Заметки</label><textarea id="st-notes"></textarea></div>
     <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="addScanTarget()">Add</button>
+      <button class="btn btn-outline" onclick="closeModal()">Отмена</button>
+      <button class="btn btn-primary" onclick="addScanTarget()">Добавить</button>
     </div>`;
   $('modal').classList.add('show');
 }
@@ -977,7 +1002,7 @@ async function addScanTarget() {
       notes: $('st-notes').value || null,
     }});
     closeModal();
-    toast('Scan target added');
+    toast('Цель добавлена');
     loadScanTargets();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -985,16 +1010,16 @@ async function addScanTarget() {
 async function toggleScanTarget(id, active) {
   try {
     await api('scan_target_toggle', { id, active });
-    toast(active ? 'Enabled' : 'Disabled');
+    toast(active ? 'Включено' : 'Выключено');
     loadScanTargets();
   } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deleteScanTarget(id) {
-  if (!confirm('Delete scan target?')) return;
+  if (!confirm('Удалить цель сканирования?')) return;
   try {
     await api('scan_target_delete', { id });
-    toast('Deleted');
+    toast('Удалено');
     loadScanTargets();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -1007,7 +1032,7 @@ async function loadAbTests() {
     const resp = await api('ab_tests');
     const data = resp.data || [];
     $('ab-tests-table').innerHTML = data.length ? `<table>
-      <tr><th>ID</th><th>Test Name</th><th>Landing</th><th>Status</th><th>Gen</th><th>Winner</th><th>Started</th><th>Finished</th></tr>
+      <tr><th>ID</th><th>Название теста</th><th>Лендинг</th><th>Статус</th><th>Поколение</th><th>Победитель</th><th>Начат</th><th>Завершён</th></tr>
       ${data.map(t => `<tr>
         <td>${t.id}</td>
         <td>${t.test_name}</td>
@@ -1018,7 +1043,7 @@ async function loadAbTests() {
         <td>${fmtDate(t.started_at)}</td>
         <td>${fmtDate(t.finished_at)}</td>
       </tr>`).join('')}
-    </table>` : '<div style="padding:12px;color:var(--text2);">No A/B tests</div>';
+    </table>` : '<div style="padding:12px;color:var(--text2);">Нет A/B тестов</div>';
   } catch (e) {
     $('ab-tests-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
@@ -1033,32 +1058,32 @@ async function loadEmergencyCtrl() {
     const data = resp.data || [];
     const active = data.find(e => e.is_active);
     $('emg-status').innerHTML = active
-      ? `<div class="alert-banner alert-danger">EMERGENCY ACTIVE: ${active.trigger_reason} (auto-off: ${fmtDate(active.auto_deactivate_at)})</div>`
-      : '<div class="alert-banner alert-success">No active emergency</div>';
+      ? `<div class="alert-banner alert-danger">АВАРИЙНЫЙ РЕЖИМ: ${active.trigger_reason} (автоотключение: ${fmtDate(active.auto_deactivate_at)})</div>`
+      : '<div class="alert-banner alert-success">Аварийный режим не активен</div>';
     $('emg-history').innerHTML = data.length ? `<table>
-      <tr><th>Active</th><th>Reason</th><th>Triggered By</th><th>Activated</th><th>Deactivated</th><th>Auto-Off</th></tr>
+      <tr><th>Активен</th><th>Причина</th><th>Кем</th><th>Включён</th><th>Выключен</th><th>Автоотключение</th></tr>
       ${data.map(e => `<tr>
-        <td>${e.is_active ? '<span class="badge badge-red">YES</span>' : '<span class="badge badge-gray">No</span>'}</td>
+        <td>${e.is_active ? '<span class="badge badge-red">ДА</span>' : '<span class="badge badge-gray">Нет</span>'}</td>
         <td>${e.trigger_reason||'-'}</td>
         <td>${e.triggered_by||'-'}</td>
         <td>${fmtDate(e.activated_at)}</td>
         <td>${fmtDate(e.deactivated_at)}</td>
         <td>${fmtDate(e.auto_deactivate_at)}</td>
       </tr>`).join('')}
-    </table>` : '<div style="padding:12px;color:var(--text2);">No emergency history</div>';
+    </table>` : '<div style="padding:12px;color:var(--text2);">Нет истории аварийных режимов</div>';
   } catch (e) {
     $('emg-history').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
 }
 
 async function activateEmergency() {
-  if (!confirm('ACTIVATE EMERGENCY MODE? All bid changes will be frozen!')) return;
+  if (!confirm('ВКЛЮЧИТЬ АВАРИЙНЫЙ РЕЖИМ? Все изменения ставок будут заморожены!')) return;
   try {
     await api('emergency_activate', {
       reason: $('emg-reason').value,
       hours: parseFloat($('emg-hours').value),
     });
-    toast('Emergency ACTIVATED', 'error');
+    toast('Аварийный режим ВКЛЮЧЁН', 'error');
     loadEmergencyCtrl();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -1066,7 +1091,7 @@ async function activateEmergency() {
 async function deactivateEmergency() {
   try {
     await api('emergency_deactivate');
-    toast('Emergency deactivated');
+    toast('Аварийный режим отключён');
     loadEmergencyCtrl();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -1076,14 +1101,14 @@ async function activateConservative() {
     await api('conservative_activate', {
       minutes: parseInt($('cons-minutes').value),
     });
-    toast('Conservative mode activated');
+    toast('Консервативный режим включён');
   } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deactivateConservative() {
   try {
     await api('conservative_deactivate');
-    toast('Conservative mode deactivated');
+    toast('Консервативный режим отключён');
   } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -1095,7 +1120,7 @@ async function loadLocks() {
     const resp = await api('locks');
     const data = resp.data || [];
     $('locks-table').innerHTML = data.length ? `<table>
-      <tr><th>Lock Name</th><th>Locked By</th><th>Locked At</th><th>Expires</th><th>Status</th><th>Actions</th></tr>
+      <tr><th>Блокировка</th><th>Кем</th><th>Создана</th><th>Истекает</th><th>Статус</th><th>Действия</th></tr>
       ${data.map(l => {
         const expired = new Date(l.expires_at) < new Date();
         return `<tr>
@@ -1103,21 +1128,21 @@ async function loadLocks() {
           <td>${l.locked_by}</td>
           <td>${fmtDate(l.locked_at)}</td>
           <td>${fmtDate(l.expires_at)}</td>
-          <td>${expired ? '<span class="badge badge-gray">Expired</span>' : '<span class="badge badge-yellow">Active</span>'}</td>
-          <td><button class="btn btn-sm btn-danger" onclick="deleteLock('${l.lock_name}')">Release</button></td>
+          <td>${expired ? '<span class="badge badge-gray">Истекла</span>' : '<span class="badge badge-yellow">Активна</span>'}</td>
+          <td><button class="btn btn-sm btn-danger" onclick="deleteLock('${l.lock_name}')">Снять</button></td>
         </tr>`;
       }).join('')}
-    </table>` : '<div style="padding:12px;color:var(--text2);">No active locks</div>';
+    </table>` : '<div style="padding:12px;color:var(--text2);">Нет активных блокировок</div>';
   } catch (e) {
     $('locks-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
 }
 
 async function deleteLock(name) {
-  if (!confirm('Release lock: ' + name + '?')) return;
+  if (!confirm('Снять блокировку: ' + name + '?')) return;
   try {
     await api('lock_delete', { name });
-    toast('Lock released');
+    toast('Блокировка снята');
     loadLocks();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -1130,7 +1155,7 @@ async function loadDailyPnl() {
     const resp = await api('daily_pnl');
     const data = resp.data || [];
     $('pnl-table').innerHTML = data.length ? `<table>
-      <tr><th>Date</th><th>Spend</th><th>Revenue</th><th>Profit</th><th>ROI</th><th>Best Campaign</th><th>Created</th><th>Banned</th><th>Stopped</th></tr>
+      <tr><th>Дата</th><th>Расход</th><th>Доход</th><th>Прибыль</th><th>ROI</th><th>Лучшая кампания</th><th>Созданы</th><th>Забанены</th><th>Остановлены</th></tr>
       ${data.map(p => `<tr>
         <td><strong>${p.date ? p.date.split('T')[0] : '-'}</strong></td>
         <td>$${fmt(p.total_spend)}</td>
@@ -1142,7 +1167,7 @@ async function loadDailyPnl() {
         <td>${p.teasers_banned||0}</td>
         <td>${p.teasers_stopped||0}</td>
       </tr>`).join('')}
-    </table>` : '<div style="padding:12px;color:var(--text2);">No P&L data yet</div>';
+    </table>` : '<div style="padding:12px;color:var(--text2);">Нет данных P&L</div>';
   } catch (e) {
     $('pnl-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
@@ -1156,9 +1181,50 @@ $('modal').addEventListener('click', e => { if (e.target === $('modal')) closeMo
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 // ============================================
+// AUTH
+// ============================================
+// Пароль задаётся здесь (SHA-256 хеш). По умолчанию: geozo2024
+// Сгенерировать новый: crypto.subtle.digest('SHA-256', new TextEncoder().encode('your_password')).then(b => console.log([...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')))
+const PASSWORD_HASH = 'a0e3a3c48af3beaf3f4ef2adae02ed33987564e498fc65e98a7e3f6a22b0b699';
+
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+async function doLogin() {
+  const pwd = $('login-password').value;
+  const hash = await sha256(pwd);
+  if (hash === PASSWORD_HASH) {
+    sessionStorage.setItem('auth', hash);
+    showApp();
+  } else {
+    $('login-error').style.display = 'block';
+    $('login-password').value = '';
+    $('login-password').focus();
+  }
+}
+
+function showApp() {
+  $('login-screen').style.display = 'none';
+  $('app').style.display = 'flex';
+  loadDashboard();
+}
+
+function logout() {
+  sessionStorage.removeItem('auth');
+  $('app').style.display = 'none';
+  $('login-screen').style.display = 'flex';
+  $('login-password').value = '';
+  $('login-error').style.display = 'none';
+}
+
+// ============================================
 // INIT
 // ============================================
-loadDashboard();
+if (sessionStorage.getItem('auth') === PASSWORD_HASH) {
+  showApp();
+}
 </script>
 </body>
 </html>
