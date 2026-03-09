@@ -199,6 +199,7 @@ textarea { resize:vertical; min-height:60px; }
     <div class="nav-item" data-section="anomalies">Аномалии</div>
     <div class="nav-item" data-section="block-lists">Блок-листы</div>
     <div class="nav-item" data-section="scan-targets">Цели сканирования</div>
+    <div class="nav-item" data-section="position-tracking">Трекинг позиций</div>
     <div class="nav-item" data-section="ab-tests">A/B Тесты</div>
     <div class="nav-section">Управление</div>
     <div class="nav-item" data-section="emergency-ctrl">Экстренный режим</div>
@@ -376,6 +377,15 @@ textarea { resize:vertical; min-height:60px; }
       </div>
     </div>
 
+    <!-- POSITION TRACKING -->
+    <div class="section" id="sec-position-tracking">
+      <h2 style="margin-bottom:4px;font-size:20px;">Трекинг позиций</h2>
+      <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Результаты сканирования позиций тизеров на площадках. Показывает где именно отображаются ваши объявления и сколько конкурентов в блоке.</p>
+      <div class="card">
+        <div class="table-wrap" id="position-tracking-table"><div class="loading">Загрузка...</div></div>
+      </div>
+    </div>
+
     <!-- AB TESTS -->
     <div class="section" id="sec-ab-tests">
       <h2 style="margin-bottom:4px;font-size:20px;">A/B Тесты</h2>
@@ -501,6 +511,7 @@ function loadSection(sec) {
     'anomalies': () => loadAnomalies(false),
     'block-lists': () => loadBlockLists(),
     'scan-targets': loadScanTargets,
+    'position-tracking': loadPositionTracking,
     'ab-tests': loadAbTests,
     'emergency-ctrl': loadEmergencyCtrl,
     'locks': loadLocks,
@@ -1049,6 +1060,39 @@ async function deleteScanTarget(id) {
     toast('Удалено');
     loadScanTargets();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+// ============================================
+// POSITION TRACKING
+// ============================================
+async function loadPositionTracking() {
+  try {
+    const resp = await api('position_tracking');
+    const data = resp.data || [];
+    $('position-tracking-table').innerHTML = data.length ? `<table>
+      <tr><th>ID</th><th>URL сайта</th><th>Ad ID</th><th>Тизер</th><th>Позиция</th><th>Всего в блоке</th><th>Конкуренты</th><th>Сканировано</th></tr>
+      ${data.map(r => {
+        const competitors = r.competitor_titles;
+        let compText = '-';
+        if (competitors) {
+          const arr = typeof competitors === 'string' ? JSON.parse(competitors) : (Array.isArray(competitors) ? competitors : []);
+          compText = arr.length ? arr.slice(0,3).join(', ') + (arr.length > 3 ? ` (+${arr.length-3})` : '') : '-';
+        }
+        return `<tr>
+          <td>${r.id}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${r.site_url}</td>
+          <td>${r.ad_id || '-'}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${r.teaser_title || '-'}</td>
+          <td><span class="badge ${r.position <= 2 ? 'badge-green' : r.position <= 5 ? 'badge-yellow' : 'badge-red'}">${r.position || '-'}</span></td>
+          <td>${r.total_teasers_in_block || '-'}</td>
+          <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">${compText}</td>
+          <td>${r.scanned_at ? new Date(r.scanned_at).toLocaleString('ru-RU') : '-'}</td>
+        </tr>`;
+      }).join('')}
+    </table>` : '<div style="padding:12px;color:var(--text2);">Нет данных о позициях. Данные появятся после первого запуска сканера позиций.</div>';
+  } catch (e) {
+    $('position-tracking-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
 }
 
 // ============================================
