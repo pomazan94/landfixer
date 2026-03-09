@@ -517,4 +517,4 @@ CREATE TABLE admin_auth (
 
 -- Пароль по умолчанию: geozo2024
 INSERT INTO admin_auth (password_hash)
-VALUES ('a0e3a3c48af3beaf3f4ef2adae02ed33987564e498fc65e98a7e3f6a22b0b699');
+VALUES ('0ea97442cce68ac959b508f79e64e5943ab7d48ce6faab8905da3baf7145183d');
