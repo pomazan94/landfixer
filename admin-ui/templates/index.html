@@ -180,6 +180,9 @@ textarea { resize:vertical; min-height:60px; }
       <span>GEOZO Bot<span style="display:block;font-size:11px;font-weight:normal;color:var(--text2)">Панель управления</span></span>
       <span onclick="logout()" style="cursor:pointer;font-size:12px;color:var(--text2);font-weight:normal;" title="Выйти">&#x2716;</span>
     </h1>
+    <div style="padding:0 16px 8px;border-bottom:1px solid var(--border);margin-bottom:8px;">
+      <button class="btn btn-sm btn-outline" onclick="showChangePassword()" style="width:100%;font-size:11px;">Сменить пароль</button>
+    </div>
     <div class="nav-item active" data-section="dashboard">Дашборд</div>
     <div class="nav-section">Конфигурация</div>
     <div class="nav-item" data-section="smart-bidder">Умный биддер</div>
@@ -1181,12 +1184,8 @@ $('modal').addEventListener('click', e => { if (e.target === $('modal')) closeMo
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 // ============================================
-// AUTH
+// AUTH (пароль хранится в БД, таблица admin_auth)
 // ============================================
-// Пароль задаётся здесь (SHA-256 хеш). По умолчанию: geozo2024
-// Сгенерировать новый: crypto.subtle.digest('SHA-256', new TextEncoder().encode('your_password')).then(b => console.log([...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')))
-const PASSWORD_HASH = 'a0e3a3c48af3beaf3f4ef2adae02ed33987564e498fc65e98a7e3f6a22b0b699';
-
 async function sha256(text) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, '0')).join('');
@@ -1194,14 +1193,22 @@ async function sha256(text) {
 
 async function doLogin() {
   const pwd = $('login-password').value;
+  if (!pwd) return;
   const hash = await sha256(pwd);
-  if (hash === PASSWORD_HASH) {
-    sessionStorage.setItem('auth', hash);
-    showApp();
-  } else {
+  try {
+    const resp = await api('login', { password_hash: hash });
+    const result = (resp.data && resp.data[0] && resp.data[0].result) || resp.result;
+    if (result === 'ok') {
+      sessionStorage.setItem('auth', hash);
+      showApp();
+    } else {
+      $('login-error').style.display = 'block';
+      $('login-password').value = '';
+      $('login-password').focus();
+    }
+  } catch (e) {
+    $('login-error').textContent = 'Ошибка подключения';
     $('login-error').style.display = 'block';
-    $('login-password').value = '';
-    $('login-password').focus();
   }
 }
 
@@ -1219,12 +1226,55 @@ function logout() {
   $('login-error').style.display = 'none';
 }
 
-// ============================================
-// INIT
-// ============================================
-if (sessionStorage.getItem('auth') === PASSWORD_HASH) {
-  showApp();
+function showChangePassword() {
+  $('modal-content').innerHTML = `
+    <h2>Сменить пароль</h2>
+    <div class="form-group"><label>Текущий пароль</label><input type="password" id="cp-old"></div>
+    <div class="form-group"><label>Новый пароль</label><input type="password" id="cp-new"></div>
+    <div class="form-group"><label>Повторите новый пароль</label><input type="password" id="cp-confirm"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Отмена</button>
+      <button class="btn btn-primary" onclick="doChangePassword()">Сменить</button>
+    </div>`;
+  $('modal').classList.add('show');
 }
+
+async function doChangePassword() {
+  const oldPwd = $('cp-old').value;
+  const newPwd = $('cp-new').value;
+  const confirm = $('cp-confirm').value;
+  if (!oldPwd || !newPwd) { toast('Заполните все поля', 'error'); return; }
+  if (newPwd !== confirm) { toast('Пароли не совпадают', 'error'); return; }
+  if (newPwd.length < 4) { toast('Минимум 4 символа', 'error'); return; }
+  const oldHash = await sha256(oldPwd);
+  const newHash = await sha256(newPwd);
+  try {
+    const resp = await api('change_password', { old_hash: oldHash, new_hash: newHash });
+    const result = (resp.data && resp.data[0] && resp.data[0].result) || resp.result;
+    if (result === 'ok') {
+      sessionStorage.setItem('auth', newHash);
+      closeModal();
+      toast('Пароль изменён');
+    } else {
+      toast('Неверный текущий пароль', 'error');
+    }
+  } catch (e) { toast('Ошибка: ' + e.message, 'error'); }
+}
+
+// ============================================
+// INIT — проверяем сессию через API
+// ============================================
+(async () => {
+  const saved = sessionStorage.getItem('auth');
+  if (saved) {
+    try {
+      const resp = await api('login', { password_hash: saved });
+      const result = (resp.data && resp.data[0] && resp.data[0].result) || resp.result;
+      if (result === 'ok') { showApp(); return; }
+    } catch (e) {}
+    sessionStorage.removeItem('auth');
+  }
+})();
 </script>
 </body>
 </html>

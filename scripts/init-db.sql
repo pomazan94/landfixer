@@ -505,3 +505,16 @@ INSERT INTO geo_payouts (country_code, country_name, geo_id, vertical, avg_payou
     ('AU', 'Australia',       13,  'crypto', 1500, 0.055, 0.05, 0.15),
     ('CA', 'Canada',          38,  'crypto', 1400, 0.055, 0.05, 0.15),
     ('NZ', 'New Zealand',     157, 'crypto', 1400, 0.055, 0.04, 0.12);
+
+-- ============================================
+-- Admin Auth
+-- ============================================
+CREATE TABLE admin_auth (
+    id          SERIAL PRIMARY KEY,
+    password_hash TEXT NOT NULL,
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Пароль по умолчанию: geozo2024
+INSERT INTO admin_auth (password_hash)
+VALUES ('a0e3a3c48af3beaf3f4ef2adae02ed33987564e498fc65e98a7e3f6a22b0b699');
