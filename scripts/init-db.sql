@@ -333,6 +333,131 @@ CREATE TABLE bid_rollback_snapshots (
 );
 
 -- ============================================
+-- BOT CONFIG (all constants editable via UI)
+-- ============================================
+CREATE TABLE bot_config (
+    id SERIAL PRIMARY KEY,
+    category VARCHAR(50) NOT NULL,
+    key VARCHAR(100) NOT NULL,
+    value TEXT NOT NULL,
+    value_type VARCHAR(20) DEFAULT 'number',
+    label VARCHAR(200),
+    description TEXT,
+    min_value TEXT,
+    max_value TEXT,
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(category, key)
+);
+
+-- Smart Bidder constants
+INSERT INTO bot_config (category, key, value, value_type, label, description, min_value, max_value) VALUES
+    ('smart_bidder', 'max_bid_changes_per_day', '3', 'integer', 'Max bid changes per day', 'Maximum number of bid changes per ad per day', '1', '20'),
+    ('smart_bidder', 'min_cooldown_hours', '2', 'number', 'Min cooldown hours', 'Minimum hours between bid changes for the same ad', '0.5', '24'),
+    ('smart_bidder', 'max_cumulative_change_down', '0.5', 'number', 'Max cumulative decrease', 'Max cumulative bid decrease per day (0.5 = 50%)', '0.1', '1.0'),
+    ('smart_bidder', 'max_cumulative_change_up', '2.0', 'number', 'Max cumulative increase', 'Max cumulative bid increase per day (2.0 = 2x)', '1.0', '10.0'),
+    ('smart_bidder', 'min_spend_for_decision', '200', 'number', 'Min spend for decision ($)', 'Minimum spend before making bid decisions', '10', '2000'),
+    ('smart_bidder', 'min_spend_for_stop', '600', 'number', 'Min spend for stop ($)', 'Minimum spend before considering STOP', '50', '5000'),
+    ('smart_bidder', 'min_clicks_for_stop', '500', 'integer', 'Min clicks for stop', 'Minimum clicks before allowing STOP action', '50', '5000'),
+    ('smart_bidder', 'stats_lookback_days', '3', 'integer', 'Stats lookback days', 'Number of days to look back for statistics', '1', '30'),
+    ('smart_bidder', 'api_fetch_count', '500', 'integer', 'API fetch count', 'Number of ads to fetch from Geozo API per call', '50', '1000'),
+    -- Escalation levels
+    ('smart_bidder', 'escalation_l1_multiplier', '0.92', 'number', 'L1: Soft correction multiplier', 'Bid multiplier for Level 1 escalation (-8%)', '0.5', '0.99'),
+    ('smart_bidder', 'escalation_l1_cooldown', '2', 'number', 'L1: Cooldown hours', 'Hours cooldown after L1 correction', '1', '24'),
+    ('smart_bidder', 'escalation_l2_multiplier', '0.85', 'number', 'L2: Moderate correction multiplier', 'Bid multiplier for Level 2 escalation (-15%)', '0.5', '0.99'),
+    ('smart_bidder', 'escalation_l2_cooldown', '4', 'number', 'L2: Cooldown hours', 'Hours cooldown after L2 correction', '1', '24'),
+    ('smart_bidder', 'escalation_l3_multiplier', '0.75', 'number', 'L3: Aggressive correction multiplier', 'Bid multiplier for Level 3 escalation (-25%)', '0.3', '0.99'),
+    ('smart_bidder', 'escalation_l3_cooldown', '6', 'number', 'L3: Cooldown hours', 'Hours cooldown after L3 correction', '1', '48'),
+    ('smart_bidder', 'escalation_l2_cpl_threshold', '1.3', 'number', 'L2: CPL threshold multiplier', 'Trigger L2 when CPL > maxCPL * this value', '1.0', '5.0'),
+    ('smart_bidder', 'escalation_l3_cpl_threshold', '2.0', 'number', 'L3: CPL threshold multiplier', 'Trigger L3 when CPL > maxCPL * this value', '1.5', '10.0'),
+    ('smart_bidder', 'escalation_max_failures', '3', 'integer', 'Max escalation failures', 'Failed attempts before STOP', '1', '10'),
+    -- Profitable logic
+    ('smart_bidder', 'profitable_raise_high_pct', '0.15', 'number', 'Profitable raise % (high)', 'Raise bid by this % when very profitable (CPL < 0.5*maxCPL)', '0.05', '0.50'),
+    ('smart_bidder', 'profitable_raise_high_cap', '0.30', 'number', 'Profitable raise cap (high)', 'Cap raise at this % for very profitable', '0.10', '1.0'),
+    ('smart_bidder', 'profitable_raise_good_pct', '0.10', 'number', 'Profitable raise % (good)', 'Raise bid by this % when good (CPL < 0.75*maxCPL)', '0.05', '0.50'),
+    ('smart_bidder', 'profitable_raise_good_cap', '0.20', 'number', 'Profitable raise cap (good)', 'Cap raise at this % for good CPL', '0.05', '0.50'),
+    ('smart_bidder', 'profitable_min_leads_high', '3', 'integer', 'Min leads for high raise', 'Minimum leads to qualify for high raise', '1', '50'),
+    ('smart_bidder', 'profitable_min_leads_good', '2', 'integer', 'Min leads for good raise', 'Minimum leads to qualify for good raise', '1', '50'),
+    ('smart_bidder', 'profitable_cpl_ratio_high', '0.5', 'number', 'CPL ratio for high profit', 'CPL <= maxCPL * this ratio = very profitable', '0.1', '1.0'),
+    ('smart_bidder', 'profitable_cpl_ratio_good', '0.75', 'number', 'CPL ratio for good profit', 'CPL <= maxCPL * this ratio = good profit', '0.3', '1.0'),
+    -- Time multipliers
+    ('time_multipliers', 'evening_start', '19', 'integer', 'Evening start hour', 'Hour when evening (cheap auction) starts', '0', '23'),
+    ('time_multipliers', 'evening_end', '2', 'integer', 'Evening end hour', 'Hour when evening period ends', '0', '23'),
+    ('time_multipliers', 'evening_multiplier', '1.5', 'number', 'Evening multiplier', 'Bid multiplier during evening (cheap auction)', '0.5', '3.0'),
+    ('time_multipliers', 'night_start', '2', 'integer', 'Night start hour', 'Hour when night (low traffic) starts', '0', '23'),
+    ('time_multipliers', 'night_end', '8', 'integer', 'Night end hour', 'Hour when night period ends', '0', '23'),
+    ('time_multipliers', 'night_multiplier', '0.7', 'number', 'Night multiplier', 'Bid multiplier during night', '0.1', '3.0'),
+    ('time_multipliers', 'morning_start', '8', 'integer', 'Morning start hour', 'Hour when morning (expensive auction) starts', '0', '23'),
+    ('time_multipliers', 'morning_end', '12', 'integer', 'Morning end hour', 'Hour when morning period ends', '0', '23'),
+    ('time_multipliers', 'morning_multiplier', '0.8', 'number', 'Morning multiplier', 'Bid multiplier during morning', '0.1', '3.0'),
+    ('time_multipliers', 'afternoon_multiplier', '1.0', 'number', 'Afternoon multiplier', 'Bid multiplier during afternoon (default)', '0.1', '3.0'),
+    -- Warmup phases
+    ('warmup', 'phase0_max_spend', '10', 'number', 'Phase 0 max spend ($)', 'Max spend for Phase 0 (set to max bid)', '1', '100'),
+    ('warmup', 'phase1_max_spend', '100', 'number', 'Phase 1 max spend ($)', 'Max spend for Phase 1 (collect data)', '10', '500'),
+    ('warmup', 'phase2_max_spend', '300', 'number', 'Phase 2 max spend ($)', 'Max spend for Phase 2 (evaluate)', '50', '1000'),
+    ('warmup', 'phase1_dead_clicks', '10', 'integer', 'Phase 1 dead clicks threshold', 'Clicks below this with shows > threshold = dead creative', '1', '100'),
+    ('warmup', 'phase1_dead_shows', '3000', 'integer', 'Phase 1 dead shows threshold', 'Shows above this with clicks below threshold = dead creative', '500', '50000'),
+    ('warmup', 'phase2_low_ctr', '0.1', 'number', 'Phase 2 low CTR (%)', 'CTR below this in Phase 2 = stop', '0.01', '1.0'),
+    ('warmup', 'phase2_min_shows', '5000', 'integer', 'Phase 2 min shows', 'Minimum shows to evaluate CTR in Phase 2', '1000', '50000'),
+    -- ROI classification thresholds
+    ('roi_classification', 'profit_high_threshold', '100', 'number', 'PROFIT_HIGH ROI threshold (%)', 'ROI above this = PROFIT_HIGH', '50', '500'),
+    ('roi_classification', 'profit_threshold', '50', 'number', 'PROFIT ROI threshold (%)', 'ROI above this = PROFIT', '10', '200'),
+    ('roi_classification', 'losing_threshold', '-30', 'number', 'LOSING ROI threshold (%)', 'ROI below 0 but above this = LOSING', '-90', '0'),
+    ('roi_classification', 'burning_threshold', '-50', 'number', 'BURNING ROI threshold (%)', 'ROI below LOSING but above this = BURNING', '-99', '0'),
+    ('roi_classification', 'critical_min_spend', '3', 'number', 'CRITICAL min spend ($)', 'Minimum spend for CRITICAL status', '0.5', '50'),
+    -- Emergency controller
+    ('emergency', 'daily_budget', '200', 'number', 'Daily budget ($)', 'Maximum daily spend before emergency', '10', '10000'),
+    ('emergency', 'min_balance_critical', '5', 'number', 'Critical balance ($)', 'Balance below this = EMERGENCY STOP', '1', '100'),
+    ('emergency', 'min_balance_warning', '20', 'number', 'Warning balance ($)', 'Balance below this = WARNING', '5', '200'),
+    ('emergency', 'max_bid_changes_per_hour', '30', 'integer', 'Max bid changes per hour', 'Bid changes above this = suspicious activity', '5', '200'),
+    ('emergency', 'critical_anomaly_threshold', '3', 'integer', 'Critical anomaly threshold', 'Number of unresolved critical anomalies to trigger emergency', '1', '20'),
+    ('emergency', 'budget_emergency_pct', '95', 'number', 'Budget emergency % ', 'Budget usage % to trigger EMERGENCY', '50', '100'),
+    ('emergency', 'budget_conservative_pct', '80', 'number', 'Budget conservative %', 'Budget usage % to trigger conservative mode', '30', '95'),
+    ('emergency', 'min_hours_remaining_warning', '4', 'number', 'Min hours remaining warning', 'Hours remaining below this = warning', '1', '24'),
+    ('emergency', 'emergency_auto_deactivate_hours', '2', 'number', 'Emergency auto-deactivate hours', 'Hours after which emergency auto-deactivates', '0.5', '24'),
+    ('emergency', 'conservative_lock_minutes', '30', 'integer', 'Conservative lock minutes', 'Duration of conservative mode lock', '5', '120'),
+    ('emergency', 'emergency_stop_batch_size', '50', 'integer', 'Emergency stop batch size', 'Number of ads per batch in emergency stop', '10', '500'),
+    -- Balance watchdog
+    ('balance', 'min_balance_alert', '10', 'number', 'Min balance alert ($)', 'Alert when balance drops below this', '1', '100'),
+    ('balance', 'low_hours_warning', '6', 'number', 'Low hours warning', 'Alert when hours remaining below this', '1', '24'),
+    -- Anomaly detector
+    ('anomaly', 'std_dev_threshold', '3', 'number', 'Std dev threshold', 'Number of standard deviations for anomaly detection', '1', '10'),
+    ('anomaly', 'rolling_avg_days', '7', 'integer', 'Rolling average days', 'Number of days for rolling average', '3', '30'),
+    -- Position
+    ('position', 'top_position_threshold', '2', 'integer', 'Top position threshold', 'Position <= this is considered TOP', '1', '5'),
+    ('position', 'good_position_threshold', '5', 'integer', 'Good position threshold', 'Position <= this is considered GOOD', '1', '10'),
+    ('position', 'lookback_hours', '24', 'integer', 'Position lookback hours', 'Hours to look back for position data', '1', '72'),
+    -- Workflow schedules (minutes)
+    ('schedules', 'stats_puller_interval', '15', 'integer', 'Stats puller interval (min)', 'How often to pull stats from Geozo', '5', '60'),
+    ('schedules', 'balance_watchdog_interval', '60', 'integer', 'Balance watchdog interval (min)', 'How often to check balance', '15', '180'),
+    ('schedules', 'smart_bidder_interval', '30', 'integer', 'Smart bidder interval (min)', 'How often to run bid optimization', '15', '120'),
+    ('schedules', 'budget_pacer_interval', '120', 'integer', 'Budget pacer interval (min)', 'How often to run budget pacing', '30', '360'),
+    ('schedules', 'image_factory_interval', '60', 'integer', 'Image factory interval (min)', 'How often to generate images', '30', '360'),
+    ('schedules', 'uploader_interval', '60', 'integer', 'Uploader interval (min)', 'How often to upload teasers', '30', '360'),
+    ('schedules', 'ab_tester_interval', '240', 'integer', 'A/B tester interval (min)', 'How often to evaluate A/B tests', '60', '720'),
+    ('schedules', 'anomaly_detector_interval', '60', 'integer', 'Anomaly detector interval (min)', 'How often to run anomaly detection', '15', '180'),
+    ('schedules', 'position_scanner_interval', '120', 'integer', 'Position scanner interval (min)', 'How often to scan ad positions', '60', '360'),
+    ('schedules', 'recovery_engine_interval', '240', 'integer', 'Recovery engine interval (min)', 'How often to attempt recovery', '60', '720'),
+    ('schedules', 'bid_outcome_interval', '60', 'integer', 'Bid outcome checker interval (min)', 'How often to check bid expectations', '30', '180'),
+    ('schedules', 'emergency_interval', '15', 'integer', 'Emergency controller interval (min)', 'How often to run emergency checks', '5', '60'),
+    ('schedules', 'rollback_engine_interval', '60', 'integer', 'Rollback engine interval (min)', 'How often to check for rollbacks', '30', '180'),
+    -- General defaults
+    ('general', 'default_bid', '0.01', 'number', 'Default bid ($)', 'Default starting bid for new ads', '0.001', '1.0'),
+    ('general', 'max_bid_ceiling', '0.10', 'number', 'Max bid ceiling ($)', 'Global maximum bid ceiling', '0.01', '1.0'),
+    ('general', 'timezone', 'Europe/Moscow', 'string', 'Timezone', 'System timezone', NULL, NULL),
+    ('general', 'telegram_chat_id', '591828204', 'string', 'Telegram Chat ID', 'Telegram chat for notifications', NULL, NULL),
+    -- Dead creative detection
+    ('dead_creative', 'min_shows_no_clicks', '5000', 'integer', 'Min shows (no clicks)', 'Shows threshold with minimal clicks to consider dead', '500', '50000'),
+    ('dead_creative', 'max_clicks_dead', '10', 'integer', 'Max clicks (dead)', 'If clicks below this with shows above threshold = dead', '1', '100'),
+    -- Rollback settings
+    ('rollback', 'threshold_hours', '2', 'integer', 'Rollback threshold hours', 'Hours after which to check for rollback', '1', '12'),
+    ('rollback', 'measurement_window_hours', '4', 'integer', 'Measurement window hours', 'Window for measuring bid change outcomes', '1', '24'),
+    -- Default geo payout (fallback)
+    ('default_payout', 'avg_payout', '1350', 'number', 'Default avg payout ($)', 'Fallback average payout for unknown geos', '100', '5000'),
+    ('default_payout', 'avg_approval', '0.055', 'number', 'Default avg approval rate', 'Fallback approval rate for unknown geos', '0.01', '0.50'),
+    ('default_payout', 'min_bid', '0.01', 'number', 'Default min bid ($)', 'Fallback minimum bid for unknown geos', '0.001', '0.50'),
+    ('default_payout', 'max_bid', '0.15', 'number', 'Default max bid ($)', 'Fallback maximum bid for unknown geos', '0.01', '1.0');
+
+-- ============================================
 -- INDEXES
 -- ============================================
 CREATE INDEX idx_ad_stats_ad_date ON ad_stats(ad_id, date);

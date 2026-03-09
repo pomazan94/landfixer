@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GEOZO Bot - Admin Panel</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --bg2: #1a1d27;
+  --bg3: #242833;
+  --border: #2e3345;
+  --text: #e1e4ed;
+  --text2: #8b90a0;
+  --accent: #5b8af5;
+  --accent2: #4a7ae5;
+  --green: #34d399;
+  --red: #f87171;
+  --orange: #fb923c;
+  --yellow: #fbbf24;
+  --purple: #a78bfa;
+  --radius: 8px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:var(--bg); color:var(--text); font-size:14px; }
+a { color:var(--accent); text-decoration:none; }
+
+/* Layout */
+.app { display:flex; min-height:100vh; }
+.sidebar { width:240px; background:var(--bg2); border-right:1px solid var(--border); padding:16px 0; position:fixed; height:100vh; overflow-y:auto; z-index:100; }
+.sidebar h1 { font-size:16px; padding:0 16px 16px; border-bottom:1px solid var(--border); margin-bottom:8px; color:var(--accent); }
+.sidebar h1 span { color:var(--text2); font-weight:normal; font-size:11px; display:block; }
+.nav-item { display:flex; align-items:center; gap:8px; padding:10px 16px; cursor:pointer; color:var(--text2); transition:.15s; font-size:13px; }
+.nav-item:hover { background:var(--bg3); color:var(--text); }
+.nav-item.active { background:var(--accent); color:#fff; }
+.nav-section { padding:8px 16px 4px; font-size:11px; text-transform:uppercase; color:var(--text2); letter-spacing:1px; margin-top:8px; }
+.main { margin-left:240px; flex:1; padding:24px; }
+
+/* Cards */
+.card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:16px; }
+.card h2 { font-size:15px; margin-bottom:12px; color:var(--text); display:flex; align-items:center; gap:8px; }
+.card h3 { font-size:13px; margin:12px 0 8px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; }
+
+/* Grid */
+.grid { display:grid; gap:16px; }
+.grid-2 { grid-template-columns:1fr 1fr; }
+.grid-3 { grid-template-columns:1fr 1fr 1fr; }
+.grid-4 { grid-template-columns:1fr 1fr 1fr 1fr; }
+@media(max-width:1200px) { .grid-4 { grid-template-columns:1fr 1fr; } }
+@media(max-width:900px) { .grid-3,.grid-2 { grid-template-columns:1fr; } }
+
+/* Stats */
+.stat { background:var(--bg3); border-radius:var(--radius); padding:14px; }
+.stat .label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; }
+.stat .value { font-size:24px; font-weight:700; margin:4px 0; }
+.stat .sub { font-size:12px; color:var(--text2); }
+.stat.green .value { color:var(--green); }
+.stat.red .value { color:var(--red); }
+.stat.orange .value { color:var(--orange); }
+.stat.blue .value { color:var(--accent); }
+.stat.purple .value { color:var(--purple); }
+
+/* Tables */
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th { text-align:left; padding:8px 12px; background:var(--bg3); color:var(--text2); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--border); white-space:nowrap; }
+td { padding:8px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+tr:hover td { background:rgba(91,138,245,.05); }
+.table-wrap { overflow-x:auto; }
+
+/* Forms */
+.form-group { margin-bottom:12px; }
+.form-group label { display:block; font-size:12px; color:var(--text2); margin-bottom:4px; }
+input[type="text"], input[type="number"], input[type="password"], select, textarea {
+  width:100%; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px; outline:none;
+}
+input:focus, select:focus, textarea:focus { border-color:var(--accent); }
+textarea { resize:vertical; min-height:60px; }
+
+/* Config input */
+.cfg-row { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); }
+.cfg-row:last-child { border:none; }
+.cfg-label { flex:1; min-width:200px; }
+.cfg-label .name { font-size:13px; color:var(--text); }
+.cfg-label .desc { font-size:11px; color:var(--text2); }
+.cfg-input { width:120px; }
+.cfg-input input { text-align:right; }
+.cfg-range { font-size:10px; color:var(--text2); white-space:nowrap; min-width:80px; text-align:right; }
+.cfg-changed { background:rgba(91,138,245,.1); border-radius:4px; }
+
+/* Buttons */
+.btn { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:6px; border:none; cursor:pointer; font-size:13px; font-weight:500; transition:.15s; }
+.btn-primary { background:var(--accent); color:#fff; }
+.btn-primary:hover { background:var(--accent2); }
+.btn-danger { background:var(--red); color:#fff; }
+.btn-danger:hover { background:#e05050; }
+.btn-success { background:var(--green); color:#000; }
+.btn-success:hover { background:#2bc088; }
+.btn-warning { background:var(--orange); color:#000; }
+.btn-warning:hover { background:#e88030; }
+.btn-sm { padding:4px 10px; font-size:12px; }
+.btn-outline { background:transparent; border:1px solid var(--border); color:var(--text); }
+.btn-outline:hover { background:var(--bg3); }
+.btn-group { display:flex; gap:8px; margin:12px 0; flex-wrap:wrap; }
+
+/* Badge */
+.badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+.badge-green { background:rgba(52,211,153,.15); color:var(--green); }
+.badge-red { background:rgba(248,113,113,.15); color:var(--red); }
+.badge-orange { background:rgba(251,146,60,.15); color:var(--orange); }
+.badge-yellow { background:rgba(251,191,36,.15); color:var(--yellow); }
+.badge-blue { background:rgba(91,138,245,.15); color:var(--accent); }
+.badge-purple { background:rgba(167,139,250,.15); color:var(--purple); }
+.badge-gray { background:rgba(139,144,160,.15); color:var(--text2); }
+
+/* Alert banner */
+.alert-banner { padding:12px 16px; border-radius:var(--radius); margin-bottom:16px; font-size:13px; display:flex; align-items:center; gap:8px; }
+.alert-danger { background:rgba(248,113,113,.15); border:1px solid rgba(248,113,113,.3); color:var(--red); }
+.alert-warning { background:rgba(251,191,36,.15); border:1px solid rgba(251,191,36,.3); color:var(--yellow); }
+.alert-success { background:rgba(52,211,153,.15); border:1px solid rgba(52,211,153,.3); color:var(--green); }
+
+/* Tabs */
+.tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:16px; }
+.tab { padding:8px 16px; cursor:pointer; color:var(--text2); border-bottom:2px solid transparent; font-size:13px; transition:.15s; }
+.tab:hover { color:var(--text); }
+.tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+/* Toast */
+.toast { position:fixed; bottom:24px; right:24px; padding:12px 20px; border-radius:var(--radius); font-size:13px; z-index:9999; animation:toastIn .3s ease; }
+.toast-success { background:var(--green); color:#000; }
+.toast-error { background:var(--red); color:#fff; }
+@keyframes toastIn { from { transform:translateY(20px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+
+/* Section visibility */
+.section { display:none; }
+.section.active { display:block; }
+
+/* Modal */
+.modal-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.6); z-index:500; align-items:center; justify-content:center; }
+.modal-overlay.show { display:flex; }
+.modal { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:24px; width:500px; max-width:90vw; max-height:80vh; overflow-y:auto; }
+.modal h2 { margin-bottom:16px; }
+.modal-footer { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+
+/* Loading */
+.loading { text-align:center; padding:40px; color:var(--text2); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width:6px; }
+::-webkit-scrollbar-track { background:var(--bg); }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <h1>GEOZO Bot<span>Management Panel</span></h1>
+    <div class="nav-item active" data-section="dashboard">Dashboard</div>
+    <div class="nav-section">Configuration</div>
+    <div class="nav-item" data-section="smart-bidder">Smart Bidder</div>
+    <div class="nav-item" data-section="time-multipliers">Time Multipliers</div>
+    <div class="nav-item" data-section="warmup">Warmup Phases</div>
+    <div class="nav-item" data-section="roi-class">ROI Classification</div>
+    <div class="nav-item" data-section="emergency-cfg">Emergency Controller</div>
+    <div class="nav-item" data-section="schedules">Workflow Schedules</div>
+    <div class="nav-item" data-section="general-cfg">General Settings</div>
+    <div class="nav-section">Data Management</div>
+    <div class="nav-item" data-section="geo-payouts">Geo Payouts</div>
+    <div class="nav-item" data-section="teasers">Teasers</div>
+    <div class="nav-item" data-section="bid-history">Bid History</div>
+    <div class="nav-item" data-section="anomalies">Anomalies</div>
+    <div class="nav-item" data-section="block-lists">Block Lists</div>
+    <div class="nav-item" data-section="scan-targets">Scan Targets</div>
+    <div class="nav-item" data-section="ab-tests">A/B Tests</div>
+    <div class="nav-section">Controls</div>
+    <div class="nav-item" data-section="emergency-ctrl">Emergency Control</div>
+    <div class="nav-item" data-section="locks">Workflow Locks</div>
+    <div class="nav-item" data-section="daily-pnl">Daily P&L</div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+    <!-- DASHBOARD -->
+    <div class="section active" id="sec-dashboard">
+      <h2 style="margin-bottom:16px;font-size:20px;">Dashboard</h2>
+      <div id="emergency-banner"></div>
+      <div class="grid grid-4" id="dash-stats"></div>
+      <div class="grid grid-2" style="margin-top:16px;">
+        <div class="card">
+          <h2>Teaser States</h2>
+          <div id="dash-teasers"></div>
+        </div>
+        <div class="card">
+          <h2>Recent Bid Changes</h2>
+          <div id="dash-bids"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SMART BIDDER CONFIG -->
+    <div class="section" id="sec-smart-bidder">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 style="font-size:20px;">Smart Bidder Configuration</h2>
+        <button class="btn btn-primary" onclick="saveCategory('smart_bidder')">Save Changes</button>
+      </div>
+      <div class="card" id="cfg-smart_bidder"><div class="loading">Loading...</div></div>
+    </div>
+
+    <!-- TIME MULTIPLIERS -->
+    <div class="section" id="sec-time-multipliers">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 style="font-size:20px;">Time-of-Day Multipliers</h2>
+        <button class="btn btn-primary" onclick="saveCategory('time_multipliers')">Save Changes</button>
+      </div>
+      <div class="card" id="cfg-time_multipliers"><div class="loading">Loading...</div></div>
+    </div>
+
+    <!-- WARMUP -->
+    <div class="section" id="sec-warmup">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 style="font-size:20px;">Warmup Phase Settings</h2>
+        <button class="btn btn-primary" onclick="saveCategory('warmup')">Save Changes</button>
+      </div>
+      <div class="card" id="cfg-warmup"><div class="loading">Loading...</div></div>
+    </div>
+
+    <!-- ROI CLASSIFICATION -->
+    <div class="section" id="sec-roi-class">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 style="font-size:20px;">ROI Classification Thresholds</h2>
+        <button class="btn btn-primary" onclick="saveCategory('roi_classification')">Save Changes</button>
+      </div>
+      <div class="card" id="cfg-roi_classification"><div class="loading">Loading...</div></div>
+    </div>
+
+    <!-- EMERGENCY CONFIG -->
+    <div class="section" id="sec-emergency-cfg">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 style="font-size:20px;">Emergency Controller Settings</h2>
+        <button class="btn btn-primary" onclick="saveMultiCategory(['emergency','balance'])">Save Changes</button>
+      </div>
+      <div class="card"><h2>Emergency Thresholds</h2><div id="cfg-emergency"><div class="loading">Loading...</div></div></div>
+      <div class="card"><h2>Balance Watchdog</h2><div id="cfg-balance"><div class="loading">Loading...</div></div></div>
+    </div>
+
+    <!-- SCHEDULES -->
+    <div class="section" id="sec-schedules">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 style="font-size:20px;">Workflow Schedules</h2>
+        <button class="btn btn-primary" onclick="saveCategory('schedules')">Save Changes</button>
+      </div>
+      <div class="card" id="cfg-schedules"><div class="loading">Loading...</div></div>
+    </div>
+
+    <!-- GENERAL CONFIG -->
+    <div class="section" id="sec-general-cfg">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 style="font-size:20px;">General Settings</h2>
+        <button class="btn btn-primary" onclick="saveMultiCategory(['general','default_payout','dead_creative','rollback','anomaly','position'])">Save Changes</button>
+      </div>
+      <div class="card"><h2>General</h2><div id="cfg-general"><div class="loading">Loading...</div></div></div>
+      <div class="card"><h2>Default Geo Payout (Fallback)</h2><div id="cfg-default_payout"><div class="loading">Loading...</div></div></div>
+      <div class="card"><h2>Dead Creative Detection</h2><div id="cfg-dead_creative"><div class="loading">Loading...</div></div></div>
+      <div class="card"><h2>Rollback Settings</h2><div id="cfg-rollback"><div class="loading">Loading...</div></div></div>
+      <div class="card"><h2>Anomaly Detector</h2><div id="cfg-anomaly"><div class="loading">Loading...</div></div></div>
+      <div class="card"><h2>Position Tracking</h2><div id="cfg-position"><div class="loading">Loading...</div></div></div>
+    </div>
+
+    <!-- GEO PAYOUTS -->
+    <div class="section" id="sec-geo-payouts">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 style="font-size:20px;">Geo Payouts</h2>
+        <button class="btn btn-primary" onclick="showAddGeo()">+ Add Geo</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap" id="geo-table"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- TEASERS -->
+    <div class="section" id="sec-teasers">
+      <h2 style="margin-bottom:16px;font-size:20px;">Teasers</h2>
+      <div class="btn-group">
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers()">All</button>
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers('active')">Active</button>
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers('testing')">Testing</button>
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers('paused_high_cpl')">Paused CPL</button>
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers('stopped')">Stopped</button>
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers('created')">Created</button>
+        <button class="btn btn-sm btn-outline" onclick="loadTeasers('banned')">Banned</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap" id="teasers-table"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- BID HISTORY -->
+    <div class="section" id="sec-bid-history">
+      <h2 style="margin-bottom:16px;font-size:20px;">Bid History</h2>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <input type="number" id="bh-ad-id" placeholder="Filter by Ad ID" style="width:200px;">
+        <button class="btn btn-sm btn-primary" onclick="loadBidHistory()">Filter</button>
+        <button class="btn btn-sm btn-outline" onclick="document.getElementById('bh-ad-id').value='';loadBidHistory()">Clear</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap" id="bid-history-table"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- ANOMALIES -->
+    <div class="section" id="sec-anomalies">
+      <h2 style="margin-bottom:16px;font-size:20px;">Anomalies</h2>
+      <div class="tabs" id="anomaly-tabs">
+        <div class="tab active" onclick="loadAnomalies(false)">Open</div>
+        <div class="tab" onclick="loadAnomalies(true)">Resolved</div>
+      </div>
+      <div class="card">
+        <div class="table-wrap" id="anomalies-table"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- BLOCK LISTS -->
+    <div class="section" id="sec-block-lists">
+      <h2 style="margin-bottom:16px;font-size:20px;">Block Lists (Whitelist/Blacklist)</h2>
+      <div class="tabs" id="bl-tabs">
+        <div class="tab active" onclick="loadBlockLists()">All</div>
+        <div class="tab" onclick="loadBlockLists('whitelist')">Whitelist</div>
+        <div class="tab" onclick="loadBlockLists('blacklist')">Blacklist</div>
+      </div>
+      <div class="card">
+        <div class="table-wrap" id="block-lists-table"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- SCAN TARGETS -->
+    <div class="section" id="sec-scan-targets">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h2 style="font-size:20px;">Scan Targets</h2>
+        <button class="btn btn-primary" onclick="showAddScanTarget()">+ Add Target</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap" id="scan-targets-table"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- AB TESTS -->
+    <div class="section" id="sec-ab-tests">
+      <h2 style="margin-bottom:16px;font-size:20px;">A/B Tests</h2>
+      <div class="card">
+        <div class="table-wrap" id="ab-tests-table"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- EMERGENCY CONTROL -->
+    <div class="section" id="sec-emergency-ctrl">
+      <h2 style="margin-bottom:16px;font-size:20px;">Emergency Control Panel</h2>
+      <div class="grid grid-2">
+        <div class="card">
+          <h2 style="color:var(--red);">Emergency Stop</h2>
+          <p style="color:var(--text2);font-size:13px;margin-bottom:12px;">Activates emergency mode - all bid changes are frozen and optionally all ads are paused.</p>
+          <div class="form-group">
+            <label>Reason</label>
+            <input type="text" id="emg-reason" value="Manual activation via admin UI">
+          </div>
+          <div class="form-group">
+            <label>Auto-deactivate after (hours)</label>
+            <input type="number" id="emg-hours" value="2" min="0.5" max="24" step="0.5">
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-danger" onclick="activateEmergency()">ACTIVATE EMERGENCY</button>
+            <button class="btn btn-success" onclick="deactivateEmergency()">DEACTIVATE</button>
+          </div>
+          <div id="emg-status" style="margin-top:12px;"></div>
+        </div>
+        <div class="card">
+          <h2 style="color:var(--orange);">Conservative Mode</h2>
+          <p style="color:var(--text2);font-size:13px;margin-bottom:12px;">Only bid decreases are allowed. No bid raises. Prevents spending runaway.</p>
+          <div class="form-group">
+            <label>Duration (minutes)</label>
+            <input type="number" id="cons-minutes" value="30" min="5" max="1440" step="5">
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-warning" onclick="activateConservative()">ACTIVATE CONSERVATIVE</button>
+            <button class="btn btn-success" onclick="deactivateConservative()">DEACTIVATE</button>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px;">
+        <h2>Emergency History</h2>
+        <div id="emg-history"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- WORKFLOW LOCKS -->
+    <div class="section" id="sec-locks">
+      <h2 style="margin-bottom:16px;font-size:20px;">Active Workflow Locks</h2>
+      <div class="card">
+        <div class="table-wrap" id="locks-table"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+
+    <!-- DAILY PNL -->
+    <div class="section" id="sec-daily-pnl">
+      <h2 style="margin-bottom:16px;font-size:20px;">Daily P&L</h2>
+      <div class="card">
+        <div class="table-wrap" id="pnl-table"><div class="loading">Loading...</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<script>
+// ============================================
+// STATE
+// ============================================
+let configData = {};
+let currentSection = 'dashboard';
+
+// ============================================
+// NAVIGATION
+// ============================================
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    const sec = el.dataset.section;
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.getElementById('sec-' + sec).classList.add('active');
+    currentSection = sec;
+    loadSection(sec);
+  });
+});
+
+function loadSection(sec) {
+  const loaders = {
+    'dashboard': loadDashboard,
+    'smart-bidder': () => loadConfig('smart_bidder'),
+    'time-multipliers': () => loadConfig('time_multipliers'),
+    'warmup': () => loadConfig('warmup'),
+    'roi-class': () => loadConfig('roi_classification'),
+    'emergency-cfg': () => { loadConfig('emergency'); loadConfig('balance'); },
+    'schedules': () => loadConfig('schedules'),
+    'general-cfg': () => { ['general','default_payout','dead_creative','rollback','anomaly','position'].forEach(loadConfig); },
+    'geo-payouts': loadGeoPayouts,
+    'teasers': () => loadTeasers(),
+    'bid-history': loadBidHistory,
+    'anomalies': () => loadAnomalies(false),
+    'block-lists': () => loadBlockLists(),
+    'scan-targets': loadScanTargets,
+    'ab-tests': loadAbTests,
+    'emergency-ctrl': loadEmergencyCtrl,
+    'locks': loadLocks,
+    'daily-pnl': loadDailyPnl,
+  };
+  if (loaders[sec]) loaders[sec]();
+}
+
+// ============================================
+// API HELPER
+// ============================================
+async function api(path, opts = {}) {
+  const resp = await fetch('/api/' + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: resp.statusText }));
+    throw new Error(err.error || resp.statusText);
+  }
+  return resp.json();
+}
+
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = 'toast toast-' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function $(id) { return document.getElementById(id); }
+function fmt(n, d=2) { return n != null ? Number(n).toFixed(d) : '-'; }
+function fmtDate(s) { if (!s) return '-'; const d = new Date(s); return d.toLocaleDateString('ru') + ' ' + d.toLocaleTimeString('ru', {hour:'2-digit',minute:'2-digit'}); }
+
+// ============================================
+// DASHBOARD
+// ============================================
+async function loadDashboard() {
+  try {
+    const d = await api('dashboard');
+    const b = d.balance || {};
+    const s = d.today_stats || {};
+    const tc = d.teaser_counts || [];
+    const bc = d.bid_changes_24h || {};
+    const ao = d.anomalies_open || {};
+    const em = d.emergency;
+    const cm = d.conservative_mode;
+
+    // Emergency banner
+    let banner = '';
+    if (em) {
+      banner = `<div class="alert-banner alert-danger">EMERGENCY MODE ACTIVE: ${em.trigger_reason || 'Unknown'} (since ${fmtDate(em.activated_at)})</div>`;
+    }
+    if (cm) {
+      banner += `<div class="alert-banner alert-warning">CONSERVATIVE MODE: ${cm.locked_by} (expires ${fmtDate(cm.expires_at)})</div>`;
+    }
+    $('emergency-banner').innerHTML = banner;
+
+    // Stats
+    const spend = s.total_spend || 0;
+    const revenue = s.total_revenue || 0;
+    const profit = s.total_profit || 0;
+    const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;
+
+    $('dash-stats').innerHTML = `
+      <div class="stat blue"><div class="label">Balance</div><div class="value">$${fmt(b.balance)}</div><div class="sub">${fmt(b.spend_rate_per_hour)}/h | ${fmt(b.hours_remaining,1)}h left</div></div>
+      <div class="stat ${spend > 0 ? 'orange' : ''}"><div class="label">Today Spend</div><div class="value">$${fmt(spend)}</div><div class="sub">${s.total_ads || 0} ads tracked</div></div>
+      <div class="stat ${profit >= 0 ? 'green' : 'red'}"><div class="label">Today Profit</div><div class="value">$${fmt(profit)}</div><div class="sub">ROI: ${fmt(roi,1)}%</div></div>
+      <div class="stat purple"><div class="label">Bid Changes 24h</div><div class="value">${bc.cnt || 0}</div><div class="sub">Anomalies open: ${ao.cnt || 0}</div></div>
+    `;
+
+    // Teaser counts
+    const stateMap = {};
+    tc.forEach(r => { stateMap[r.state] = r.cnt; });
+    const states = ['active','testing','created','paused_high_cpl','stopped','banned','dead'];
+    const stateColors = {active:'green',testing:'blue',created:'gray',paused_high_cpl:'orange',stopped:'red',banned:'red',dead:'gray'};
+    $('dash-teasers').innerHTML = states.map(s =>
+      `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
+        <span><span class="badge badge-${stateColors[s]||'gray'}">${s}</span></span>
+        <span style="font-weight:600;">${stateMap[s] || 0}</span>
+      </div>`
+    ).join('');
+
+    // Recent bids
+    const bids = await api('bid_history?limit=10');
+    $('dash-bids').innerHTML = bids.length ? bids.map(b => {
+      const dir = b.new_bid > b.old_bid ? 'green' : (b.new_bid < b.old_bid ? 'red' : 'gray');
+      const arrow = b.new_bid > b.old_bid ? '&uarr;' : (b.new_bid < b.old_bid ? '&darr;' : '=');
+      return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;">
+        <span>#${b.ad_id} <span style="color:var(--${dir})">${arrow} $${fmt(b.old_bid,4)}&rarr;$${fmt(b.new_bid,4)}</span></span>
+        <span style="color:var(--text2)">${fmtDate(b.changed_at)}</span>
+      </div>`;
+    }).join('') : '<div style="color:var(--text2);padding:12px;">No bid changes yet</div>';
+  } catch (e) {
+    $('dash-stats').innerHTML = `<div class="alert-banner alert-danger">Error loading dashboard: ${e.message}</div>`;
+  }
+}
+
+// ============================================
+// CONFIG MANAGEMENT
+// ============================================
+async function loadAllConfig() {
+  configData = await api('config');
+}
+
+async function loadConfig(category) {
+  if (!configData || Object.keys(configData).length === 0) {
+    await loadAllConfig();
+  }
+  const el = $('cfg-' + category);
+  if (!el) return;
+  const items = configData[category] || [];
+  if (items.length === 0) {
+    el.innerHTML = '<div style="color:var(--text2);padding:8px;">No configuration items</div>';
+    return;
+  }
+  el.innerHTML = items.map(c => `
+    <div class="cfg-row" data-cfg-id="${c.id}">
+      <div class="cfg-label">
+        <div class="name">${c.label || c.key}</div>
+        <div class="desc">${c.description || ''}</div>
+      </div>
+      <div class="cfg-input">
+        <input type="${c.value_type === 'string' ? 'text' : 'number'}"
+          id="cfg-val-${c.id}"
+          value="${c.value}"
+          data-original="${c.value}"
+          ${c.value_type === 'number' ? 'step="0.01"' : ''}
+          ${c.value_type === 'integer' ? 'step="1"' : ''}
+          ${c.min_value != null ? `min="${c.min_value}"` : ''}
+          ${c.max_value != null ? `max="${c.max_value}"` : ''}
+          onchange="markChanged(this)">
+      </div>
+      <div class="cfg-range">${c.min_value != null ? c.min_value + ' - ' + c.max_value : ''}</div>
+    </div>
+  `).join('');
+}
+
+function markChanged(input) {
+  const row = input.closest('.cfg-row');
+  if (input.value !== input.dataset.original) {
+    row.classList.add('cfg-changed');
+  } else {
+    row.classList.remove('cfg-changed');
+  }
+}
+
+async function saveCategory(category) {
+  const items = configData[category] || [];
+  const updates = [];
+  items.forEach(c => {
+    const input = $('cfg-val-' + c.id);
+    if (input && input.value !== input.dataset.original) {
+      updates.push({ id: c.id, value: input.value });
+    }
+  });
+  if (updates.length === 0) {
+    toast('No changes to save', 'error');
+    return;
+  }
+  try {
+    const res = await api('config/bulk', { method: 'PUT', body: { updates } });
+    if (res.errors && res.errors.length > 0) {
+      toast('Saved with errors: ' + res.errors.join(', '), 'error');
+    } else {
+      toast(`Saved ${updates.length} changes`);
+    }
+    // Refresh original values
+    updates.forEach(u => {
+      const input = $('cfg-val-' + u.id);
+      if (input) {
+        input.dataset.original = u.value;
+        input.closest('.cfg-row').classList.remove('cfg-changed');
+      }
+    });
+    await loadAllConfig();
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function saveMultiCategory(categories) {
+  const updates = [];
+  categories.forEach(cat => {
+    const items = configData[cat] || [];
+    items.forEach(c => {
+      const input = $('cfg-val-' + c.id);
+      if (input && input.value !== input.dataset.original) {
+        updates.push({ id: c.id, value: input.value });
+      }
+    });
+  });
+  if (updates.length === 0) {
+    toast('No changes to save', 'error');
+    return;
+  }
+  try {
+    await api('config/bulk', { method: 'PUT', body: { updates } });
+    toast(`Saved ${updates.length} changes`);
+    updates.forEach(u => {
+      const input = $('cfg-val-' + u.id);
+      if (input) { input.dataset.original = u.value; input.closest('.cfg-row').classList.remove('cfg-changed'); }
+    });
+    await loadAllConfig();
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+// ============================================
+// GEO PAYOUTS
+// ============================================
+async function loadGeoPayouts() {
+  try {
+    const data = await api('geo_payouts');
+    $('geo-table').innerHTML = `<table>
+      <tr><th>Code</th><th>Country</th><th>Geo ID</th><th>Vertical</th><th>Avg Payout</th><th>Approval</th><th>Max CPL</th><th>Min Bid</th><th>Max Bid</th><th>Active</th><th>Actions</th></tr>
+      ${data.map(g => `<tr>
+        <td><strong>${g.country_code}</strong></td>
+        <td>${g.country_name || ''}</td>
+        <td>${g.geo_id || '-'}</td>
+        <td>${g.vertical || '-'}</td>
+        <td>$${fmt(g.avg_payout,0)}</td>
+        <td>${(g.avg_approval*100).toFixed(1)}%</td>
+        <td><strong>$${fmt(g.max_cpl)}</strong></td>
+        <td>$${fmt(g.min_bid,4)}</td>
+        <td>$${fmt(g.max_bid,4)}</td>
+        <td>${g.is_active ? '<span class="badge badge-green">Yes</span>' : '<span class="badge badge-red">No</span>'}</td>
+        <td><button class="btn btn-sm btn-outline" onclick="editGeo(${g.id})">Edit</button> <button class="btn btn-sm btn-danger" onclick="deleteGeo(${g.id})">Del</button></td>
+      </tr>`).join('')}
+    </table>`;
+  } catch (e) {
+    $('geo-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+}
+
+function showAddGeo() {
+  $('modal-content').innerHTML = `
+    <h2>Add Geo Payout</h2>
+    <div class="form-group"><label>Country Code (2 letters)</label><input type="text" id="ng-cc" maxlength="5" placeholder="US"></div>
+    <div class="form-group"><label>Country Name</label><input type="text" id="ng-name" placeholder="United States"></div>
+    <div class="form-group"><label>Geo ID (Geozo)</label><input type="number" id="ng-geoid" placeholder="240"></div>
+    <div class="form-group"><label>Vertical</label><input type="text" id="ng-vert" value="crypto"></div>
+    <div class="form-group"><label>Avg Payout ($)</label><input type="number" id="ng-payout" step="1" placeholder="1400"></div>
+    <div class="form-group"><label>Avg Approval Rate</label><input type="number" id="ng-approval" step="0.001" placeholder="0.055"></div>
+    <div class="form-group"><label>Min Bid ($)</label><input type="number" id="ng-minbid" step="0.001" value="0.03"></div>
+    <div class="form-group"><label>Max Bid ($)</label><input type="number" id="ng-maxbid" step="0.001" value="0.15"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="addGeo()">Add</button>
+    </div>`;
+  $('modal').classList.add('show');
+}
+
+async function addGeo() {
+  try {
+    await api('geo_payouts', { method: 'POST', body: {
+      country_code: $('ng-cc').value.toUpperCase(),
+      country_name: $('ng-name').value,
+      geo_id: parseInt($('ng-geoid').value) || null,
+      vertical: $('ng-vert').value,
+      avg_payout: parseFloat($('ng-payout').value),
+      avg_approval: parseFloat($('ng-approval').value),
+      min_bid: parseFloat($('ng-minbid').value),
+      max_bid: parseFloat($('ng-maxbid').value),
+    }});
+    closeModal();
+    toast('Geo added');
+    loadGeoPayouts();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function editGeo(id) {
+  const data = await api('geo_payouts');
+  const g = data.find(x => x.id === id);
+  if (!g) return;
+  $('modal-content').innerHTML = `
+    <h2>Edit ${g.country_code} - ${g.country_name}</h2>
+    <div class="form-group"><label>Country Name</label><input type="text" id="eg-name" value="${g.country_name||''}"></div>
+    <div class="form-group"><label>Geo ID</label><input type="number" id="eg-geoid" value="${g.geo_id||''}"></div>
+    <div class="form-group"><label>Vertical</label><input type="text" id="eg-vert" value="${g.vertical||'crypto'}"></div>
+    <div class="form-group"><label>Avg Payout ($)</label><input type="number" id="eg-payout" step="1" value="${g.avg_payout}"></div>
+    <div class="form-group"><label>Avg Approval Rate</label><input type="number" id="eg-approval" step="0.001" value="${g.avg_approval}"></div>
+    <div class="form-group"><label>Min Bid ($)</label><input type="number" id="eg-minbid" step="0.001" value="${g.min_bid}"></div>
+    <div class="form-group"><label>Max Bid ($)</label><input type="number" id="eg-maxbid" step="0.001" value="${g.max_bid}"></div>
+    <div class="form-group"><label>Active</label><select id="eg-active"><option value="true" ${g.is_active?'selected':''}>Yes</option><option value="false" ${!g.is_active?'selected':''}>No</option></select></div>
+    <div class="form-group"><label>Notes</label><textarea id="eg-notes">${g.notes||''}</textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveGeo(${id})">Save</button>
+    </div>`;
+  $('modal').classList.add('show');
+}
+
+async function saveGeo(id) {
+  try {
+    await api('geo_payouts/' + id, { method: 'PUT', body: {
+      country_name: $('eg-name').value,
+      geo_id: parseInt($('eg-geoid').value) || null,
+      vertical: $('eg-vert').value,
+      avg_payout: parseFloat($('eg-payout').value),
+      avg_approval: parseFloat($('eg-approval').value),
+      min_bid: parseFloat($('eg-minbid').value),
+      max_bid: parseFloat($('eg-maxbid').value),
+      is_active: $('eg-active').value === 'true',
+      notes: $('eg-notes').value,
+    }});
+    closeModal();
+    toast('Geo updated');
+    loadGeoPayouts();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deleteGeo(id) {
+  if (!confirm('Delete this geo payout?')) return;
+  try {
+    await api('geo_payouts/' + id, { method: 'DELETE' });
+    toast('Geo deleted');
+    loadGeoPayouts();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ============================================
+// TEASERS
+// ============================================
+async function loadTeasers(state) {
+  try {
+    const url = 'teasers?limit=100' + (state ? '&state=' + state : '');
+    const d = await api(url);
+    const rows = d.data || [];
+    $('teasers-table').innerHTML = rows.length ? `<table>
+      <tr><th>ID</th><th>Ad ID</th><th>Title</th><th>State</th><th>Bid</th><th>Warmup</th><th>Esc.Lvl</th><th>Spend</th><th>Today</th><th>Actions</th></tr>
+      ${rows.map(t => {
+        const stCol = {active:'green',testing:'blue',created:'gray',paused_high_cpl:'orange',stopped:'red',banned:'red',dead:'gray'}[t.state]||'gray';
+        return `<tr>
+          <td>${t.id}</td>
+          <td><strong>${t.ad_id||'-'}</strong></td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(t.title||'').replace(/"/g,'&quot;')}">${t.title||'-'}</td>
+          <td><span class="badge badge-${stCol}">${t.state}</span></td>
+          <td>$${fmt(t.bid,4)}</td>
+          <td>${t.warmup_phase != null ? 'P'+t.warmup_phase : '-'}</td>
+          <td>${t.escalation_level||0}</td>
+          <td>$${fmt(t.total_spend_lifetime)}</td>
+          <td style="font-size:11px;">${t.today_spend != null ? '$'+fmt(t.today_spend)+' | '+fmt(t.today_roi,1)+'%' : '-'}</td>
+          <td>
+            <select style="width:90px;padding:2px 4px;font-size:11px;" onchange="changeState(${t.id},this.value)">
+              <option value="">Change...</option>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="stopped">Stopped</option>
+              <option value="testing">Testing</option>
+            </select>
+          </td>
+        </tr>`;
+      }).join('')}
+    </table><div style="padding:8px;color:var(--text2);font-size:12px;">Showing ${rows.length} of ${d.total}</div>` : '<div style="padding:12px;color:var(--text2);">No teasers found</div>';
+  } catch (e) {
+    $('teasers-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+}
+
+async function changeState(id, state) {
+  if (!state) return;
+  try {
+    await api('teasers/' + id + '/state', { method: 'PUT', body: { state } });
+    toast('State changed to ' + state);
+    loadTeasers();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ============================================
+// BID HISTORY
+// ============================================
+async function loadBidHistory() {
+  try {
+    const adId = $('bh-ad-id')?.value;
+    const url = 'bid_history?limit=100' + (adId ? '&ad_id=' + adId : '');
+    const data = await api(url);
+    $('bid-history-table').innerHTML = data.length ? `<table>
+      <tr><th>Time</th><th>Ad ID</th><th>Old Bid</th><th>New Bid</th><th>Change</th><th>Rule</th><th>Reason</th></tr>
+      ${data.map(b => {
+        const pct = b.old_bid > 0 ? ((b.new_bid - b.old_bid)/b.old_bid*100).toFixed(1) : '0';
+        const col = b.new_bid > b.old_bid ? 'green' : (b.new_bid < b.old_bid ? 'red' : 'gray');
+        return `<tr>
+          <td style="white-space:nowrap;">${fmtDate(b.changed_at)}</td>
+          <td><strong>${b.ad_id}</strong></td>
+          <td>$${fmt(b.old_bid,4)}</td>
+          <td>$${fmt(b.new_bid,4)}</td>
+          <td style="color:var(--${col})">${pct>0?'+':''}${pct}%</td>
+          <td><span class="badge badge-blue">${b.rule_applied||'-'}</span></td>
+          <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(b.reason||'').replace(/"/g,'&quot;')}">${b.reason||'-'}</td>
+        </tr>`;
+      }).join('')}
+    </table>` : '<div style="padding:12px;color:var(--text2);">No bid history</div>';
+  } catch (e) {
+    $('bid-history-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+}
+
+// ============================================
+// ANOMALIES
+// ============================================
+async function loadAnomalies(resolved) {
+  try {
+    document.querySelectorAll('#anomaly-tabs .tab').forEach((t,i) => {
+      t.classList.toggle('active', resolved ? i===1 : i===0);
+    });
+    const data = await api('anomalies?resolved=' + (resolved ? 'true' : 'false'));
+    $('anomalies-table').innerHTML = data.length ? `<table>
+      <tr><th>Time</th><th>Ad ID</th><th>Type</th><th>Severity</th><th>Metric</th><th>Expected</th><th>Actual</th><th>Dev%</th><th>Actions</th></tr>
+      ${data.map(a => `<tr>
+        <td style="white-space:nowrap;">${fmtDate(a.detected_at)}</td>
+        <td>${a.ad_id||'-'}</td>
+        <td>${a.anomaly_type}</td>
+        <td><span class="badge badge-${a.severity==='critical'?'red':'yellow'}">${a.severity}</span></td>
+        <td>${a.metric_name||'-'}</td>
+        <td>${fmt(a.expected_value)}</td>
+        <td>${fmt(a.actual_value)}</td>
+        <td style="color:var(--red)">${fmt(a.deviation_percent,1)}%</td>
+        <td>${!a.resolved ? `<button class="btn btn-sm btn-success" onclick="resolveAnomaly(${a.id})">Resolve</button>` : `<span class="badge badge-green">Resolved</span>`}</td>
+      </tr>`).join('')}
+    </table>` : '<div style="padding:12px;color:var(--text2);">No anomalies</div>';
+  } catch (e) {
+    $('anomalies-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+}
+
+async function resolveAnomaly(id) {
+  try {
+    await api('anomalies/' + id + '/resolve', { method: 'PUT' });
+    toast('Anomaly resolved');
+    loadAnomalies(false);
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ============================================
+// BLOCK LISTS
+// ============================================
+async function loadBlockLists(type) {
+  try {
+    document.querySelectorAll('#bl-tabs .tab').forEach((t,i) => {
+      t.classList.toggle('active', !type ? i===0 : (type==='whitelist' ? i===1 : i===2));
+    });
+    const url = 'block_lists' + (type ? '?type=' + type : '');
+    const data = await api(url);
+    $('block-lists-table').innerHTML = data.length ? `<table>
+      <tr><th>Block ID</th><th>Type</th><th>Ad Group</th><th>Reason</th><th>ROI</th><th>Added</th><th>Actions</th></tr>
+      ${data.map(b => `<tr>
+        <td><strong>${b.block_id}</strong></td>
+        <td><span class="badge badge-${b.list_type==='whitelist'?'green':'red'}">${b.list_type}</span></td>
+        <td>${b.ad_group_id||'-'}</td>
+        <td>${b.reason||'-'}</td>
+        <td>${fmt(b.roi_at_decision,1)}%</td>
+        <td>${fmtDate(b.added_at)}</td>
+        <td><button class="btn btn-sm btn-danger" onclick="deleteBlockList(${b.id})">Remove</button></td>
+      </tr>`).join('')}
+    </table>` : '<div style="padding:12px;color:var(--text2);">No block list entries</div>';
+  } catch (e) {
+    $('block-lists-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+}
+
+async function deleteBlockList(id) {
+  if (!confirm('Remove from block list?')) return;
+  try {
+    await api('block_lists/' + id, { method: 'DELETE' });
+    toast('Removed');
+    loadBlockLists();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ============================================
+// SCAN TARGETS
+// ============================================
+async function loadScanTargets() {
+  try {
+    const data = await api('scan_targets');
+    $('scan-targets-table').innerHTML = data.length ? `<table>
+      <tr><th>ID</th><th>Site URL</th><th>Country</th><th>Proxy</th><th>Type</th><th>Active</th><th>Notes</th><th>Actions</th></tr>
+      ${data.map(s => `<tr>
+        <td>${s.id}</td>
+        <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;">${s.site_url}</td>
+        <td>${s.country_code}</td>
+        <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">${s.proxy_url||'-'}</td>
+        <td>${s.proxy_type||'-'}</td>
+        <td>${s.is_active ? '<span class="badge badge-green">Yes</span>' : '<span class="badge badge-red">No</span>'}</td>
+        <td>${s.notes||'-'}</td>
+        <td>
+          <button class="btn btn-sm btn-outline" onclick="toggleScanTarget(${s.id},${!s.is_active})">${s.is_active?'Disable':'Enable'}</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteScanTarget(${s.id})">Del</button>
+        </td>
+      </tr>`).join('')}
+    </table>` : '<div style="padding:12px;color:var(--text2);">No scan targets</div>';
+  } catch (e) {
+    $('scan-targets-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+}
+
+function showAddScanTarget() {
+  $('modal-content').innerHTML = `
+    <h2>Add Scan Target</h2>
+    <div class="form-group"><label>Site URL</label><input type="text" id="st-url" placeholder="https://example.com"></div>
+    <div class="form-group"><label>Country Code</label><input type="text" id="st-cc" maxlength="5" placeholder="GB"></div>
+    <div class="form-group"><label>Proxy URL (optional)</label><input type="text" id="st-proxy" placeholder="socks5://user:pass@host:port"></div>
+    <div class="form-group"><label>Proxy Type</label><select id="st-ptype"><option>socks5</option><option>http</option><option>https</option></select></div>
+    <div class="form-group"><label>Notes</label><textarea id="st-notes"></textarea></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="addScanTarget()">Add</button>
+    </div>`;
+  $('modal').classList.add('show');
+}
+
+async function addScanTarget() {
+  try {
+    await api('scan_targets', { method: 'POST', body: {
+      site_url: $('st-url').value,
+      country_code: $('st-cc').value.toUpperCase(),
+      proxy_url: $('st-proxy').value || null,
+      proxy_type: $('st-ptype').value,
+      notes: $('st-notes').value || null,
+    }});
+    closeModal();
+    toast('Scan target added');
+    loadScanTargets();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function toggleScanTarget(id, active) {
+  try {
+    await api('scan_targets/' + id, { method: 'PUT', body: { is_active: active } });
+    toast(active ? 'Enabled' : 'Disabled');
+    loadScanTargets();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deleteScanTarget(id) {
+  if (!confirm('Delete scan target?')) return;
+  try {
+    await api('scan_targets/' + id, { method: 'DELETE' });
+    toast('Deleted');
+    loadScanTargets();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ============================================
+// AB TESTS
+// ============================================
+async function loadAbTests() {
+  try {
+    const data = await api('ab_tests');
+    $('ab-tests-table').innerHTML = data.length ? `<table>
+      <tr><th>ID</th><th>Test Name</th><th>Landing</th><th>Status</th><th>Gen</th><th>Winner</th><th>Started</th><th>Finished</th></tr>
+      ${data.map(t => `<tr>
+        <td>${t.id}</td>
+        <td>${t.test_name}</td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${t.landing_url}</td>
+        <td><span class="badge badge-${t.status==='running'?'blue':(t.status==='completed'?'green':'gray')}">${t.status}</span></td>
+        <td>${t.generation||1}</td>
+        <td>${t.winner_ad_id||'-'}</td>
+        <td>${fmtDate(t.started_at)}</td>
+        <td>${fmtDate(t.finished_at)}</td>
+      </tr>`).join('')}
+    </table>` : '<div style="padding:12px;color:var(--text2);">No A/B tests</div>';
+  } catch (e) {
+    $('ab-tests-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+}
+
+// ============================================
+// EMERGENCY CONTROL
+// ============================================
+async function loadEmergencyCtrl() {
+  try {
+    const data = await api('emergency');
+    const active = data.find(e => e.is_active);
+    $('emg-status').innerHTML = active
+      ? `<div class="alert-banner alert-danger">EMERGENCY ACTIVE: ${active.trigger_reason} (auto-off: ${fmtDate(active.auto_deactivate_at)})</div>`
+      : '<div class="alert-banner alert-success">No active emergency</div>';
+    $('emg-history').innerHTML = data.length ? `<table>
+      <tr><th>Active</th><th>Reason</th><th>Triggered By</th><th>Activated</th><th>Deactivated</th><th>Auto-Off</th></tr>
+      ${data.map(e => `<tr>
+        <td>${e.is_active ? '<span class="badge badge-red">YES</span>' : '<span class="badge badge-gray">No</span>'}</td>
+        <td>${e.trigger_reason||'-'}</td>
+        <td>${e.triggered_by||'-'}</td>
+        <td>${fmtDate(e.activated_at)}</td>
+        <td>${fmtDate(e.deactivated_at)}</td>
+        <td>${fmtDate(e.auto_deactivate_at)}</td>
+      </tr>`).join('')}
+    </table>` : '<div style="padding:12px;color:var(--text2);">No emergency history</div>';
+  } catch (e) {
+    $('emg-history').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+}
+
+async function activateEmergency() {
+  if (!confirm('ACTIVATE EMERGENCY MODE? All bid changes will be frozen!')) return;
+  try {
+    await api('emergency/activate', { method: 'POST', body: {
+      reason: $('emg-reason').value,
+      auto_deactivate_hours: parseFloat($('emg-hours').value),
+    }});
+    toast('Emergency ACTIVATED', 'error');
+    loadEmergencyCtrl();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deactivateEmergency() {
+  try {
+    await api('emergency/deactivate', { method: 'POST' });
+    toast('Emergency deactivated');
+    loadEmergencyCtrl();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function activateConservative() {
+  try {
+    await api('conservative/activate', { method: 'POST', body: {
+      minutes: parseInt($('cons-minutes').value),
+    }});
+    toast('Conservative mode activated');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deactivateConservative() {
+  try {
+    await api('conservative/deactivate', { method: 'POST' });
+    toast('Conservative mode deactivated');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ============================================
+// LOCKS
+// ============================================
+async function loadLocks() {
+  try {
+    const data = await api('locks');
+    $('locks-table').innerHTML = data.length ? `<table>
+      <tr><th>Lock Name</th><th>Locked By</th><th>Locked At</th><th>Expires</th><th>Status</th><th>Actions</th></tr>
+      ${data.map(l => {
+        const expired = new Date(l.expires_at) < new Date();
+        return `<tr>
+          <td><strong>${l.lock_name}</strong></td>
+          <td>${l.locked_by}</td>
+          <td>${fmtDate(l.locked_at)}</td>
+          <td>${fmtDate(l.expires_at)}</td>
+          <td>${expired ? '<span class="badge badge-gray">Expired</span>' : '<span class="badge badge-yellow">Active</span>'}</td>
+          <td><button class="btn btn-sm btn-danger" onclick="deleteLock('${l.lock_name}')">Release</button></td>
+        </tr>`;
+      }).join('')}
+    </table>` : '<div style="padding:12px;color:var(--text2);">No active locks</div>';
+  } catch (e) {
+    $('locks-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+}
+
+async function deleteLock(name) {
+  if (!confirm('Release lock: ' + name + '?')) return;
+  try {
+    await api('locks/' + encodeURIComponent(name), { method: 'DELETE' });
+    toast('Lock released');
+    loadLocks();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ============================================
+// DAILY PNL
+// ============================================
+async function loadDailyPnl() {
+  try {
+    const data = await api('daily_pnl');
+    $('pnl-table').innerHTML = data.length ? `<table>
+      <tr><th>Date</th><th>Spend</th><th>Revenue</th><th>Profit</th><th>ROI</th><th>Best Campaign</th><th>Created</th><th>Banned</th><th>Stopped</th></tr>
+      ${data.map(p => `<tr>
+        <td><strong>${p.date ? p.date.split('T')[0] : '-'}</strong></td>
+        <td>$${fmt(p.total_spend)}</td>
+        <td>$${fmt(p.total_revenue)}</td>
+        <td style="color:var(--${p.gross_profit>=0?'green':'red'})">$${fmt(p.gross_profit)}</td>
+        <td style="color:var(--${p.roi_percent>=0?'green':'red'})">${fmt(p.roi_percent,1)}%</td>
+        <td>${p.best_campaign_id||'-'}</td>
+        <td>${p.teasers_created||0}</td>
+        <td>${p.teasers_banned||0}</td>
+        <td>${p.teasers_stopped||0}</td>
+      </tr>`).join('')}
+    </table>` : '<div style="padding:12px;color:var(--text2);">No P&L data yet</div>';
+  } catch (e) {
+    $('pnl-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+}
+
+// ============================================
+// MODAL
+// ============================================
+function closeModal() { $('modal').classList.remove('show'); }
+$('modal').addEventListener('click', e => { if (e.target === $('modal')) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ============================================
+// INIT
+// ============================================
+loadDashboard();
+</script>
+</body>
+</html>
