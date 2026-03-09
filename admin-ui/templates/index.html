@@ -463,8 +463,9 @@ function loadSection(sec) {
 // ============================================
 // API HELPER
 // ============================================
+const BASE = location.pathname.replace(/\/$/, '');
 async function api(path, opts = {}) {
-  const resp = await fetch('/api/' + path, {
+  const resp = await fetch(BASE + '/api/' + path, {
     headers: { 'Content-Type': 'application/json' },
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
