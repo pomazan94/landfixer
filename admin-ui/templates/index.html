@@ -867,15 +867,24 @@ async function loadTeasersTree(filter) {
   const container = $('teasers-tree');
   container.innerHTML = '<div class="loading">Загрузка...</div>';
   try {
-    // Fetch both tree structure and teasers
-    const [tree, tData] = await Promise.all([
-      api('campaigns_tree'),
-      api('teasers', { limit: 500, ..._treeFilter })
-    ]);
+    // Fetch tree structure first
+    const tree = await api('campaigns_tree');
+
+    // Fetch ALL teasers with pagination (500 per page)
+    let allTeasers = [];
+    let offset = 0;
+    const pageSize = 500;
+    while (true) {
+      const tData = await api('teasers', { limit: pageSize, offset, ..._treeFilter });
+      const page = tData.data || [];
+      allTeasers = allTeasers.concat(page);
+      if (page.length < pageSize) break; // last page
+      offset += pageSize;
+    }
 
     const campaigns = tree.campaigns || [];
     const groups = tree.groups || [];
-    const teasers = tData.data || [];
+    const teasers = allTeasers;
 
     $('teasers-count').textContent = `Всего тизеров: ${teasers.length}`;
 
