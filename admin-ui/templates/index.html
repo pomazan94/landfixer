@@ -165,7 +165,7 @@ textarea { resize:vertical; min-height:60px; }
 <div class="login-screen" id="login-screen">
   <div class="login-box">
     <h1>GEOZO Bot</h1>
-    <p>Management Panel</p>
+    <p>Панель управления</p>
     <input type="password" id="login-password" placeholder="Пароль" autofocus onkeydown="if(event.key==='Enter')doLogin()">
     <button class="btn" onclick="doLogin()">Войти</button>
     <div class="login-error" id="login-error">Неверный пароль</div>
@@ -210,7 +210,8 @@ textarea { resize:vertical; min-height:60px; }
   <main class="main">
     <!-- DASHBOARD -->
     <div class="section active" id="sec-dashboard">
-      <h2 style="margin-bottom:16px;font-size:20px;">Дашборд</h2>
+      <h2 style="margin-bottom:4px;font-size:20px;">Дашборд</h2>
+      <p style="color:var(--text2);font-size:12px;margin-bottom:16px;">Общая сводка: баланс, расходы/доходы за сегодня, статусы тизеров и последние изменения ставок.</p>
       <div id="emergency-banner"></div>
       <div class="grid grid-4" id="dash-stats"></div>
       <div class="grid grid-2" style="margin-top:16px;">
@@ -228,7 +229,7 @@ textarea { resize:vertical; min-height:60px; }
     <!-- SMART BIDDER CONFIG -->
     <div class="section" id="sec-smart-bidder">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Настройки умного биддера</h2>
+        <div><h2 style="font-size:20px;">Настройки умного биддера</h2><p style="color:var(--text2);font-size:12px;">Параметры автоматического управления ставками: шаг повышения/понижения, макс. ставка, стратегии для разных ROI-классов.</p></div>
         <button class="btn btn-primary" onclick="saveCategory('smart_bidder')">Сохранить</button>
       </div>
       <div class="card" id="cfg-smart_bidder"><div class="loading">Загрузка...</div></div>
@@ -237,7 +238,7 @@ textarea { resize:vertical; min-height:60px; }
     <!-- TIME MULTIPLIERS -->
     <div class="section" id="sec-time-multipliers">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Мультипликаторы по времени суток</h2>
+        <div><h2 style="font-size:20px;">Мультипликаторы по времени суток</h2><p style="color:var(--text2);font-size:12px;">Коэффициенты ставок по часам — повышение в прайм-тайм, снижение в ночное время.</p></div>
         <button class="btn btn-primary" onclick="saveCategory('time_multipliers')">Сохранить</button>
       </div>
       <div class="card" id="cfg-time_multipliers"><div class="loading">Загрузка...</div></div>
@@ -246,7 +247,7 @@ textarea { resize:vertical; min-height:60px; }
     <!-- WARMUP -->
     <div class="section" id="sec-warmup">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Настройки фаз прогрева</h2>
+        <div><h2 style="font-size:20px;">Настройки фаз прогрева</h2><p style="color:var(--text2);font-size:12px;">Конфигурация этапов прогрева новых тизеров: начальные ставки, длительность фаз, пороги перехода.</p></div>
         <button class="btn btn-primary" onclick="saveCategory('warmup')">Сохранить</button>
       </div>
       <div class="card" id="cfg-warmup"><div class="loading">Загрузка...</div></div>
@@ -255,7 +256,7 @@ textarea { resize:vertical; min-height:60px; }
     <!-- ROI CLASSIFICATION -->
     <div class="section" id="sec-roi-class">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Пороги классификации ROI</h2>
+        <div><h2 style="font-size:20px;">Пороги классификации ROI</h2><p style="color:var(--text2);font-size:12px;">Границы для классификации тизеров по ROI: хороший/средний/плохой. Влияет на стратегию изменения ставок.</p></div>
         <button class="btn btn-primary" onclick="saveCategory('roi_classification')">Сохранить</button>
       </div>
       <div class="card" id="cfg-roi_classification"><div class="loading">Загрузка...</div></div>
@@ -264,7 +265,7 @@ textarea { resize:vertical; min-height:60px; }
     <!-- EMERGENCY CONFIG -->
     <div class="section" id="sec-emergency-cfg">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Настройки аварийного контроллера</h2>
+        <div><h2 style="font-size:20px;">Настройки аварийного контроллера</h2><p style="color:var(--text2);font-size:12px;">Пороги срабатывания аварийного режима (ROI, скорость трат, баланс) и параметры мониторинга баланса.</p></div>
         <button class="btn btn-primary" onclick="saveMultiCategory(['emergency','balance'])">Сохранить</button>
       </div>
       <div class="card"><h2>Аварийные пороги</h2><div id="cfg-emergency"><div class="loading">Загрузка...</div></div></div>
@@ -274,7 +275,7 @@ textarea { resize:vertical; min-height:60px; }
     <!-- SCHEDULES -->
     <div class="section" id="sec-schedules">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Расписания воркфлоу</h2>
+        <div><h2 style="font-size:20px;">Расписания воркфлоу</h2><p style="color:var(--text2);font-size:12px;">Интервалы запуска автоматических процессов: биддер, сбор статистики, сканирование.</p></div>
         <button class="btn btn-primary" onclick="saveCategory('schedules')">Сохранить</button>
       </div>
       <div class="card" id="cfg-schedules"><div class="loading">Загрузка...</div></div>
@@ -283,7 +284,7 @@ textarea { resize:vertical; min-height:60px; }
     <!-- GENERAL CONFIG -->
     <div class="section" id="sec-general-cfg">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Общие настройки</h2>
+        <div><h2 style="font-size:20px;">Общие настройки</h2><p style="color:var(--text2);font-size:12px;">Базовые параметры бота: фоллбэк-выплаты, детекция мёртвых креативов, откаты ставок, детектор аномалий, трекинг позиций.</p></div>
         <button class="btn btn-primary" onclick="saveMultiCategory(['general','default_payout','dead_creative','rollback','anomaly','position'])">Сохранить</button>
       </div>
       <div class="card"><h2>Общее</h2><div id="cfg-general"><div class="loading">Загрузка...</div></div></div>
@@ -297,7 +298,7 @@ textarea { resize:vertical; min-height:60px; }
     <!-- GEO PAYOUTS -->
     <div class="section" id="sec-geo-payouts">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Гео и выплаты</h2>
+        <div><h2 style="font-size:20px;">Гео и выплаты</h2><p style="color:var(--text2);font-size:12px;">Справочник стран: средние выплаты, апрув, допустимые диапазоны ставок. Бот использует для расчёта макс. CPL.</p></div>
         <button class="btn btn-primary" onclick="showAddGeo()">+ Добавить гео</button>
       </div>
       <div class="card">
@@ -307,7 +308,8 @@ textarea { resize:vertical; min-height:60px; }
 
     <!-- TEASERS -->
     <div class="section" id="sec-teasers">
-      <h2 style="margin-bottom:16px;font-size:20px;">Тизеры</h2>
+      <h2 style="margin-bottom:4px;font-size:20px;">Тизеры</h2>
+      <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Все объявления бота. Можно фильтровать по статусу и вручную менять состояние (активация, пауза, стоп).</p>
       <div class="btn-group">
         <button class="btn btn-sm btn-outline" onclick="loadTeasers()">Все</button>
         <button class="btn btn-sm btn-outline" onclick="loadTeasers('active')">Активные</button>
@@ -324,7 +326,8 @@ textarea { resize:vertical; min-height:60px; }
 
     <!-- BID HISTORY -->
     <div class="section" id="sec-bid-history">
-      <h2 style="margin-bottom:16px;font-size:20px;">История ставок</h2>
+      <h2 style="margin-bottom:4px;font-size:20px;">История ставок</h2>
+      <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Лог всех изменений ставок ботом: старая/новая ставка, правило, причина. Можно фильтровать по Ad ID.</p>
       <div style="display:flex;gap:8px;margin-bottom:12px;">
         <input type="number" id="bh-ad-id" placeholder="Фильтр по Ad ID" style="width:200px;">
         <button class="btn btn-sm btn-primary" onclick="loadBidHistory()">Найти</button>
@@ -337,7 +340,8 @@ textarea { resize:vertical; min-height:60px; }
 
     <!-- ANOMALIES -->
     <div class="section" id="sec-anomalies">
-      <h2 style="margin-bottom:16px;font-size:20px;">Аномалии</h2>
+      <h2 style="margin-bottom:4px;font-size:20px;">Аномалии</h2>
+      <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Автоматически обнаруженные отклонения метрик от нормы: резкие изменения CTR, расхода, конверсии.</p>
       <div class="tabs" id="anomaly-tabs">
         <div class="tab active" onclick="loadAnomalies(false)">Открытые</div>
         <div class="tab" onclick="loadAnomalies(true)">Решённые</div>
@@ -349,7 +353,8 @@ textarea { resize:vertical; min-height:60px; }
 
     <!-- BLOCK LISTS -->
     <div class="section" id="sec-block-lists">
-      <h2 style="margin-bottom:16px;font-size:20px;">Блок-листы</h2>
+      <h2 style="margin-bottom:4px;font-size:20px;">Блок-листы</h2>
+      <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Чёрный и белый списки площадок. Бот автоматически добавляет площадки по ROI. Можно удалять вручную.</p>
       <div class="tabs" id="bl-tabs">
         <div class="tab active" onclick="loadBlockLists()">Все</div>
         <div class="tab" onclick="loadBlockLists('whitelist')">Белый список</div>
@@ -363,7 +368,7 @@ textarea { resize:vertical; min-height:60px; }
     <!-- SCAN TARGETS -->
     <div class="section" id="sec-scan-targets">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 style="font-size:20px;">Цели сканирования</h2>
+        <div><h2 style="font-size:20px;">Цели сканирования</h2><p style="color:var(--text2);font-size:12px;">Сайты для мониторинга позиций тизеров. Бот проверяет через прокси и отслеживает видимость объявлений.</p></div>
         <button class="btn btn-primary" onclick="showAddScanTarget()">+ Добавить цель</button>
       </div>
       <div class="card">
@@ -373,7 +378,8 @@ textarea { resize:vertical; min-height:60px; }
 
     <!-- AB TESTS -->
     <div class="section" id="sec-ab-tests">
-      <h2 style="margin-bottom:16px;font-size:20px;">A/B Тесты</h2>
+      <h2 style="margin-bottom:4px;font-size:20px;">A/B Тесты</h2>
+      <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Автоматические сплит-тесты лендингов: бот запускает варианты и выбирает победителя по конверсии.</p>
       <div class="card">
         <div class="table-wrap" id="ab-tests-table"><div class="loading">Загрузка...</div></div>
       </div>
@@ -381,7 +387,8 @@ textarea { resize:vertical; min-height:60px; }
 
     <!-- EMERGENCY CONTROL -->
     <div class="section" id="sec-emergency-ctrl">
-      <h2 style="margin-bottom:16px;font-size:20px;">Панель экстренного управления</h2>
+      <h2 style="margin-bottom:4px;font-size:20px;">Панель экстренного управления</h2>
+      <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Ручное управление аварийным и консервативным режимами. Аварийный — полная заморозка. Консервативный — только снижения ставок.</p>
       <div class="grid grid-2">
         <div class="card">
           <h2 style="color:var(--red);">Экстренная остановка</h2>
@@ -421,7 +428,8 @@ textarea { resize:vertical; min-height:60px; }
 
     <!-- WORKFLOW LOCKS -->
     <div class="section" id="sec-locks">
-      <h2 style="margin-bottom:16px;font-size:20px;">Активные блокировки</h2>
+      <h2 style="margin-bottom:4px;font-size:20px;">Активные блокировки</h2>
+      <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Блокировки воркфлоу (мьютексы). Предотвращают одновременное выполнение конфликтующих процессов. Можно снять вручную.</p>
       <div class="card">
         <div class="table-wrap" id="locks-table"><div class="loading">Загрузка...</div></div>
       </div>
@@ -429,7 +437,8 @@ textarea { resize:vertical; min-height:60px; }
 
     <!-- DAILY PNL -->
     <div class="section" id="sec-daily-pnl">
-      <h2 style="margin-bottom:16px;font-size:20px;">P&L по дням</h2>
+      <h2 style="margin-bottom:4px;font-size:20px;">P&amp;L по дням</h2>
+      <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Ежедневная финансовая сводка: расходы, доходы, прибыль, ROI. Показывает тренд за последние 30 дней.</p>
       <div class="card">
         <div class="table-wrap" id="pnl-table"><div class="loading">Загрузка...</div></div>
       </div>
@@ -448,6 +457,18 @@ textarea { resize:vertical; min-height:60px; }
 // ============================================
 let configData = {};
 let currentSection = 'dashboard';
+
+// Перевод статусов тизеров
+const STATE_RU = {
+  active: 'Активный', testing: 'Тестирование', created: 'Создан',
+  paused_high_cpl: 'Пауза (CPL)', paused: 'Пауза', stopped: 'Остановлен',
+  banned: 'Забанен', dead: 'Мёртвый', running: 'Запущен',
+  completed: 'Завершён', pending: 'Ожидание'
+};
+function stateRu(s) { return STATE_RU[s] || s; }
+
+// Перевод severity
+const SEV_RU = { critical: 'Критичный', warning: 'Внимание', info: 'Инфо' };
 
 // ============================================
 // NAVIGATION
@@ -498,11 +519,14 @@ async function api(action, params = {}) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, params }),
   });
+  const text = await resp.text();
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: resp.statusText }));
+    let err;
+    try { err = JSON.parse(text); } catch { err = { error: resp.statusText }; }
     throw new Error(err.error || resp.statusText);
   }
-  return resp.json();
+  if (!text || text.trim() === '') return { data: [] };
+  try { return JSON.parse(text); } catch { return { data: [] }; }
 }
 
 function toast(msg, type = 'success') {
@@ -561,7 +585,7 @@ async function loadDashboard() {
     const stateColors = {active:'green',testing:'blue',created:'gray',paused_high_cpl:'orange',stopped:'red',banned:'red',dead:'gray'};
     $('dash-teasers').innerHTML = states.map(s =>
       `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
-        <span><span class="badge badge-${stateColors[s]||'gray'}">${s}</span></span>
+        <span><span class="badge badge-${stateColors[s]||'gray'}">${stateRu(s)}</span></span>
         <span style="font-weight:600;">${stateMap[s] || 0}</span>
       </div>`
     ).join('');
@@ -811,14 +835,14 @@ async function loadTeasers(state) {
     const d = await api('teasers', { limit: 100, state: state || undefined });
     const rows = d.data || [];
     $('teasers-table').innerHTML = rows.length ? `<table>
-      <tr><th>ID</th><th>Ad ID</th><th>Заголовок</th><th>Статус</th><th>Ставка</th><th>Прогрев</th><th>Ур.эск.</th><th>Расход</th><th>Сегодня</th><th>Действия</th></tr>
+      <tr><th>ID</th><th>Ad ID</th><th>Заголовок</th><th>Статус</th><th>Ставка</th><th>Фаза</th><th>Эскалация</th><th>Всего расход</th><th>Сегодня</th><th>Действия</th></tr>
       ${rows.map(t => {
         const stCol = {active:'green',testing:'blue',created:'gray',paused_high_cpl:'orange',stopped:'red',banned:'red',dead:'gray'}[t.state]||'gray';
         return `<tr>
           <td>${t.id}</td>
           <td><strong>${t.ad_id||'-'}</strong></td>
           <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(t.title||'').replace(/"/g,'&quot;')}">${t.title||'-'}</td>
-          <td><span class="badge badge-${stCol}">${t.state}</span></td>
+          <td><span class="badge badge-${stCol}">${stateRu(t.state)}</span></td>
           <td>$${fmt(t.bid,4)}</td>
           <td>${t.warmup_phase != null ? 'P'+t.warmup_phase : '-'}</td>
           <td>${t.escalation_level||0}</td>
@@ -826,11 +850,11 @@ async function loadTeasers(state) {
           <td style="font-size:11px;">${t.today_spend != null ? '$'+fmt(t.today_spend)+' | '+fmt(t.today_roi,1)+'%' : '-'}</td>
           <td>
             <select style="width:90px;padding:2px 4px;font-size:11px;" onchange="changeState(${t.id},this.value)">
-              <option value="">Сменить...</option>
+              <option value="">Изменить статус...</option>
               <option value="active">Активный</option>
               <option value="paused">Пауза</option>
-              <option value="stopped">Стоп</option>
-              <option value="testing">Тест</option>
+              <option value="stopped">Остановлен</option>
+              <option value="testing">Тестирование</option>
             </select>
           </td>
         </tr>`;
@@ -845,7 +869,7 @@ async function changeState(id, state) {
   if (!state) return;
   try {
     await api('teaser_state', { id, state });
-    toast('Статус изменён на ' + state);
+    toast('Статус изменён: ' + stateRu(state));
     loadTeasers();
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -895,12 +919,12 @@ async function loadAnomalies(resolved) {
         <td style="white-space:nowrap;">${fmtDate(a.detected_at)}</td>
         <td>${a.ad_id||'-'}</td>
         <td>${a.anomaly_type}</td>
-        <td><span class="badge badge-${a.severity==='critical'?'red':'yellow'}">${a.severity}</span></td>
+        <td><span class="badge badge-${a.severity==='critical'?'red':'yellow'}">${SEV_RU[a.severity]||a.severity}</span></td>
         <td>${a.metric_name||'-'}</td>
         <td>${fmt(a.expected_value)}</td>
         <td>${fmt(a.actual_value)}</td>
         <td style="color:var(--red)">${fmt(a.deviation_percent,1)}%</td>
-        <td>${!a.resolved ? `<button class="btn btn-sm btn-success" onclick="resolveAnomaly(${a.id})">Решить</button>` : `<span class="badge badge-green">Решено</span>`}</td>
+        <td>${!a.resolved ? `<button class="btn btn-sm btn-success" onclick="resolveAnomaly(${a.id})">Закрыть</button>` : `<span class="badge badge-green">Закрыто</span>`}</td>
       </tr>`).join('')}
     </table>` : '<div style="padding:12px;color:var(--text2);">Нет аномалий</div>';
   } catch (e) {
@@ -930,7 +954,7 @@ async function loadBlockLists(type) {
       <tr><th>Block ID</th><th>Тип</th><th>Группа</th><th>Причина</th><th>ROI</th><th>Добавлен</th><th>Действия</th></tr>
       ${data.map(b => `<tr>
         <td><strong>${b.block_id}</strong></td>
-        <td><span class="badge badge-${b.list_type==='whitelist'?'green':'red'}">${b.list_type}</span></td>
+        <td><span class="badge badge-${b.list_type==='whitelist'?'green':'red'}">${b.list_type==='whitelist'?'Белый':'Чёрный'}</span></td>
         <td>${b.ad_group_id||'-'}</td>
         <td>${b.reason||'-'}</td>
         <td>${fmt(b.roi_at_decision,1)}%</td>
@@ -1040,7 +1064,7 @@ async function loadAbTests() {
         <td>${t.id}</td>
         <td>${t.test_name}</td>
         <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${t.landing_url}</td>
-        <td><span class="badge badge-${t.status==='running'?'blue':(t.status==='completed'?'green':'gray')}">${t.status}</span></td>
+        <td><span class="badge badge-${t.status==='running'?'blue':(t.status==='completed'?'green':'gray')}">${stateRu(t.status)}</span></td>
         <td>${t.generation||1}</td>
         <td>${t.winner_ad_id||'-'}</td>
         <td>${fmtDate(t.started_at)}</td>
