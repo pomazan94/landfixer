@@ -461,14 +461,14 @@ function loadSection(sec) {
 }
 
 // ============================================
-// API HELPER
+// API HELPER — calls n8n webhook
 // ============================================
-const BASE = location.pathname.replace(/\/$/, '');
-async function api(path, opts = {}) {
-  const resp = await fetch(BASE + '/api/' + path, {
+const WEBHOOK_URL = '/webhook/admin-api';
+async function api(action, params = {}) {
+  const resp = await fetch(WEBHOOK_URL, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    ...opts,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
+    body: JSON.stringify({ action, params }),
   });
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ error: resp.statusText }));
@@ -498,8 +498,8 @@ async function loadDashboard() {
     const b = d.balance || {};
     const s = d.today_stats || {};
     const tc = d.teaser_counts || [];
-    const bc = d.bid_changes_24h || {};
-    const ao = d.anomalies_open || {};
+    const bc = d.bid_changes_24h;
+    const ao = d.anomalies_open;
     const em = d.emergency;
     const cm = d.conservative_mode;
 
@@ -523,7 +523,7 @@ async function loadDashboard() {
       <div class="stat blue"><div class="label">Balance</div><div class="value">$${fmt(b.balance)}</div><div class="sub">${fmt(b.spend_rate_per_hour)}/h | ${fmt(b.hours_remaining,1)}h left</div></div>
       <div class="stat ${spend > 0 ? 'orange' : ''}"><div class="label">Today Spend</div><div class="value">$${fmt(spend)}</div><div class="sub">${s.total_ads || 0} ads tracked</div></div>
       <div class="stat ${profit >= 0 ? 'green' : 'red'}"><div class="label">Today Profit</div><div class="value">$${fmt(profit)}</div><div class="sub">ROI: ${fmt(roi,1)}%</div></div>
-      <div class="stat purple"><div class="label">Bid Changes 24h</div><div class="value">${bc.cnt || 0}</div><div class="sub">Anomalies open: ${ao.cnt || 0}</div></div>
+      <div class="stat purple"><div class="label">Bid Changes 24h</div><div class="value">${bc || 0}</div><div class="sub">Anomalies open: ${ao || 0}</div></div>
     `;
 
     // Teaser counts
@@ -539,7 +539,8 @@ async function loadDashboard() {
     ).join('');
 
     // Recent bids
-    const bids = await api('bid_history?limit=10');
+    const bidsResp = await api('bid_history', { limit: 10 });
+    const bids = bidsResp.data || [];
     $('dash-bids').innerHTML = bids.length ? bids.map(b => {
       const dir = b.new_bid > b.old_bid ? 'green' : (b.new_bid < b.old_bid ? 'red' : 'gray');
       const arrow = b.new_bid > b.old_bid ? '&uarr;' : (b.new_bid < b.old_bid ? '&darr;' : '=');
@@ -557,7 +558,7 @@ async function loadDashboard() {
 // CONFIG MANAGEMENT
 // ============================================
 async function loadAllConfig() {
-  configData = await api('config');
+  configData = await api('config_list');
 }
 
 async function loadConfig(category) {
@@ -616,12 +617,8 @@ async function saveCategory(category) {
     return;
   }
   try {
-    const res = await api('config/bulk', { method: 'PUT', body: { updates } });
-    if (res.errors && res.errors.length > 0) {
-      toast('Saved with errors: ' + res.errors.join(', '), 'error');
-    } else {
-      toast(`Saved ${updates.length} changes`);
-    }
+    await api('config_update', { updates });
+    toast(`Saved ${updates.length} changes`);
     // Refresh original values
     updates.forEach(u => {
       const input = $('cfg-val-' + u.id);
@@ -652,7 +649,7 @@ async function saveMultiCategory(categories) {
     return;
   }
   try {
-    await api('config/bulk', { method: 'PUT', body: { updates } });
+    await api('config_update', { updates });
     toast(`Saved ${updates.length} changes`);
     updates.forEach(u => {
       const input = $('cfg-val-' + u.id);
@@ -669,7 +666,8 @@ async function saveMultiCategory(categories) {
 // ============================================
 async function loadGeoPayouts() {
   try {
-    const data = await api('geo_payouts');
+    const resp = await api('geo_list');
+    const data = resp.data || [];
     $('geo-table').innerHTML = `<table>
       <tr><th>Code</th><th>Country</th><th>Geo ID</th><th>Vertical</th><th>Avg Payout</th><th>Approval</th><th>Max CPL</th><th>Min Bid</th><th>Max Bid</th><th>Active</th><th>Actions</th></tr>
       ${data.map(g => `<tr>
@@ -711,7 +709,7 @@ function showAddGeo() {
 
 async function addGeo() {
   try {
-    await api('geo_payouts', { method: 'POST', body: {
+    await api('geo_create', { fields: {
       country_code: $('ng-cc').value.toUpperCase(),
       country_name: $('ng-name').value,
       geo_id: parseInt($('ng-geoid').value) || null,
@@ -728,8 +726,8 @@ async function addGeo() {
 }
 
 async function editGeo(id) {
-  const data = await api('geo_payouts');
-  const g = data.find(x => x.id === id);
+  const resp = await api('geo_list');
+  const g = (resp.data || []).find(x => x.id === id);
   if (!g) return;
   $('modal-content').innerHTML = `
     <h2>Edit ${g.country_code} - ${g.country_name}</h2>
@@ -751,7 +749,7 @@ async function editGeo(id) {
 
 async function saveGeo(id) {
   try {
-    await api('geo_payouts/' + id, { method: 'PUT', body: {
+    await api('geo_update', { id, fields: {
       country_name: $('eg-name').value,
       geo_id: parseInt($('eg-geoid').value) || null,
       vertical: $('eg-vert').value,
@@ -771,7 +769,7 @@ async function saveGeo(id) {
 async function deleteGeo(id) {
   if (!confirm('Delete this geo payout?')) return;
   try {
-    await api('geo_payouts/' + id, { method: 'DELETE' });
+    await api('geo_delete', { id });
     toast('Geo deleted');
     loadGeoPayouts();
   } catch (e) { toast(e.message, 'error'); }
@@ -782,8 +780,7 @@ async function deleteGeo(id) {
 // ============================================
 async function loadTeasers(state) {
   try {
-    const url = 'teasers?limit=100' + (state ? '&state=' + state : '');
-    const d = await api(url);
+    const d = await api('teasers', { limit: 100, state: state || undefined });
     const rows = d.data || [];
     $('teasers-table').innerHTML = rows.length ? `<table>
       <tr><th>ID</th><th>Ad ID</th><th>Title</th><th>State</th><th>Bid</th><th>Warmup</th><th>Esc.Lvl</th><th>Spend</th><th>Today</th><th>Actions</th></tr>
@@ -819,7 +816,7 @@ async function loadTeasers(state) {
 async function changeState(id, state) {
   if (!state) return;
   try {
-    await api('teasers/' + id + '/state', { method: 'PUT', body: { state } });
+    await api('teaser_state', { id, state });
     toast('State changed to ' + state);
     loadTeasers();
   } catch (e) { toast(e.message, 'error'); }
@@ -831,8 +828,8 @@ async function changeState(id, state) {
 async function loadBidHistory() {
   try {
     const adId = $('bh-ad-id')?.value;
-    const url = 'bid_history?limit=100' + (adId ? '&ad_id=' + adId : '');
-    const data = await api(url);
+    const resp = await api('bid_history', { limit: 100, ad_id: adId ? parseInt(adId) : undefined });
+    const data = resp.data || [];
     $('bid-history-table').innerHTML = data.length ? `<table>
       <tr><th>Time</th><th>Ad ID</th><th>Old Bid</th><th>New Bid</th><th>Change</th><th>Rule</th><th>Reason</th></tr>
       ${data.map(b => {
@@ -862,7 +859,8 @@ async function loadAnomalies(resolved) {
     document.querySelectorAll('#anomaly-tabs .tab').forEach((t,i) => {
       t.classList.toggle('active', resolved ? i===1 : i===0);
     });
-    const data = await api('anomalies?resolved=' + (resolved ? 'true' : 'false'));
+    const resp = await api('anomalies', { resolved });
+    const data = resp.data || [];
     $('anomalies-table').innerHTML = data.length ? `<table>
       <tr><th>Time</th><th>Ad ID</th><th>Type</th><th>Severity</th><th>Metric</th><th>Expected</th><th>Actual</th><th>Dev%</th><th>Actions</th></tr>
       ${data.map(a => `<tr>
@@ -884,7 +882,7 @@ async function loadAnomalies(resolved) {
 
 async function resolveAnomaly(id) {
   try {
-    await api('anomalies/' + id + '/resolve', { method: 'PUT' });
+    await api('anomaly_resolve', { id });
     toast('Anomaly resolved');
     loadAnomalies(false);
   } catch (e) { toast(e.message, 'error'); }
@@ -898,8 +896,8 @@ async function loadBlockLists(type) {
     document.querySelectorAll('#bl-tabs .tab').forEach((t,i) => {
       t.classList.toggle('active', !type ? i===0 : (type==='whitelist' ? i===1 : i===2));
     });
-    const url = 'block_lists' + (type ? '?type=' + type : '');
-    const data = await api(url);
+    const resp = await api('block_lists', { type: type || undefined });
+    const data = resp.data || [];
     $('block-lists-table').innerHTML = data.length ? `<table>
       <tr><th>Block ID</th><th>Type</th><th>Ad Group</th><th>Reason</th><th>ROI</th><th>Added</th><th>Actions</th></tr>
       ${data.map(b => `<tr>
@@ -920,7 +918,7 @@ async function loadBlockLists(type) {
 async function deleteBlockList(id) {
   if (!confirm('Remove from block list?')) return;
   try {
-    await api('block_lists/' + id, { method: 'DELETE' });
+    await api('block_list_delete', { id });
     toast('Removed');
     loadBlockLists();
   } catch (e) { toast(e.message, 'error'); }
@@ -931,7 +929,8 @@ async function deleteBlockList(id) {
 // ============================================
 async function loadScanTargets() {
   try {
-    const data = await api('scan_targets');
+    const resp = await api('scan_targets');
+    const data = resp.data || [];
     $('scan-targets-table').innerHTML = data.length ? `<table>
       <tr><th>ID</th><th>Site URL</th><th>Country</th><th>Proxy</th><th>Type</th><th>Active</th><th>Notes</th><th>Actions</th></tr>
       ${data.map(s => `<tr>
@@ -970,7 +969,7 @@ function showAddScanTarget() {
 
 async function addScanTarget() {
   try {
-    await api('scan_targets', { method: 'POST', body: {
+    await api('scan_target_create', { fields: {
       site_url: $('st-url').value,
       country_code: $('st-cc').value.toUpperCase(),
       proxy_url: $('st-proxy').value || null,
@@ -985,7 +984,7 @@ async function addScanTarget() {
 
 async function toggleScanTarget(id, active) {
   try {
-    await api('scan_targets/' + id, { method: 'PUT', body: { is_active: active } });
+    await api('scan_target_toggle', { id, active });
     toast(active ? 'Enabled' : 'Disabled');
     loadScanTargets();
   } catch (e) { toast(e.message, 'error'); }
@@ -994,7 +993,7 @@ async function toggleScanTarget(id, active) {
 async function deleteScanTarget(id) {
   if (!confirm('Delete scan target?')) return;
   try {
-    await api('scan_targets/' + id, { method: 'DELETE' });
+    await api('scan_target_delete', { id });
     toast('Deleted');
     loadScanTargets();
   } catch (e) { toast(e.message, 'error'); }
@@ -1005,7 +1004,8 @@ async function deleteScanTarget(id) {
 // ============================================
 async function loadAbTests() {
   try {
-    const data = await api('ab_tests');
+    const resp = await api('ab_tests');
+    const data = resp.data || [];
     $('ab-tests-table').innerHTML = data.length ? `<table>
       <tr><th>ID</th><th>Test Name</th><th>Landing</th><th>Status</th><th>Gen</th><th>Winner</th><th>Started</th><th>Finished</th></tr>
       ${data.map(t => `<tr>
@@ -1029,7 +1029,8 @@ async function loadAbTests() {
 // ============================================
 async function loadEmergencyCtrl() {
   try {
-    const data = await api('emergency');
+    const resp = await api('emergency_list');
+    const data = resp.data || [];
     const active = data.find(e => e.is_active);
     $('emg-status').innerHTML = active
       ? `<div class="alert-banner alert-danger">EMERGENCY ACTIVE: ${active.trigger_reason} (auto-off: ${fmtDate(active.auto_deactivate_at)})</div>`
@@ -1053,10 +1054,10 @@ async function loadEmergencyCtrl() {
 async function activateEmergency() {
   if (!confirm('ACTIVATE EMERGENCY MODE? All bid changes will be frozen!')) return;
   try {
-    await api('emergency/activate', { method: 'POST', body: {
+    await api('emergency_activate', {
       reason: $('emg-reason').value,
-      auto_deactivate_hours: parseFloat($('emg-hours').value),
-    }});
+      hours: parseFloat($('emg-hours').value),
+    });
     toast('Emergency ACTIVATED', 'error');
     loadEmergencyCtrl();
   } catch (e) { toast(e.message, 'error'); }
@@ -1064,7 +1065,7 @@ async function activateEmergency() {
 
 async function deactivateEmergency() {
   try {
-    await api('emergency/deactivate', { method: 'POST' });
+    await api('emergency_deactivate');
     toast('Emergency deactivated');
     loadEmergencyCtrl();
   } catch (e) { toast(e.message, 'error'); }
@@ -1072,16 +1073,16 @@ async function deactivateEmergency() {
 
 async function activateConservative() {
   try {
-    await api('conservative/activate', { method: 'POST', body: {
+    await api('conservative_activate', {
       minutes: parseInt($('cons-minutes').value),
-    }});
+    });
     toast('Conservative mode activated');
   } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deactivateConservative() {
   try {
-    await api('conservative/deactivate', { method: 'POST' });
+    await api('conservative_deactivate');
     toast('Conservative mode deactivated');
   } catch (e) { toast(e.message, 'error'); }
 }
@@ -1091,7 +1092,8 @@ async function deactivateConservative() {
 // ============================================
 async function loadLocks() {
   try {
-    const data = await api('locks');
+    const resp = await api('locks');
+    const data = resp.data || [];
     $('locks-table').innerHTML = data.length ? `<table>
       <tr><th>Lock Name</th><th>Locked By</th><th>Locked At</th><th>Expires</th><th>Status</th><th>Actions</th></tr>
       ${data.map(l => {
@@ -1114,7 +1116,7 @@ async function loadLocks() {
 async function deleteLock(name) {
   if (!confirm('Release lock: ' + name + '?')) return;
   try {
-    await api('locks/' + encodeURIComponent(name), { method: 'DELETE' });
+    await api('lock_delete', { name });
     toast('Lock released');
     loadLocks();
   } catch (e) { toast(e.message, 'error'); }
@@ -1125,7 +1127,8 @@ async function deleteLock(name) {
 // ============================================
 async function loadDailyPnl() {
   try {
-    const data = await api('daily_pnl');
+    const resp = await api('daily_pnl');
+    const data = resp.data || [];
     $('pnl-table').innerHTML = data.length ? `<table>
       <tr><th>Date</th><th>Spend</th><th>Revenue</th><th>Profit</th><th>ROI</th><th>Best Campaign</th><th>Created</th><th>Banned</th><th>Stopped</th></tr>
       ${data.map(p => `<tr>
