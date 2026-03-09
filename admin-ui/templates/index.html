@@ -903,16 +903,18 @@ async function loadTeasersTree(filter) {
     let html = '';
     for (const [cid, groupsObj] of Object.entries(byCampaign)) {
       const camp = campMap[cid] || {};
-      const campName = camp.name || teasers.find(t => t.campaign_name)?.campaign_name || 'Campaign #' + cid;
+      const campTeasers = Object.values(groupsObj).flat();
+      const campName = camp.name || campTeasers.find(t => t.campaign_name)?.campaign_name || 'Campaign #' + cid;
       const campSpend = camp.today_spend ? '$' + fmt(camp.today_spend) : '';
       const campProfit = camp.today_profit ? (camp.today_profit >= 0 ? '+' : '') + '$' + fmt(camp.today_profit) : '';
-      const campAds = camp.total_ads || Object.values(groupsObj).flat().length;
-      const campActive = camp.active_ads || 0;
+      const campAds = camp.total_ads || campTeasers.length;
+      const campActive = camp.active_ads || campTeasers.filter(t => t.geozo_status_id === 5).length;
 
       html += `<div class="card" style="margin-bottom:12px;">
         <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;border-bottom:1px solid var(--border);" onclick="this.parentElement.querySelector('.camp-body').classList.toggle('collapsed')">
           <div>
-            <strong style="font-size:14px;">Campaign #${cid}: ${esc(campName)}</strong>
+            <strong style="font-size:14px;">${esc(campName)}</strong>
+            <span style="font-size:11px;color:var(--text2);margin-left:4px;">#${cid}</span>
             <span style="font-size:11px;color:var(--text2);margin-left:8px;">${campAds} тизеров, ${campActive} активных</span>
           </div>
           <div style="font-size:12px;display:flex;gap:12px;">
@@ -924,15 +926,16 @@ async function loadTeasersTree(filter) {
 
       for (const [gid, ads] of Object.entries(groupsObj)) {
         const grp = groupMap[gid] || {};
-        const grpName = grp.name || ads[0]?.group_name || 'Group #' + gid;
+        const grpName = grp.name || ads.find(t => t.group_name)?.group_name || 'Group #' + gid;
+        const grpActive = ads.filter(t => t.geozo_status_id === 5).length;
         const grpSpend = grp.today_spend ? '$' + fmt(grp.today_spend) : '';
 
         html += `<div style="margin:0 8px;border-bottom:1px solid var(--border);">
           <div style="padding:8px 6px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;background:rgba(255,255,255,0.02);" onclick="this.nextElementSibling.classList.toggle('collapsed')">
             <div>
-              <span style="color:var(--text2);font-size:11px;">Group #${gid}:</span>
-              <strong style="font-size:13px;margin-left:4px;">${esc(grpName)}</strong>
-              <span class="badge badge-gray" style="margin-left:6px;font-size:10px;">${ads.length} ads</span>
+              <strong style="font-size:13px;">${esc(grpName)}</strong>
+              <span style="color:var(--text2);font-size:10px;margin-left:4px;">#${gid}</span>
+              <span class="badge badge-gray" style="margin-left:6px;font-size:10px;">${ads.length} ads, ${grpActive} активных</span>
             </div>
             <div style="font-size:11px;color:var(--text2);">${grpSpend ? 'Расход: '+grpSpend : ''}</div>
           </div>
