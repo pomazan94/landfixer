@@ -1210,13 +1210,11 @@ function extractResult(resp) {
 }
 
 async function doLogin() {
-  const pwd = $('login-password').value;
+  const pwd = $('login-password').value.trim();
   if (!pwd) return;
   const hash = await sha256(pwd);
-  console.log('Password:', JSON.stringify(pwd), 'Hash:', hash);
   try {
     const resp = await api('login', { password_hash: hash });
-    console.log('Login response:', JSON.stringify(resp));
     const result = extractResult(resp);
     if (result === 'ok') {
       sessionStorage.setItem('auth', hash);
