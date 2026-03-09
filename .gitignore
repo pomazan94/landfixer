@@ -1,43 +1,23 @@
-# Environment
 .env
 *.env.local
-
-# Node
 node_modules/
-
-# Python
 __pycache__/
 *.pyc
 .venv/
-
-# Data
 *.sqlite
 *.db
-
-# Logs
 *.log
 logs/
-
-# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
-
-# Docker volumes
 postgres_data/
 redis_data/
 n8n_data/
-grafana_data/
-
-# Generated images
 images/generated/
-
-# Secrets
 credentials/
 *.pem
 *.key
