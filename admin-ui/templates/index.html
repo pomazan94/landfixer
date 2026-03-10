@@ -335,6 +335,23 @@ textarea { resize:vertical; min-height:60px; }
         <span style="color:var(--text2);font-size:11px;" id="teasers-count"></span>
         <button class="btn btn-sm btn-outline" onclick="_teasersLoaded=false;loadTeasersTree();" title="Обновить данные">&#x21bb; Обновить</button>
       </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <div class="btn-group" id="filter-period">
+          <button class="btn btn-sm btn-outline active" onclick="setPeriod(this,'today')">Сегодня</button>
+          <button class="btn btn-sm btn-outline" onclick="setPeriod(this,'yesterday')">Вчера</button>
+          <button class="btn btn-sm btn-outline" onclick="setPeriod(this,'3d')">3 дня</button>
+          <button class="btn btn-sm btn-outline" onclick="setPeriod(this,'7d')">7 дней</button>
+          <button class="btn btn-sm btn-outline" onclick="setPeriod(this,'30d')">30 дней</button>
+          <button class="btn btn-sm btn-outline" onclick="setPeriod(this,'custom')">Период</button>
+        </div>
+        <div id="custom-period-inputs" style="display:none;gap:6px;align-items:center;">
+          <input type="date" id="period-from" class="btn btn-sm btn-outline" style="padding:2px 6px;font-size:11px;">
+          <span style="color:var(--text2);font-size:11px;">—</span>
+          <input type="date" id="period-to" class="btn btn-sm btn-outline" style="padding:2px 6px;font-size:11px;">
+          <button class="btn btn-sm btn-primary" onclick="applyCustomPeriod()" style="font-size:11px;padding:2px 10px;">OK</button>
+        </div>
+        <span style="color:var(--text2);font-size:10px;" id="period-label"></span>
+      </div>
       <div id="teasers-tree"><div class="loading">Загрузка...</div></div>
     </div>
 
@@ -544,7 +561,6 @@ async function api(action, params = {}) {
     body: JSON.stringify({ action, params }),
   });
   const text = await resp.text();
-  if (action === 'campaigns_tree') console.log('[DEBUG] campaigns_tree raw status:', resp.status, 'body length:', text.length, 'first 300:', text.substring(0, 300));
   if (!resp.ok) {
     let err;
     try { err = JSON.parse(text); } catch { err = { error: resp.statusText }; }
@@ -868,6 +884,107 @@ let _treeCampaigns = [];
 let _treeGroups = [];
 let _teasersLoaded = false;
 let _currentFilter = {};
+let _currentPeriod = 'today'; // 'today','yesterday','3d','7d','30d','custom'
+let _periodDateFrom = '';
+let _periodDateTo = '';
+
+function fmtDateShort(d) {
+  return d.toISOString().slice(0,10);
+}
+
+function getPeriodDates(period) {
+  const now = new Date();
+  const today = fmtDateShort(now);
+  switch(period) {
+    case 'today': return { from: '', to: '' }; // default = CURRENT_DATE on backend
+    case 'yesterday': {
+      const y = new Date(now); y.setDate(y.getDate()-1);
+      return { from: fmtDateShort(y), to: fmtDateShort(y) };
+    }
+    case '3d': {
+      const d = new Date(now); d.setDate(d.getDate()-2);
+      return { from: fmtDateShort(d), to: today };
+    }
+    case '7d': {
+      const d = new Date(now); d.setDate(d.getDate()-6);
+      return { from: fmtDateShort(d), to: today };
+    }
+    case '30d': {
+      const d = new Date(now); d.setDate(d.getDate()-29);
+      return { from: fmtDateShort(d), to: today };
+    }
+    default: return { from: '', to: '' };
+  }
+}
+
+function setPeriod(btn, period) {
+  document.querySelectorAll('#filter-period .btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _currentPeriod = period;
+
+  const customInputs = document.getElementById('custom-period-inputs');
+  if (period === 'custom') {
+    customInputs.style.display = 'flex';
+    // Set defaults if empty
+    if (!$('period-from').value) {
+      const d = new Date(); d.setDate(d.getDate()-6);
+      $('period-from').value = fmtDateShort(d);
+      $('period-to').value = fmtDateShort(new Date());
+    }
+    return; // wait for OK click
+  }
+  customInputs.style.display = 'none';
+
+  const dates = getPeriodDates(period);
+  _periodDateFrom = dates.from;
+  _periodDateTo = dates.to;
+  updatePeriodLabel();
+  reloadTeasersStats();
+}
+
+function applyCustomPeriod() {
+  _periodDateFrom = $('period-from').value;
+  _periodDateTo = $('period-to').value;
+  if (!_periodDateFrom || !_periodDateTo) { toast('Выберите обе даты', 'error'); return; }
+  updatePeriodLabel();
+  reloadTeasersStats();
+}
+
+function updatePeriodLabel() {
+  const label = $('period-label');
+  if (!_periodDateFrom) {
+    label.textContent = '';
+  } else if (_periodDateFrom === _periodDateTo) {
+    label.textContent = _periodDateFrom;
+  } else {
+    label.textContent = _periodDateFrom + ' — ' + _periodDateTo;
+  }
+}
+
+async function reloadTeasersStats() {
+  // Reload only teasers data with new period, skip campaigns_tree
+  const container = $('teasers-tree');
+  container.style.opacity = '0.5';
+  try {
+    _allTeasers = [];
+    let offset = 0;
+    const pageSize = 500;
+    const dateParams = {};
+    if (_periodDateFrom) dateParams.date_from = _periodDateFrom;
+    if (_periodDateTo) dateParams.date_to = _periodDateTo;
+    while (true) {
+      const tData = await api('teasers', { limit: pageSize, offset, ...dateParams });
+      const page = tData.data || [];
+      _allTeasers = _allTeasers.concat(page);
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
+    renderTeasersTree(_currentFilter);
+  } catch (e) {
+    container.innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+  container.style.opacity = '1';
+}
 
 function filterTree(btn) {
   document.querySelectorAll('#filter-geozo .btn, #filter-state .btn').forEach(b => b.classList.remove('active'));
@@ -882,14 +999,16 @@ async function loadTeasersTree() {
   try {
     // Fetch tree structure
     const tree = await api('campaigns_tree');
-    console.log('[DEBUG] RAW campaigns_tree response:', JSON.stringify(tree).substring(0, 500));
 
     // Fetch ALL teasers with pagination (no filters — filter on frontend)
     _allTeasers = [];
     let offset = 0;
     const pageSize = 500;
+    const dateParams = {};
+    if (_periodDateFrom) dateParams.date_from = _periodDateFrom;
+    if (_periodDateTo) dateParams.date_to = _periodDateTo;
     while (true) {
-      const tData = await api('teasers', { limit: pageSize, offset });
+      const tData = await api('teasers', { limit: pageSize, offset, ...dateParams });
       const page = tData.data || [];
       _allTeasers = _allTeasers.concat(page);
       if (page.length < pageSize) break;
@@ -951,21 +1070,8 @@ function renderTeasersTree(filter) {
     const groupMap = {};
     groups.forEach(g => { groupMap[g.ad_group_id] = g; });
 
-    // DEBUG: trace lookup mismatches
-    console.log('[DEBUG] campaigns_tree:', {campaigns: campaigns.length, groups: groups.length});
-    console.log('[DEBUG] teasers byCampaign keys:', Object.keys(byCampaign));
-    console.log('[DEBUG] campMap keys:', Object.keys(campMap));
-    console.log('[DEBUG] groupMap keys:', Object.keys(groupMap));
-    for (const [cid, groupsObj] of Object.entries(byCampaign)) {
-      if (!campMap[cid]) {
-        console.warn('[DEBUG] MISS campMap[' + cid + '] type=' + typeof cid, 'campMap sample key type=' + typeof Object.keys(campMap)[0]);
-      }
-      for (const gid of Object.keys(groupsObj)) {
-        if (!groupMap[gid]) {
-          console.warn('[DEBUG] MISS groupMap[' + gid + '] type=' + typeof gid, 'groupMap sample key type=' + typeof Object.keys(groupMap)[0]);
-        }
-      }
-    }
+    const periodNames = {today:'Сегодня',yesterday:'Вчера','3d':'3 дня','7d':'7 дней','30d':'30 дней',custom:'Период'};
+    const periodHeader = periodNames[_currentPeriod] || 'Сегодня';
 
     let html = '';
     for (const [cid, groupsObj] of Object.entries(byCampaign)) {
@@ -1010,7 +1116,7 @@ function renderTeasersTree(filter) {
             <table style="font-size:12px;">
               <tr>
                 <th style="width:40px"></th><th style="width:55px">Ad ID</th><th>Заголовок</th><th style="width:35px">GEO</th><th style="width:75px">Geozo</th><th style="width:65px">Бот</th><th style="width:50px">Ставка</th>
-                <th colspan="4" style="text-align:center;border-bottom:1px solid var(--border);background:rgba(0,200,100,0.05);">Сегодня (Geozo)</th>
+                <th colspan="4" style="text-align:center;border-bottom:1px solid var(--border);background:rgba(0,200,100,0.05);">${periodHeader} (Geozo)</th>
                 <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);background:rgba(255,180,0,0.08);">CRM Сегодня</th>
                 <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);background:rgba(100,100,255,0.05);">CRM 3 дня</th>
                 <th style="width:80px">Действия</th>
