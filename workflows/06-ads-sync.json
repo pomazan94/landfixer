@@ -188,6 +188,70 @@
           "name": "PostgreSQL"
         }
       }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT param5 AS ad_id, COUNT(*) AS crm_leads, SUM(CASE WHEN status = 'Depositor' THEN 1 ELSE 0 END) AS crm_depositors, ROUND(SUM(CASE WHEN status = 'Depositor' THEN cost ELSE 0 END), 2) AS crm_revenue FROM leads WHERE param5 IS NOT NULL AND param5 != '' AND param5 REGEXP '^[0-9]+$' AND created_at >= DATE_SUB(CURDATE(), INTERVAL 3 DAY) GROUP BY param5",
+        "options": {}
+      },
+      "id": "fetch-crm-total",
+      "name": "Fetch CRM Leads (3d)",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [880, 300],
+      "credentials": {
+        "mySql": {
+          "id": "mysql-crm",
+          "name": "MySQL CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT param5 AS ad_id, COUNT(*) AS crm_leads_today, ROUND(SUM(CASE WHEN status = 'Depositor' THEN cost ELSE 0 END), 2) AS crm_revenue_today FROM leads WHERE param5 IS NOT NULL AND param5 != '' AND param5 REGEXP '^[0-9]+$' AND created_at >= CURDATE() GROUP BY param5",
+        "options": {}
+      },
+      "id": "fetch-crm-today",
+      "name": "Fetch CRM Leads (today)",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [880, 450],
+      "credentials": {
+        "mySql": {
+          "id": "mysql-crm",
+          "name": "MySQL CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build UPDATE SQL from CRM data\nconst totalItems = $('Fetch CRM Leads (3d)').all().map(i => i.json);\nconst todayItems = $('Fetch CRM Leads (today)').all().map(i => i.json);\n\nconst sqls = [];\n\n// 3-day totals\nfor (const row of totalItems) {\n  const adId = parseInt(row.ad_id);\n  if (!adId) continue;\n  sqls.push(`UPDATE teasers SET crm_leads = ${row.crm_leads || 0}, crm_depositors = ${row.crm_depositors || 0}, crm_revenue = ${row.crm_revenue || 0}, crm_synced_at = NOW() WHERE ad_id = ${adId}`);\n}\n\n// Today\nfor (const row of todayItems) {\n  const adId = parseInt(row.ad_id);\n  if (!adId) continue;\n  sqls.push(`UPDATE teasers SET crm_leads_today = ${row.crm_leads_today || 0}, crm_revenue_today = ${row.crm_revenue_today || 0} WHERE ad_id = ${adId}`);\n}\n\n// Reset today's CRM for ads NOT in today's results\nsqls.push(`UPDATE teasers SET crm_leads_today = 0, crm_revenue_today = 0 WHERE ad_id NOT IN (${todayItems.map(r => parseInt(r.ad_id)).filter(Boolean).join(',') || '0'})`);\n\nif (sqls.length === 0) {\n  return [{ json: { sql: \"SELECT 'no_crm_data' as result\" } }];\n}\n\nconst sql = sqls.join(';\\n') + \";\\nSELECT 'ok' as result, \" + totalItems.length + \" as crm_total_updated, \" + todayItems.length + \" as crm_today_updated\";\nreturn [{ json: { sql } }];"
+      },
+      "id": "build-crm-sql",
+      "name": "Build CRM Update SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 370]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.sql }}",
+        "options": {}
+      },
+      "id": "sync-crm",
+      "name": "Sync CRM Data",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1320, 370],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
     }
   ],
   "connections": {
@@ -236,6 +300,55 @@
         [
           {
             "node": "Fetch Next Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync Page 1": {
+      "main": [
+        [
+          {
+            "node": "Fetch CRM Leads (3d)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch CRM Leads (today)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch CRM Leads (3d)": {
+      "main": [
+        [
+          {
+            "node": "Build CRM Update SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch CRM Leads (today)": {
+      "main": [
+        [
+          {
+            "node": "Build CRM Update SQL",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Build CRM Update SQL": {
+      "main": [
+        [
+          {
+            "node": "Sync CRM Data",
             "type": "main",
             "index": 0
           }
