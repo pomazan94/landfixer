@@ -1079,8 +1079,12 @@ function renderTeasersTree(filter) {
       const camp = campMap[cid] || {};
       const campTeasers = Object.values(groupsObj).flat();
       const campName = camp.name || campTeasers.find(t => t.campaign_name)?.campaign_name || 'Campaign #' + cid;
-      const campSpend = camp.today_spend ? '$' + fmt(camp.today_spend) : '';
-      const campProfit = camp.today_profit ? (camp.today_profit >= 0 ? '+' : '') + '$' + fmt(camp.today_profit) : '';
+      // Aggregate spend/revenue from teasers (period-aware since today_spend comes from ad_stats for any period)
+      const campTotalSpend = campTeasers.reduce((s, t) => s + (t.today_spend || 0), 0);
+      const campTotalCrmRevenue = campTeasers.reduce((s, t) => s + (isToday ? (t.crm_revenue_today||0) : (t.period_crm_revenue||0)), 0);
+      const campProfitVal = campTotalCrmRevenue - campTotalSpend;
+      const campSpend = campTotalSpend ? '$' + fmt(campTotalSpend) : '';
+      const campProfit = campTotalSpend ? (campProfitVal >= 0 ? '+' : '') + '$' + fmt(campProfitVal) : '';
       const campAds = camp.total_ads || campTeasers.length;
       const campActive = camp.active_ads || campTeasers.filter(t => t.geozo_status_id === 5).length;
 
@@ -1093,7 +1097,7 @@ function renderTeasersTree(filter) {
           </div>
           <div style="font-size:12px;display:flex;gap:12px;">
             ${campSpend ? '<span>Расход: '+campSpend+'</span>' : ''}
-            ${campProfit ? '<span style="color:'+(parseFloat(camp.today_profit)>=0?'var(--green)':'var(--red)')+'">P&L: '+campProfit+'</span>' : ''}
+            ${campProfit ? '<span style="color:'+(campProfitVal>=0?'var(--green)':'var(--red)')+'">P&L: '+campProfit+'</span>' : ''}
           </div>
         </div>
         <div class="camp-body">`;
@@ -1102,7 +1106,8 @@ function renderTeasersTree(filter) {
         const grp = groupMap[gid] || {};
         const grpName = grp.name || ads.find(t => t.group_name)?.group_name || 'Group #' + gid;
         const grpActive = ads.filter(t => t.geozo_status_id === 5).length;
-        const grpSpend = grp.today_spend ? '$' + fmt(grp.today_spend) : '';
+        const grpTotalSpend = ads.reduce((s, t) => s + (t.today_spend || 0), 0);
+        const grpSpend = grpTotalSpend ? 'Расход: $' + fmt(grpTotalSpend) : '';
 
         html += `<div style="margin:0 8px;border-bottom:1px solid var(--border);">
           <div style="padding:8px 6px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;background:rgba(255,255,255,0.02);" onclick="this.nextElementSibling.classList.toggle('collapsed')">
@@ -1111,7 +1116,7 @@ function renderTeasersTree(filter) {
               <span style="color:var(--text2);font-size:10px;margin-left:4px;">#${gid}</span>
               <span class="badge badge-gray" style="margin-left:6px;font-size:10px;">${ads.length} ads, ${grpActive} активных</span>
             </div>
-            <div style="font-size:11px;color:var(--text2);">${grpSpend ? 'Расход: '+grpSpend : ''}</div>
+            <div style="font-size:11px;color:var(--text2);">${grpSpend}</div>
           </div>
           <div>
             <table style="font-size:12px;">
@@ -1148,8 +1153,9 @@ function renderTeasersTree(filter) {
                 const pCrmDeps = isToday ? 0 : (t.period_crm_depositors||0);
                 const pCrmRevenue = isToday ? (t.crm_revenue_today||0) : (t.period_crm_revenue||0);
                 const pSpend = t.today_spend || 0;
+                const profitVal = pCrmRevenue - pSpend;
                 const cplVal = (pCrmLeads > 0 && pSpend > 0) ? pSpend / pCrmLeads : 0;
-                const roiVal = (pSpend > 0 && pCrmRevenue > 0) ? ((pCrmRevenue - pSpend) / pSpend * 100) : 0;
+                const roiVal = (pSpend > 0) ? ((pCrmRevenue - pSpend) / pSpend * 100) : 0;
                 const roiColor = (v) => v >= 0 ? 'var(--green)' : 'var(--red)';
                 const roiFmt = (v) => (v >= 0 ? '+' : '') + fmt(v,1) + '%';
                 return `<tr>
@@ -1163,7 +1169,7 @@ function renderTeasersTree(filter) {
                   <td style="font-size:11px;background:rgba(0,200,100,0.02);">${hasToday ? (t.today_confirmed_shows||t.today_shows||0) : '-'}</td>
                   <td style="font-size:11px;background:rgba(0,200,100,0.02);">${hasToday ? (t.today_clicks||0) : '-'}</td>
                   <td style="font-size:11px;background:rgba(0,200,100,0.02);">${hasToday ? '$'+fmt(t.today_spend) : '-'}</td>
-                  <td style="font-size:11px;background:rgba(0,200,100,0.02);">${hasToday ? '<span style="color:'+roiColor(t.today_profit||0)+'">'+(t.today_profit>=0?'+':'')+fmt(t.today_profit||0)+'</span>' : '-'}</td>
+                  <td style="font-size:11px;background:rgba(0,200,100,0.02);">${hasToday ? '<span style="color:'+roiColor(profitVal)+'">'+(profitVal>=0?'+$':'-$')+fmt(Math.abs(profitVal))+'</span>' : '-'}</td>
                   ${isToday ? `
                   <td style="font-size:11px;background:rgba(255,180,0,0.02);font-weight:${pCrmLeads ? '600' : 'normal'};">${pCrmLeads || '-'}</td>
                   <td style="font-size:11px;background:rgba(255,180,0,0.02);">${pCrmRevenue ? '$'+fmt(pCrmRevenue) : '-'}</td>
