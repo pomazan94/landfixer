@@ -333,6 +333,7 @@ textarea { resize:vertical; min-height:60px; }
           <button class="btn btn-sm btn-outline" onclick="filterTree(this)" data-filter='{"state":"stopped"}'>Бот: Стоп</button>
         </div>
         <span style="color:var(--text2);font-size:11px;" id="teasers-count"></span>
+        <button class="btn btn-sm btn-outline" onclick="_teasersLoaded=false;loadTeasersTree();" title="Обновить данные">&#x21bb; Обновить</button>
       </div>
       <div id="teasers-tree"><div class="loading">Загрузка...</div></div>
     </div>
@@ -518,7 +519,7 @@ function loadSection(sec) {
     'schedules': () => loadConfig('schedules'),
     'general-cfg': () => { ['general','default_payout','dead_creative','rollback','anomaly','position'].forEach(loadConfig); },
     'geo-payouts': loadGeoPayouts,
-    'teasers': () => loadTeasersTree(),
+    'teasers': () => { if (_teasersLoaded) { renderTeasersTree(_currentFilter); } else { loadTeasersTree(); } },
     'bid-history': loadBidHistory,
     'anomalies': () => loadAnomalies(false),
     'block-lists': () => loadBlockLists(),
@@ -865,12 +866,14 @@ const BOT_INTENT_RU = {
 let _allTeasers = [];
 let _treeCampaigns = [];
 let _treeGroups = [];
+let _teasersLoaded = false;
+let _currentFilter = {};
 
 function filterTree(btn) {
   document.querySelectorAll('#filter-geozo .btn, #filter-state .btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  const filter = JSON.parse(btn.dataset.filter);
-  renderTeasersTree(filter);
+  _currentFilter = JSON.parse(btn.dataset.filter);
+  renderTeasersTree(_currentFilter);
 }
 
 async function loadTeasersTree() {
@@ -895,6 +898,8 @@ async function loadTeasersTree() {
 
     _treeCampaigns = tree.campaigns || [];
     _treeGroups = tree.groups || [];
+    _teasersLoaded = true;
+    _currentFilter = {};
 
     // Reset filter to "Все"
     document.querySelectorAll('#filter-geozo .btn, #filter-state .btn').forEach(b => b.classList.remove('active'));
@@ -1073,7 +1078,12 @@ async function changeState(id, state) {
   try {
     await api('teaser_state', { id, state });
     toast('Статус изменён: ' + stateRu(state));
-    loadTeasersTree();
+    // Update locally — no full reload
+    const t = _allTeasers.find(t => t.id === id);
+    if (t) {
+      t.state = state;
+      renderTeasersTree(_currentFilter);
+    }
   } catch (e) { toast(e.message, 'error'); }
 }
 
