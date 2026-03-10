@@ -91,6 +91,8 @@ CREATE TABLE teasers (
     bid_changes_today INTEGER DEFAULT 0,
     bid_changes_reset_date DATE DEFAULT CURRENT_DATE,
     cumulative_bid_change_today DECIMAL(8,4) DEFAULT 1.0,
+    campaign_name VARCHAR(255),
+    group_ad_name VARCHAR(255),
     escalation_level INTEGER DEFAULT 0,
     escalation_failures INTEGER DEFAULT 0,
     warmup_phase INTEGER DEFAULT 0,

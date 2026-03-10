@@ -23,3 +23,7 @@ ALTER TABLE teasers ADD COLUMN IF NOT EXISTS crm_revenue DECIMAL(12,2) DEFAULT 0
 ALTER TABLE teasers ADD COLUMN IF NOT EXISTS crm_leads_today INTEGER DEFAULT 0;
 ALTER TABLE teasers ADD COLUMN IF NOT EXISTS crm_revenue_today DECIMAL(12,2) DEFAULT 0;
 ALTER TABLE teasers ADD COLUMN IF NOT EXISTS crm_synced_at TIMESTAMP;
+
+-- Campaign/group names stored directly on teasers for reliable display
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS campaign_name VARCHAR(255);
+ALTER TABLE teasers ADD COLUMN IF NOT EXISTS group_ad_name VARCHAR(255);
