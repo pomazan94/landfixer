@@ -543,13 +543,14 @@ async function api(action, params = {}) {
     body: JSON.stringify({ action, params }),
   });
   const text = await resp.text();
+  if (action === 'campaigns_tree') console.log('[DEBUG] campaigns_tree raw status:', resp.status, 'body length:', text.length, 'first 300:', text.substring(0, 300));
   if (!resp.ok) {
     let err;
     try { err = JSON.parse(text); } catch { err = { error: resp.statusText }; }
     throw new Error(err.error || resp.statusText);
   }
   if (!text || text.trim() === '') return { data: [] };
-  try { return JSON.parse(text); } catch { return { data: [] }; }
+  try { return JSON.parse(text); } catch (e) { console.error('[DEBUG] JSON parse error for', action, ':', e.message); return { data: [] }; }
 }
 
 function toast(msg, type = 'success') {
@@ -878,6 +879,7 @@ async function loadTeasersTree() {
   try {
     // Fetch tree structure
     const tree = await api('campaigns_tree');
+    console.log('[DEBUG] RAW campaigns_tree response:', JSON.stringify(tree).substring(0, 500));
 
     // Fetch ALL teasers with pagination (no filters — filter on frontend)
     _allTeasers = [];
