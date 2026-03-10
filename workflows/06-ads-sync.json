@@ -217,7 +217,7 @@
       "name": "Fetch CRM Leads (today)",
       "type": "n8n-nodes-base.mySql",
       "typeVersion": 2.4,
-      "position": [880, 450],
+      "position": [1100, 300],
       "credentials": {
         "mySql": {
           "id": "mysql-crm",
@@ -227,13 +227,13 @@
     },
     {
       "parameters": {
-        "jsCode": "// Build UPDATE SQL from CRM data\nconst totalItems = $('Fetch CRM Leads (3d)').all().map(i => i.json);\nconst todayItems = $('Fetch CRM Leads (today)').all().map(i => i.json);\n\nconst sqls = [];\n\n// 3-day totals\nfor (const row of totalItems) {\n  const adId = parseInt(row.ad_id);\n  if (!adId) continue;\n  sqls.push(`UPDATE teasers SET crm_leads = ${row.crm_leads || 0}, crm_depositors = ${row.crm_depositors || 0}, crm_revenue = ${row.crm_revenue || 0}, crm_synced_at = NOW() WHERE ad_id = ${adId}`);\n}\n\n// Today\nfor (const row of todayItems) {\n  const adId = parseInt(row.ad_id);\n  if (!adId) continue;\n  sqls.push(`UPDATE teasers SET crm_leads_today = ${row.crm_leads_today || 0}, crm_revenue_today = ${row.crm_revenue_today || 0} WHERE ad_id = ${adId}`);\n}\n\n// Reset today's CRM for ads NOT in today's results\nsqls.push(`UPDATE teasers SET crm_leads_today = 0, crm_revenue_today = 0 WHERE ad_id NOT IN (${todayItems.map(r => parseInt(r.ad_id)).filter(Boolean).join(',') || '0'})`);\n\nif (sqls.length === 0) {\n  return [{ json: { sql: \"SELECT 'no_crm_data' as result\" } }];\n}\n\nconst sql = sqls.join(';\\n') + \";\\nSELECT 'ok' as result, \" + totalItems.length + \" as crm_total_updated, \" + todayItems.length + \" as crm_today_updated\";\nreturn [{ json: { sql } }];"
+        "jsCode": "// Build UPDATE SQL from CRM data\n// Sequential flow: 3d → today → this node. Use $() for 3d, $input for today.\nconst totalItems = $('Fetch CRM Leads (3d)').all().map(i => i.json);\nconst todayItems = $input.all().map(i => i.json);\n\nconst sqls = [];\n\n// 3-day totals\nfor (const row of totalItems) {\n  const adId = parseInt(row.ad_id);\n  if (!adId) continue;\n  sqls.push(`UPDATE teasers SET crm_leads = ${row.crm_leads || 0}, crm_depositors = ${row.crm_depositors || 0}, crm_revenue = ${row.crm_revenue || 0}, crm_synced_at = NOW() WHERE ad_id = ${adId}`);\n}\n\n// Today\nfor (const row of todayItems) {\n  const adId = parseInt(row.ad_id);\n  if (!adId) continue;\n  sqls.push(`UPDATE teasers SET crm_leads_today = ${row.crm_leads_today || 0}, crm_revenue_today = ${row.crm_revenue_today || 0} WHERE ad_id = ${adId}`);\n}\n\n// Reset today's CRM for ads NOT in today's results\nsqls.push(`UPDATE teasers SET crm_leads_today = 0, crm_revenue_today = 0 WHERE ad_id NOT IN (${todayItems.map(r => parseInt(r.ad_id)).filter(Boolean).join(',') || '0'})`);\n\nif (sqls.length === 0) {\n  return [{ json: { sql: \"SELECT 'no_crm_data' as result\" } }];\n}\n\nconst sql = sqls.join(';\\n') + \";\\nSELECT 'ok' as result, \" + totalItems.length + \" as crm_total_updated, \" + todayItems.length + \" as crm_today_updated\";\nreturn [{ json: { sql } }];"
       },
       "id": "build-crm-sql",
       "name": "Build CRM Update SQL",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1100, 370]
+      "position": [1320, 300]
     },
     {
       "parameters": {
@@ -245,7 +245,7 @@
       "name": "Sync CRM Data",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
-      "position": [1320, 370],
+      "position": [1540, 300],
       "credentials": {
         "postgres": {
           "id": "postgres-cred",
@@ -313,11 +313,6 @@
             "node": "Fetch CRM Leads (3d)",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Fetch CRM Leads (today)",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -326,7 +321,7 @@
       "main": [
         [
           {
-            "node": "Build CRM Update SQL",
+            "node": "Fetch CRM Leads (today)",
             "type": "main",
             "index": 0
           }
@@ -339,7 +334,7 @@
           {
             "node": "Build CRM Update SQL",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ]
       ]
