@@ -944,6 +944,22 @@ function renderTeasersTree(filter) {
     const groupMap = {};
     groups.forEach(g => { groupMap[g.ad_group_id] = g; });
 
+    // DEBUG: trace lookup mismatches
+    console.log('[DEBUG] campaigns_tree:', {campaigns: campaigns.length, groups: groups.length});
+    console.log('[DEBUG] teasers byCampaign keys:', Object.keys(byCampaign));
+    console.log('[DEBUG] campMap keys:', Object.keys(campMap));
+    console.log('[DEBUG] groupMap keys:', Object.keys(groupMap));
+    for (const [cid, groupsObj] of Object.entries(byCampaign)) {
+      if (!campMap[cid]) {
+        console.warn('[DEBUG] MISS campMap[' + cid + '] type=' + typeof cid, 'campMap sample key type=' + typeof Object.keys(campMap)[0]);
+      }
+      for (const gid of Object.keys(groupsObj)) {
+        if (!groupMap[gid]) {
+          console.warn('[DEBUG] MISS groupMap[' + gid + '] type=' + typeof gid, 'groupMap sample key type=' + typeof Object.keys(groupMap)[0]);
+        }
+      }
+    }
+
     let html = '';
     for (const [cid, groupsObj] of Object.entries(byCampaign)) {
       const camp = campMap[cid] || {};
