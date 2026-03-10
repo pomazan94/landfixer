@@ -1080,8 +1080,8 @@ function renderTeasersTree(filter) {
       const campTeasers = Object.values(groupsObj).flat();
       const campName = camp.name || campTeasers.find(t => t.campaign_name)?.campaign_name || 'Campaign #' + cid;
       // Aggregate spend/revenue from teasers (period-aware since today_spend comes from ad_stats for any period)
-      const campTotalSpend = campTeasers.reduce((s, t) => s + (t.today_spend || 0), 0);
-      const campTotalCrmRevenue = campTeasers.reduce((s, t) => s + (isToday ? (t.crm_revenue_today||0) : (t.period_crm_revenue||0)), 0);
+      const campTotalSpend = campTeasers.reduce((s, t) => s + parseFloat(t.today_spend || 0), 0);
+      const campTotalCrmRevenue = campTeasers.reduce((s, t) => s + parseFloat(isToday ? (t.crm_revenue_today||0) : (t.period_crm_revenue||0)), 0);
       const campProfitVal = campTotalCrmRevenue - campTotalSpend;
       const campSpend = campTotalSpend ? '$' + fmt(campTotalSpend) : '';
       const campProfit = campTotalSpend ? (campProfitVal >= 0 ? '+' : '') + '$' + fmt(campProfitVal) : '';
@@ -1106,7 +1106,7 @@ function renderTeasersTree(filter) {
         const grp = groupMap[gid] || {};
         const grpName = grp.name || ads.find(t => t.group_name)?.group_name || 'Group #' + gid;
         const grpActive = ads.filter(t => t.geozo_status_id === 5).length;
-        const grpTotalSpend = ads.reduce((s, t) => s + (t.today_spend || 0), 0);
+        const grpTotalSpend = ads.reduce((s, t) => s + parseFloat(t.today_spend || 0), 0);
         const grpSpend = grpTotalSpend ? 'Расход: $' + fmt(grpTotalSpend) : '';
 
         html += `<div style="margin:0 8px;border-bottom:1px solid var(--border);">
@@ -1149,10 +1149,10 @@ function renderTeasersTree(filter) {
                 const imgSrc = t.image_square_path || t.image_horizontal_path || '';
                 const hasToday = t.today_spend != null;
                 // For "today": CRM from teasers (crm_leads_today); for periods: from ad_stats aggregation
-                const pCrmLeads = isToday ? (t.crm_leads_today||0) : (t.period_crm_leads||0);
-                const pCrmDeps = isToday ? 0 : (t.period_crm_depositors||0);
-                const pCrmRevenue = isToday ? (t.crm_revenue_today||0) : (t.period_crm_revenue||0);
-                const pSpend = t.today_spend || 0;
+                const pCrmLeads = parseFloat(isToday ? (t.crm_leads_today||0) : (t.period_crm_leads||0));
+                const pCrmDeps = parseFloat(isToday ? 0 : (t.period_crm_depositors||0));
+                const pCrmRevenue = parseFloat(isToday ? (t.crm_revenue_today||0) : (t.period_crm_revenue||0));
+                const pSpend = parseFloat(t.today_spend || 0);
                 const profitVal = pCrmRevenue - pSpend;
                 const cplVal = (pCrmLeads > 0 && pSpend > 0) ? pSpend / pCrmLeads : 0;
                 const roiVal = (pSpend > 0) ? ((pCrmRevenue - pSpend) / pSpend * 100) : 0;
