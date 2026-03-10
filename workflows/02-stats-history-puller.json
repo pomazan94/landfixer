@@ -23,12 +23,55 @@
     },
     {
       "parameters": {
-        "jsCode": "// Fetch 30 days of stats from Geozo API with pagination\nconst dateFrom = $now.minus({ days: 30 }).toFormat('yyyy-MM-dd');\nconst dateTo = $now.minus({ days: 1 }).toFormat('yyyy-MM-dd');\n\nlet allStats = [];\nlet page = 1;\nconst perPage = 500;\n\nwhile (true) {\n  const response = await $http.request({\n    method: 'GET',\n    url: 'https://api.geozo.com/v1/advertiser/stats/tmp_with_postbacks',\n    headers: {\n      'Authorization': 'Bearer ' + $credentials.httpHeaderAuth.value\n    },\n    qs: {\n      'filters[date_from]': dateFrom,\n      'filters[date_to]': dateTo,\n      'groups[0]': 'ad_id',\n      'groups[1]': 'date',\n      'order_by[0][column]': 'date',\n      'order_by[0][direction]': 'desc',\n      'count': perPage,\n      'page': page\n    }\n  });\n\n  const data = response?.result?.data || response?.data?.result?.data || [];\n  if (data.length === 0) break;\n\n  allStats = allStats.concat(data);\n  \n  // Check if there are more pages\n  const totalCount = response?.result?.pagination?.total_count || response?.data?.result?.pagination?.total_count || 0;\n  if (allStats.length >= totalCount || data.length < perPage) break;\n  page++;\n  \n  // Safety limit\n  if (page > 50) break;\n}\n\nif (allStats.length === 0) {\n  return [{ json: { _empty: true, dateFrom, dateTo } }];\n}\n\nconst results = allStats\n  .filter(d => d.ad_id && d.ad_id > 0)\n  .map(d => {\n    const spend = parseFloat(d.money) || parseFloat(d.total_expenses) || 0;\n    const revenue = parseFloat(d.postbacks_confirmed_money) || 0;\n    const clicks = parseInt(d.clicks_count) || 0;\n    const shows = parseInt(d.shows_count) || 0;\n    const confirmedShows = parseInt(d.confirmed_shows_count) || 0;\n    const postbacks = parseInt(d.postbacks_total_count) || 0;\n\n    const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n    const profit = revenue - spend;\n    const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n    const cpc = clicks > 0 ? (spend / clicks) : 0;\n    const date = d.date || $now.toFormat('yyyy-MM-dd');\n\n    return {\n      json: {\n        ad_id: parseInt(d.ad_id),\n        date: date,\n        shows: shows,\n        confirmed_shows: confirmedShows,\n        clicks: clicks,\n        money: Math.round(spend * 10000) / 10000,\n        postbacks_count: postbacks,\n        postbacks_confirmed_money: Math.round(revenue * 10000) / 10000,\n        ctr: Math.round(ctr * 10000) / 10000,\n        cpc: Math.round(cpc * 10000) / 10000,\n        roi: Math.round(roi * 100) / 100,\n        profit: Math.round(profit * 10000) / 10000\n      }\n    };\n  });\n\nreturn results.length > 0 ? results : [{ json: { _empty: true } }];"
+        "method": "GET",
+        "url": "https://api.geozo.com/v1/advertiser/stats/tmp_with_postbacks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filters[date_from]",
+              "value": "={{ $now.minus({ days: 30 }).format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "filters[date_to]",
+              "value": "={{ $now.minus({ days: 1 }).format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "groups[0]",
+              "value": "ad_id"
+            },
+            {
+              "name": "groups[1]",
+              "value": "date"
+            },
+            {
+              "name": "order_by[0][column]",
+              "value": "date"
+            },
+            {
+              "name": "order_by[0][direction]",
+              "value": "desc"
+            },
+            {
+              "name": "count",
+              "value": "5000"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
       },
-      "id": "fetch-history",
-      "name": "Fetch 30d Stats with Pagination",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "fetch-stats-30d",
+      "name": "Fetch 30d Stats from Geozo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         260,
         0
@@ -39,6 +82,19 @@
           "name": "Geozo"
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json;\n\nlet statsData = [];\n\nif (raw?.result?.data && Array.isArray(raw.result.data)) {\n  statsData = raw.result.data;\n} else if (raw?.data?.result?.data && Array.isArray(raw.data.result.data)) {\n  statsData = raw.data.result.data;\n} else if (raw?.data && Array.isArray(raw.data)) {\n  statsData = raw.data;\n} else if (Array.isArray(raw)) {\n  statsData = raw;\n}\n\nif (statsData.length === 0) {\n  return [{ json: { _empty: true, _raw_keys: Object.keys(raw || {}), _raw_sample: JSON.stringify(raw).substring(0, 500) } }];\n}\n\nconst results = statsData\n  .filter(d => d.ad_id && d.ad_id > 0)\n  .map(d => {\n    const spend = parseFloat(d.money) || parseFloat(d.total_expenses) || 0;\n    const revenue = parseFloat(d.postbacks_confirmed_money) || 0;\n    const clicks = parseInt(d.clicks_count) || 0;\n    const shows = parseInt(d.shows_count) || 0;\n    const confirmedShows = parseInt(d.confirmed_shows_count) || 0;\n    const postbacks = parseInt(d.postbacks_total_count) || 0;\n\n    const roi = spend > 0 ? ((revenue - spend) / spend * 100) : 0;\n    const profit = revenue - spend;\n    const ctr = shows > 0 ? (clicks / shows * 100) : 0;\n    const cpc = clicks > 0 ? (spend / clicks) : 0;\n    const date = d.date || $now.toFormat('yyyy-MM-dd');\n\n    return {\n      json: {\n        ad_id: parseInt(d.ad_id),\n        date: date,\n        shows: shows,\n        confirmed_shows: confirmedShows,\n        clicks: clicks,\n        money: Math.round(spend * 10000) / 10000,\n        postbacks_count: postbacks,\n        postbacks_confirmed_money: Math.round(revenue * 10000) / 10000,\n        ctr: Math.round(ctr * 10000) / 10000,\n        cpc: Math.round(cpc * 10000) / 10000,\n        roi: Math.round(roi * 100) / 100,\n        profit: Math.round(profit * 10000) / 10000\n      }\n    };\n  });\n\nreturn results.length > 0 ? results : [{ json: { _empty: true } }];"
+      },
+      "id": "calculate-metrics-hist",
+      "name": "Calculate Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        0
+      ]
     },
     {
       "parameters": {
@@ -68,7 +124,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        500,
+        720,
         0
       ]
     },
@@ -83,7 +139,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        740,
+        960,
         -50
       ],
       "credentials": {
@@ -92,19 +148,6 @@
           "name": "PostgreSQL"
         }
       }
-    },
-    {
-      "parameters": {
-        "jsCode": "const items = $input.all();\nconst count = items.length;\nconst message = `📊 History Puller: saved ${count} stat records (30d)`;\nreturn [{ json: { message, count } }];"
-      },
-      "id": "log-result",
-      "name": "Log Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        960,
-        -50
-      ]
     }
   ],
   "connections": {
@@ -112,14 +155,25 @@
       "main": [
         [
           {
-            "node": "Fetch 30d Stats with Pagination",
+            "node": "Fetch 30d Stats from Geozo",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch 30d Stats with Pagination": {
+    "Fetch 30d Stats from Geozo": {
+      "main": [
+        [
+          {
+            "node": "Calculate Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Metrics": {
       "main": [
         [
           {
@@ -135,17 +189,6 @@
         [
           {
             "node": "Save History to PostgreSQL",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Save History to PostgreSQL": {
-      "main": [
-        [
-          {
-            "node": "Log Result",
             "type": "main",
             "index": 0
           }
@@ -167,5 +210,5 @@
     }
   ],
   "pinData": {},
-  "versionId": "1"
+  "versionId": "2"
 }
