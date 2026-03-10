@@ -861,41 +861,67 @@ const BOT_INTENT_RU = {
   pause:'Пауза', remoderate:'Ремодерация', kill:'Убить креатив'
 };
 
-let _treeFilter = {};
+let _allTeasers = [];
+let _treeCampaigns = [];
+let _treeGroups = [];
 
 function filterTree(btn) {
-  // Deactivate ALL filter buttons across both groups
   document.querySelectorAll('#filter-geozo .btn, #filter-state .btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const filter = JSON.parse(btn.dataset.filter);
-  loadTeasersTree(Object.keys(filter).length ? filter : {});
+  renderTeasersTree(filter);
 }
 
-async function loadTeasersTree(filter) {
-  _treeFilter = filter || {};
+async function loadTeasersTree() {
   const container = $('teasers-tree');
   container.innerHTML = '<div class="loading">Загрузка...</div>';
   try {
-    // Fetch tree structure first
+    // Fetch tree structure
     const tree = await api('campaigns_tree');
 
-    // Fetch ALL teasers with pagination (500 per page)
-    let allTeasers = [];
+    // Fetch ALL teasers with pagination (no filters — filter on frontend)
+    _allTeasers = [];
     let offset = 0;
     const pageSize = 500;
     while (true) {
-      const tData = await api('teasers', { limit: pageSize, offset, ..._treeFilter });
+      const tData = await api('teasers', { limit: pageSize, offset });
       const page = tData.data || [];
-      allTeasers = allTeasers.concat(page);
-      if (page.length < pageSize) break; // last page
+      _allTeasers = _allTeasers.concat(page);
+      if (page.length < pageSize) break;
       offset += pageSize;
     }
 
-    const campaigns = tree.campaigns || [];
-    const groups = tree.groups || [];
-    const teasers = allTeasers;
+    _treeCampaigns = tree.campaigns || [];
+    _treeGroups = tree.groups || [];
 
-    $('teasers-count').textContent = `Всего тизеров: ${teasers.length}`;
+    // Reset filter to "Все"
+    document.querySelectorAll('#filter-geozo .btn, #filter-state .btn').forEach(b => b.classList.remove('active'));
+    const allBtn = document.querySelector('#filter-geozo .btn');
+    if (allBtn) allBtn.classList.add('active');
+
+    renderTeasersTree({});
+  } catch (e) {
+    container.innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+}
+
+function renderTeasersTree(filter) {
+  const container = $('teasers-tree');
+  const campaigns = _treeCampaigns;
+  const groups = _treeGroups;
+
+  // Apply frontend filter
+  let teasers = _allTeasers;
+  if (filter && filter.geozo_status) {
+    teasers = teasers.filter(t => t.geozo_status_id == filter.geozo_status);
+  }
+  if (filter && filter.state) {
+    teasers = teasers.filter(t => t.state === filter.state);
+  }
+
+  const total = _allTeasers.length;
+  const shown = teasers.length;
+  $('teasers-count').textContent = shown === total ? `Всего: ${total}` : `Показано: ${shown} из ${total}`;
 
     if (teasers.length === 0) {
       container.innerHTML = '<div style="padding:16px;color:var(--text2);">Тизеры не найдены. Запустите синхронизацию (06 - Ads Sync).</div>';
@@ -1015,9 +1041,6 @@ async function loadTeasersTree(filter) {
       html += '</div></div>';
     }
     container.innerHTML = html;
-  } catch (e) {
-    container.innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
-  }
 }
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -1027,7 +1050,7 @@ async function changeState(id, state) {
   try {
     await api('teaser_state', { id, state });
     toast('Статус изменён: ' + stateRu(state));
-    loadTeasersTree(_treeFilter);
+    loadTeasersTree();
   } catch (e) { toast(e.message, 'error'); }
 }
 
