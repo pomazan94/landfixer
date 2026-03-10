@@ -1072,6 +1072,7 @@ function renderTeasersTree(filter) {
 
     const periodNames = {today:'Сегодня',yesterday:'Вчера','3d':'3 дня','7d':'7 дней','30d':'30 дней',custom:'Период'};
     const periodHeader = periodNames[_currentPeriod] || 'Сегодня';
+    const hasPeriodCrm = _currentPeriod !== 'today' && _periodDateFrom;
 
     let html = '';
     for (const [cid, groupsObj] of Object.entries(byCampaign)) {
@@ -1117,8 +1118,8 @@ function renderTeasersTree(filter) {
               <tr>
                 <th style="width:40px"></th><th style="width:55px">Ad ID</th><th>Заголовок</th><th style="width:35px">GEO</th><th style="width:75px">Geozo</th><th style="width:65px">Бот</th><th style="width:50px">Ставка</th>
                 <th colspan="4" style="text-align:center;border-bottom:1px solid var(--border);background:rgba(0,200,100,0.05);">${periodHeader} (Geozo)</th>
-                <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);background:rgba(255,180,0,0.08);">CRM Сегодня</th>
-                <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);background:rgba(100,100,255,0.05);">CRM 3 дня</th>
+                <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);background:rgba(255,180,0,0.08);">CRM ${hasPeriodCrm ? periodHeader : 'Сегодня'}</th>
+                <th colspan="3" style="text-align:center;border-bottom:1px solid var(--border);background:rgba(100,100,255,0.05);">${hasPeriodCrm ? 'CRM (sync)' : 'CRM 3 дня'}</th>
                 <th style="width:80px">Действия</th>
               </tr>
               <tr style="font-size:10px;color:var(--text2);">
@@ -1134,9 +1135,12 @@ function renderTeasersTree(filter) {
                 const stCol = {active:'green',testing:'blue',created:'gray',paused_high_cpl:'orange',stopped:'red',banned:'red',dead:'gray'}[t.state]||'gray';
                 const imgSrc = t.image_square_path || t.image_horizontal_path || '';
                 const hasToday = t.today_spend != null;
-                const hasCrm = (t.crm_leads||0) > 0 || (t.crm_leads_today||0) > 0;
-                const cplToday = (t.crm_leads_today > 0 && t.today_spend > 0) ? t.today_spend / t.crm_leads_today : 0;
-                const roiToday = (t.today_spend > 0 && t.crm_revenue_today > 0) ? ((t.crm_revenue_today - t.today_spend) / t.today_spend * 100) : 0;
+                // Use period CRM data from ad_stats when available, fallback to teasers columns
+                const pCrmLeads = hasPeriodCrm ? (t.period_crm_leads||0) : (t.crm_leads_today||0);
+                const pCrmRevenue = hasPeriodCrm ? (t.period_crm_revenue||0) : (t.crm_revenue_today||0);
+                const pCrmDeps = hasPeriodCrm ? (t.period_crm_depositors||0) : 0;
+                const cplToday = (pCrmLeads > 0 && t.today_spend > 0) ? t.today_spend / pCrmLeads : 0;
+                const roiToday = (t.today_spend > 0 && pCrmRevenue > 0) ? ((pCrmRevenue - t.today_spend) / t.today_spend * 100) : 0;
                 const roiColor = (v) => v >= 0 ? 'var(--green)' : 'var(--red)';
                 const roiFmt = (v) => (v >= 0 ? '+' : '') + fmt(v,1) + '%';
                 return `<tr>
@@ -1151,9 +1155,9 @@ function renderTeasersTree(filter) {
                   <td style="font-size:11px;background:rgba(0,200,100,0.02);">${hasToday ? (t.today_clicks||0) : '-'}</td>
                   <td style="font-size:11px;background:rgba(0,200,100,0.02);">${hasToday ? '$'+fmt(t.today_spend) : '-'}</td>
                   <td style="font-size:11px;background:rgba(0,200,100,0.02);">${cplToday > 0 ? '$'+fmt(cplToday) : '-'}</td>
-                  <td style="font-size:11px;background:rgba(255,180,0,0.02);font-weight:${t.crm_leads_today ? '600' : 'normal'};">${t.crm_leads_today || '-'}</td>
-                  <td style="font-size:11px;background:rgba(255,180,0,0.02);">${t.crm_revenue_today ? '$'+fmt(t.crm_revenue_today) : '-'}</td>
-                  <td style="font-size:11px;background:rgba(255,180,0,0.02);">${(t.crm_leads_today > 0 && t.today_spend > 0) ? '<span style="color:'+roiColor(roiToday)+'">'+roiFmt(roiToday)+'</span>' : '-'}</td>
+                  <td style="font-size:11px;background:rgba(255,180,0,0.02);font-weight:${pCrmLeads ? '600' : 'normal'};">${pCrmLeads || '-'}</td>
+                  <td style="font-size:11px;background:rgba(255,180,0,0.02);">${pCrmRevenue ? '$'+fmt(pCrmRevenue) : '-'}</td>
+                  <td style="font-size:11px;background:rgba(255,180,0,0.02);">${(pCrmLeads > 0 && t.today_spend > 0) ? '<span style="color:'+roiColor(roiToday)+'">'+roiFmt(roiToday)+'</span>' : '-'}</td>
                   <td style="font-size:11px;background:rgba(100,100,255,0.02);font-weight:${t.crm_leads ? '600' : 'normal'};">${t.crm_leads || '-'}</td>
                   <td style="font-size:11px;background:rgba(100,100,255,0.02);">${t.crm_depositors || '-'}</td>
                   <td style="font-size:11px;background:rgba(100,100,255,0.02);">${t.crm_revenue ? '$'+fmt(t.crm_revenue) : '-'}</td>

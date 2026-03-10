@@ -135,12 +135,99 @@
         "options": {}
       },
       "id": "save-history",
-      "name": "Save History to PostgreSQL",
+      "name": "Save Geozo Stats",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
         960,
         -50
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT param5 AS ad_id, DATE(created_at) AS lead_date, COUNT(*) AS crm_leads, SUM(CASE WHEN status = 'Depositor' THEN 1 ELSE 0 END) AS crm_depositors, ROUND(SUM(CASE WHEN status = 'Depositor' THEN cost ELSE 0 END), 2) AS crm_revenue FROM leads WHERE param5 IS NOT NULL AND param5 != '' AND param5 REGEXP '^[0-9]+$' AND created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) GROUP BY param5, DATE(created_at)",
+        "options": {}
+      },
+      "id": "fetch-crm-30d",
+      "name": "Fetch CRM Leads (30d)",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        260,
+        250
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "mysql-crm",
+          "name": "MySQL CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Filter valid rows and build UPDATE statements\nconst updates = items\n  .filter(i => i.json.ad_id && !isNaN(parseInt(i.json.ad_id)) && i.json.lead_date)\n  .map(i => {\n    const adId = parseInt(i.json.ad_id);\n    const date = i.json.lead_date;\n    const leads = parseInt(i.json.crm_leads) || 0;\n    const depositors = parseInt(i.json.crm_depositors) || 0;\n    const revenue = parseFloat(i.json.crm_revenue) || 0;\n    return {\n      json: {\n        ad_id: adId,\n        date: typeof date === 'string' ? date : new Date(date).toISOString().slice(0, 10),\n        crm_leads: leads,\n        crm_depositors: depositors,\n        crm_revenue: revenue\n      }\n    };\n  });\n\nif (updates.length === 0) {\n  return [{ json: { _empty: true } }];\n}\n\nreturn updates;"
+      },
+      "id": "process-crm-data",
+      "name": "Process CRM Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "has-crm-data",
+              "leftValue": "={{ $json._empty }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-crm-data-check",
+      "name": "Has CRM Data?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        720,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO ad_stats (ad_id, date, crm_leads, crm_depositors, crm_revenue)\nVALUES (\n  {{ $json.ad_id }},\n  '{{ $json.date }}',\n  {{ $json.crm_leads }},\n  {{ $json.crm_depositors }},\n  {{ $json.crm_revenue }}\n)\nON CONFLICT (ad_id, date)\nDO UPDATE SET\n  crm_leads = EXCLUDED.crm_leads,\n  crm_depositors = EXCLUDED.crm_depositors,\n  crm_revenue = EXCLUDED.crm_revenue,\n  collected_at = NOW();",
+        "options": {}
+      },
+      "id": "save-crm-stats",
+      "name": "Save CRM to ad_stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        960,
+        250
       ],
       "credentials": {
         "postgres": {
@@ -156,6 +243,11 @@
         [
           {
             "node": "Fetch 30d Stats from Geozo",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch CRM Leads (30d)",
             "type": "main",
             "index": 0
           }
@@ -188,7 +280,40 @@
       "main": [
         [
           {
-            "node": "Save History to PostgreSQL",
+            "node": "Save Geozo Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch CRM Leads (30d)": {
+      "main": [
+        [
+          {
+            "node": "Process CRM Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process CRM Data": {
+      "main": [
+        [
+          {
+            "node": "Has CRM Data?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has CRM Data?": {
+      "main": [
+        [
+          {
+            "node": "Save CRM to ad_stats",
             "type": "main",
             "index": 0
           }
@@ -210,5 +335,5 @@
     }
   ],
   "pinData": {},
-  "versionId": "2"
+  "versionId": "3"
 }
