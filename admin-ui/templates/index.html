@@ -205,8 +205,7 @@ textarea { resize:vertical; min-height:60px; }
     <div class="nav-item" data-section="bid-history">История ставок</div>
     <div class="nav-item" data-section="anomalies">Аномалии</div>
     <div class="nav-item" data-section="block-lists">Блок-листы</div>
-    <div class="nav-item" data-section="scan-targets">Цели сканирования</div>
-    <div class="nav-item" data-section="position-tracking">Трекинг позиций</div>
+    <div class="nav-item" data-section="spy-tool">Spy Tool</div>
     <div class="nav-item" data-section="ab-tests">A/B Тесты</div>
     <div class="nav-section">Управление</div>
     <div class="nav-item" data-section="emergency-ctrl">Экстренный режим</div>
@@ -396,23 +395,56 @@ textarea { resize:vertical; min-height:60px; }
       </div>
     </div>
 
-    <!-- SCAN TARGETS -->
-    <div class="section" id="sec-scan-targets">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <div><h2 style="font-size:20px;">Цели сканирования</h2><p style="color:var(--text2);font-size:12px;">Сайты для мониторинга позиций тизеров. Бот проверяет через прокси и отслеживает видимость объявлений.</p></div>
-        <button class="btn btn-primary" onclick="showAddScanTarget()">+ Добавить цель</button>
+    <!-- SPY TOOL -->
+    <div class="section" id="sec-spy-tool">
+      <!-- Sub-tabs -->
+      <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid var(--border);">
+        <div class="spy-tab active" data-spy-tab="gallery" onclick="switchSpyTab('gallery')" style="padding:8px 16px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid var(--primary);color:var(--primary);">Галерея конкурентов</div>
+        <div class="spy-tab" data-spy-tab="targets" onclick="switchSpyTab('targets')" style="padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text2);border-bottom:2px solid transparent;">Цели сканирования</div>
+        <div class="spy-tab" data-spy-tab="history" onclick="switchSpyTab('history')" style="padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text2);border-bottom:2px solid transparent;">История</div>
+        <div class="spy-tab" data-spy-tab="stats" onclick="switchSpyTab('stats')" style="padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text2);border-bottom:2px solid transparent;">Статистика</div>
       </div>
-      <div class="card">
-        <div class="table-wrap" id="scan-targets-table"><div class="loading">Загрузка...</div></div>
-      </div>
-    </div>
 
-    <!-- POSITION TRACKING -->
-    <div class="section" id="sec-position-tracking">
-      <h2 style="margin-bottom:4px;font-size:20px;">Трекинг позиций</h2>
-      <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Результаты сканирования позиций тизеров на площадках. Показывает где именно отображаются ваши объявления и сколько конкурентов в блоке.</p>
-      <div class="card">
-        <div class="table-wrap" id="position-tracking-table"><div class="loading">Загрузка...</div></div>
+      <!-- GALLERY TAB -->
+      <div class="spy-panel" id="spy-gallery">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
+          <input type="text" id="spy-search" placeholder="Поиск по заголовку..." style="flex:1;min-width:200px;" onkeyup="if(event.key==='Enter')loadCompetitors()">
+          <select id="spy-geo" style="width:80px;" onchange="loadCompetitors()"><option value="">Все гео</option></select>
+          <select id="spy-site" style="width:180px;" onchange="loadCompetitors()"><option value="">Все сайты</option></select>
+          <input type="date" id="spy-from" style="width:130px;" onchange="loadCompetitors()">
+          <input type="date" id="spy-to" style="width:130px;" onchange="loadCompetitors()">
+          <button class="btn btn-primary btn-sm" onclick="loadCompetitors()">Поиск</button>
+        </div>
+        <div id="spy-gallery-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;">
+          <div class="loading">Загрузка...</div>
+        </div>
+        <div id="spy-pagination" style="display:flex;justify-content:center;gap:8px;margin-top:16px;"></div>
+      </div>
+
+      <!-- TARGETS TAB -->
+      <div class="spy-panel" id="spy-targets" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div><p style="color:var(--text2);font-size:12px;">Сайты для мониторинга. Бот проверяет через прокси и собирает тизеры конкурентов.</p></div>
+          <button class="btn btn-primary" onclick="showAddScanTarget()">+ Добавить цель</button>
+        </div>
+        <div class="card">
+          <div class="table-wrap" id="scan-targets-table"><div class="loading">Загрузка...</div></div>
+        </div>
+      </div>
+
+      <!-- HISTORY TAB -->
+      <div class="spy-panel" id="spy-history" style="display:none;">
+        <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Результаты сканирования — позиции тизеров и конкуренты в блоке.</p>
+        <div class="card">
+          <div class="table-wrap" id="position-tracking-table"><div class="loading">Загрузка...</div></div>
+        </div>
+      </div>
+
+      <!-- STATS TAB -->
+      <div class="spy-panel" id="spy-stats" style="display:none;">
+        <div class="grid grid-2" id="spy-stats-content">
+          <div class="loading">Загрузка...</div>
+        </div>
       </div>
     </div>
 
@@ -540,8 +572,7 @@ function loadSection(sec) {
     'bid-history': loadBidHistory,
     'anomalies': () => loadAnomalies(false),
     'block-lists': () => loadBlockLists(),
-    'scan-targets': loadScanTargets,
-    'position-tracking': loadPositionTracking,
+    'spy-tool': loadSpyTool,
     'ab-tests': loadAbTests,
     'emergency-ctrl': loadEmergencyCtrl,
     'locks': loadLocks,
@@ -1323,22 +1354,191 @@ async function deleteBlockList(id) {
 }
 
 // ============================================
-// SCAN TARGETS
+// SPY TOOL
 // ============================================
+let _spyPage = 0;
+const SPY_PAGE_SIZE = 24;
+
+function loadSpyTool() {
+  loadCompetitors();
+  loadSpyFilters();
+}
+
+function switchSpyTab(tab) {
+  document.querySelectorAll('.spy-tab').forEach(el => {
+    el.style.borderBottomColor = 'transparent';
+    el.style.color = 'var(--text2)';
+    el.classList.remove('active');
+  });
+  document.querySelectorAll('.spy-panel').forEach(el => el.style.display = 'none');
+  const activeTab = document.querySelector(`.spy-tab[data-spy-tab="${tab}"]`);
+  if (activeTab) { activeTab.style.borderBottomColor = 'var(--primary)'; activeTab.style.color = 'var(--primary)'; activeTab.classList.add('active'); }
+  const panel = $('spy-' + tab);
+  if (panel) panel.style.display = '';
+  if (tab === 'gallery') loadCompetitors();
+  else if (tab === 'targets') loadScanTargets();
+  else if (tab === 'history') loadPositionTracking();
+  else if (tab === 'stats') loadSpyStats();
+}
+
+async function loadSpyFilters() {
+  try {
+    const resp = await api('competitors_stats');
+    const geoSel = $('spy-geo');
+    const siteSel = $('spy-site');
+    if (resp.by_geo) {
+      resp.by_geo.forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g.country_code; opt.textContent = `${g.country_code} (${g.cnt})`;
+        geoSel.appendChild(opt);
+      });
+    }
+    if (resp.top_sites) {
+      resp.top_sites.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.site_url; opt.textContent = s.site_url.replace(/^https?:\/\//, '').substring(0, 30) + ` (${s.cnt})`;
+        siteSel.appendChild(opt);
+      });
+    }
+  } catch (e) {}
+}
+
+async function loadCompetitors(page) {
+  if (page !== undefined) _spyPage = page;
+  const grid = $('spy-gallery-grid');
+  grid.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    const params = { limit: SPY_PAGE_SIZE, offset: _spyPage * SPY_PAGE_SIZE };
+    const search = $('spy-search').value.trim();
+    if (search) params.search = search;
+    const geo = $('spy-geo').value;
+    if (geo) params.geo = geo;
+    const site = $('spy-site').value;
+    if (site) params.site_url = site;
+    const from = $('spy-from').value;
+    if (from) params.date_from = from;
+    const to = $('spy-to').value;
+    if (to) params.date_to = to;
+
+    const resp = await api('competitors_list', params);
+    const data = resp.data || [];
+    const total = data.length > 0 ? (data[0].total_count || data.length) : 0;
+
+    if (data.length === 0) {
+      grid.innerHTML = '<div style="padding:24px;color:var(--text2);grid-column:1/-1;text-align:center;">Нет данных. Тизеры конкурентов появятся после первого сканирования.</div>';
+      $('spy-pagination').innerHTML = '';
+      return;
+    }
+
+    grid.innerHTML = data.map(c => `
+      <div class="card" style="cursor:pointer;padding:0;overflow:hidden;" onclick="showCompetitorDetail(${c.id})">
+        <div style="height:160px;background:var(--bg2);position:relative;overflow:hidden;">
+          ${c.image_url ? `<img src="${esc(c.image_url)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text2);font-size:12px;">Нет изображения</div>'}
+          ${c.country_code ? `<span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.7);color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600;">${esc(c.country_code)}</span>` : ''}
+          ${c.times_seen > 1 ? `<span style="position:absolute;top:6px;right:6px;background:var(--primary);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">x${c.times_seen}</span>` : ''}
+        </div>
+        <div style="padding:10px;">
+          <div style="font-size:13px;font-weight:600;line-height:1.3;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${esc(c.title)}</div>
+          ${c.short_description ? `<div style="font-size:11px;color:var(--text2);margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;">${esc(c.short_description)}</div>` : ''}
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-top:6px;">
+            <span>${c.landing_domain || '-'}</span>
+            <span>${c.last_seen_at ? new Date(c.last_seen_at).toLocaleDateString('ru-RU') : ''}</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    // Pagination
+    const totalPages = Math.ceil(total / SPY_PAGE_SIZE);
+    if (totalPages > 1) {
+      let pagHtml = '';
+      for (let p = 0; p < Math.min(totalPages, 10); p++) {
+        pagHtml += `<button class="btn btn-sm ${p === _spyPage ? 'btn-primary' : 'btn-outline'}" onclick="loadCompetitors(${p})">${p + 1}</button>`;
+      }
+      if (totalPages > 10) pagHtml += `<span style="color:var(--text2);font-size:12px;">...${totalPages} стр.</span>`;
+      $('spy-pagination').innerHTML = pagHtml;
+    } else {
+      $('spy-pagination').innerHTML = '';
+    }
+  } catch (e) {
+    grid.innerHTML = `<div class="alert-banner alert-danger" style="grid-column:1/-1;">${e.message}</div>`;
+  }
+}
+
+async function showCompetitorDetail(id) {
+  try {
+    const resp = await api('competitors_detail', { id });
+    const c = (resp.data && resp.data[0]) || resp;
+    $('modal-content').innerHTML = `
+      <h2 style="margin-bottom:12px;">Тизер конкурента</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+          ${c.image_url ? `<img src="${esc(c.image_url)}" style="width:100%;border-radius:8px;max-height:300px;object-fit:cover;" onerror="this.style.display='none'">` : ''}
+        </div>
+        <div>
+          <div style="font-size:16px;font-weight:700;margin-bottom:8px;">${esc(c.title||'')}</div>
+          ${c.short_description ? `<div style="color:var(--text2);font-size:13px;margin-bottom:4px;">${esc(c.short_description)}</div>` : ''}
+          ${c.full_description ? `<div style="color:var(--text2);font-size:12px;margin-bottom:8px;">${esc(c.full_description)}</div>` : ''}
+          ${c.button_text ? `<div style="margin-bottom:8px;"><span class="badge badge-blue">${esc(c.button_text)}</span></div>` : ''}
+          <table style="font-size:12px;width:100%;">
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Media ID</td><td>${c.media_id||'-'}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Гео</td><td>${c.country_code||'-'}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Сайт</td><td style="word-break:break-all;">${esc(c.site_url||'-')}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Landing</td><td style="word-break:break-all;">${c.destination_url ? `<a href="${esc(c.destination_url)}" target="_blank" style="color:var(--primary);">${esc(c.landing_domain||c.destination_url)}</a>` : '-'}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Render домен</td><td>${c.render_domain||'-'}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Позиция</td><td>${c.position||'-'}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Geozo Ad ID</td><td>${c.geozo_ad_id||'-'}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Geozo Group</td><td>${c.geozo_adgroup_id||'-'}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Cost</td><td>${c.cost||'-'}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Замечен</td><td>${c.times_seen||1} раз</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Первый раз</td><td>${c.first_seen_at ? new Date(c.first_seen_at).toLocaleString('ru-RU') : '-'}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Последний раз</td><td>${c.last_seen_at ? new Date(c.last_seen_at).toLocaleString('ru-RU') : '-'}</td></tr>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer" style="margin-top:16px;">
+        <button class="btn btn-outline" onclick="closeModal()">Закрыть</button>
+      </div>`;
+    $('modal').classList.add('show');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadSpyStats() {
+  const el = $('spy-stats-content');
+  el.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    const resp = await api('competitors_stats');
+    el.innerHTML = `
+      <div class="card">
+        <h2 style="font-size:16px;margin-bottom:8px;">Всего конкурентов: ${resp.total||0}</h2>
+        <h3 style="font-size:13px;color:var(--text2);margin-bottom:8px;">По гео</h3>
+        ${(resp.by_geo||[]).map(g => `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;"><span>${g.country_code}</span><span style="font-weight:600;">${g.cnt}</span></div>`).join('') || '<div style="color:var(--text2);font-size:12px;">Нет данных</div>'}
+      </div>
+      <div class="card">
+        <h3 style="font-size:13px;color:var(--text2);margin-bottom:8px;">Топ Landing доменов</h3>
+        ${(resp.top_domains||[]).map(d => `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;"><span style="word-break:break-all;">${esc(d.landing_domain)}</span><span style="font-weight:600;margin-left:8px;">${d.cnt}</span></div>`).join('') || '<div style="color:var(--text2);font-size:12px;">Нет данных</div>'}
+      </div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+}
+
+// ── SCAN TARGETS ──
 async function loadScanTargets() {
   try {
     const resp = await api('scan_targets');
     const data = resp.data || [];
     $('scan-targets-table').innerHTML = data.length ? `<table>
-      <tr><th>ID</th><th>URL сайта</th><th>Страна</th><th>Прокси</th><th>Тип</th><th>Актив</th><th>Заметки</th><th>Действия</th></tr>
+      <tr><th>ID</th><th>URL сайта</th><th>Страна</th><th>TZ</th><th>Прокси</th><th>Render домен</th><th>Посл. скан</th><th>Актив</th><th>Действия</th></tr>
       ${data.map(s => `<tr>
         <td>${s.id}</td>
-        <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;">${s.site_url}</td>
+        <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;">${esc(s.site_url)}</td>
         <td>${s.country_code}</td>
-        <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">${s.proxy_url||'-'}</td>
-        <td>${s.proxy_type||'-'}</td>
+        <td>${s.timezone||3}</td>
+        <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">${s.proxy_url||'-'}</td>
+        <td style="font-size:11px;">${s.render_domain||'-'}</td>
+        <td style="font-size:11px;">${s.last_scan_at ? new Date(s.last_scan_at).toLocaleString('ru-RU') : '-'}${s.last_error ? ' <span style="color:var(--red);" title="'+esc(s.last_error)+'">!</span>' : ''}</td>
         <td>${s.is_active ? '<span class="badge badge-green">Да</span>' : '<span class="badge badge-red">Нет</span>'}</td>
-        <td>${s.notes||'-'}</td>
         <td>
           <button class="btn btn-sm btn-outline" onclick="toggleScanTarget(${s.id},${!s.is_active})">${s.is_active?'Выкл':'Вкл'}</button>
           <button class="btn btn-sm btn-danger" onclick="deleteScanTarget(${s.id})">Удл.</button>
@@ -1351,10 +1551,14 @@ async function loadScanTargets() {
 }
 
 function showAddScanTarget() {
+  const TZ_MAP = { FI:3,RU:3,KZ:6,DE:2,US:-5,UA:3,BY:3,PL:2,TR:3,JP:9,IN:5,BR:-3,GB:1,FR:2,IT:2 };
   $('modal-content').innerHTML = `
     <h2>Добавить цель сканирования</h2>
     <div class="form-group"><label>URL сайта</label><input type="text" id="st-url" placeholder="https://example.com"></div>
-    <div class="form-group"><label>Код страны</label><input type="text" id="st-cc" maxlength="5" placeholder="GB"></div>
+    <div class="grid grid-2">
+      <div class="form-group"><label>Код страны</label><input type="text" id="st-cc" maxlength="5" placeholder="FI" onchange="const tz=({FI:3,RU:3,KZ:6,DE:2,US:-5,UA:3,BY:3,PL:2,TR:3,JP:9,IN:5,BR:-3,GB:1,FR:2})[this.value.toUpperCase()];if(tz!==undefined)document.getElementById('st-tz').value=tz"></div>
+      <div class="form-group"><label>Timezone</label><input type="number" id="st-tz" value="3" min="-12" max="14"></div>
+    </div>
     <div class="form-group"><label>Прокси URL (опционально)</label><input type="text" id="st-proxy" placeholder="socks5://user:pass@host:port"></div>
     <div class="form-group"><label>Тип прокси</label><select id="st-ptype"><option>socks5</option><option>http</option><option>https</option></select></div>
     <div class="form-group"><label>Заметки</label><textarea id="st-notes"></textarea></div>
@@ -1372,6 +1576,7 @@ async function addScanTarget() {
       country_code: $('st-cc').value.toUpperCase(),
       proxy_url: $('st-proxy').value || null,
       proxy_type: $('st-ptype').value,
+      timezone: parseInt($('st-tz').value) || 3,
       notes: $('st-notes').value || null,
     }});
     closeModal();
@@ -1397,9 +1602,7 @@ async function deleteScanTarget(id) {
   } catch (e) { toast(e.message, 'error'); }
 }
 
-// ============================================
-// POSITION TRACKING
-// ============================================
+// ── POSITION TRACKING ──
 async function loadPositionTracking() {
   try {
     const resp = await api('position_tracking');
@@ -1407,24 +1610,27 @@ async function loadPositionTracking() {
     $('position-tracking-table').innerHTML = data.length ? `<table>
       <tr><th>ID</th><th>URL сайта</th><th>Ad ID</th><th>Тизер</th><th>Позиция</th><th>Всего в блоке</th><th>Конкуренты</th><th>Сканировано</th></tr>
       ${data.map(r => {
-        const competitors = r.competitor_titles;
+        const ct = r.competitor_titles;
         let compText = '-';
-        if (competitors) {
-          const arr = typeof competitors === 'string' ? JSON.parse(competitors) : (Array.isArray(competitors) ? competitors : []);
+        if (ct && typeof ct === 'object' && ct.teasers) {
+          const teasers = ct.teasers || [];
+          compText = teasers.length ? teasers.slice(0,3).map(t => esc(t.title||'')).join(', ') + (teasers.length > 3 ? ` (+${teasers.length-3})` : '') : '-';
+        } else if (ct) {
+          const arr = typeof ct === 'string' ? JSON.parse(ct) : (Array.isArray(ct) ? ct : []);
           compText = arr.length ? arr.slice(0,3).join(', ') + (arr.length > 3 ? ` (+${arr.length-3})` : '') : '-';
         }
         return `<tr>
           <td>${r.id}</td>
-          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${r.site_url}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${esc(r.site_url)}</td>
           <td>${r.ad_id || '-'}</td>
-          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${r.teaser_title || '-'}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${esc(r.teaser_title || '-')}</td>
           <td><span class="badge ${r.position <= 2 ? 'badge-green' : r.position <= 5 ? 'badge-yellow' : 'badge-red'}">${r.position || '-'}</span></td>
           <td>${r.total_teasers_in_block || '-'}</td>
           <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">${compText}</td>
           <td>${r.scanned_at ? new Date(r.scanned_at).toLocaleString('ru-RU') : '-'}</td>
         </tr>`;
       }).join('')}
-    </table>` : '<div style="padding:12px;color:var(--text2);">Нет данных о позициях. Данные появятся после первого запуска сканера позиций.</div>';
+    </table>` : '<div style="padding:12px;color:var(--text2);">Нет данных о позициях.</div>';
   } catch (e) {
     $('position-tracking-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
