@@ -272,9 +272,24 @@ CREATE TABLE competitors (
     short_description TEXT,
     full_description TEXT,
     button_text TEXT,
+    show_rate DECIMAL(5,4) DEFAULT 0,
+    avg_position DECIMAL(5,2),
+    position_stability DECIMAL(5,4),
+    last_rechecked_at TIMESTAMPTZ,
     first_seen_at TIMESTAMP DEFAULT NOW(),
     last_seen_at TIMESTAMP DEFAULT NOW(),
     times_seen INTEGER DEFAULT 1
+);
+
+CREATE TABLE competitor_history (
+    id SERIAL PRIMARY KEY,
+    competitor_id INTEGER REFERENCES competitors(id),
+    media_id INTEGER,
+    site_url TEXT,
+    position INTEGER,
+    cost DECIMAL(10,4),
+    show_rate DECIMAL(5,4),
+    scanned_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE anomalies (
@@ -544,7 +559,10 @@ CREATE INDEX idx_bid_rollback_unchecked ON bid_rollback_snapshots(rollback_trigg
 CREATE UNIQUE INDEX idx_emergency_state_active ON emergency_state(is_active) WHERE is_active = TRUE;
 CREATE INDEX idx_emergency_state_active_all ON emergency_state(is_active);
 CREATE UNIQUE INDEX idx_competitors_site_title ON competitors(site_url, title);
-CREATE UNIQUE INDEX idx_competitors_media_id ON competitors(media_id) WHERE media_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_competitors_media_site ON competitors(media_id, site_url) WHERE media_id IS NOT NULL;
+CREATE INDEX idx_competitor_history_competitor ON competitor_history(competitor_id);
+CREATE INDEX idx_competitor_history_time ON competitor_history(scanned_at);
+CREATE INDEX idx_competitor_history_media_site ON competitor_history(media_id, site_url);
 
 -- ============================================
 -- SEED DATA: geo payouts (crypto)
