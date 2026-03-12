@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "express": "^4.21.0",
-    "playwright": "^1.49.0",
+    "playwright": "1.58.2",
     "archiver": "^7.0.1"
   }
 }
