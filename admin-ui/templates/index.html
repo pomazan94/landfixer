@@ -1510,16 +1510,18 @@ async function loadSpyStats() {
     const [resp, proxy] = await Promise.all([api('competitors_stats'), api('proxy_status').catch(() => null)]);
     let proxyHtml = '';
     if (proxy) {
+      const configured = !!(proxy.login && proxy.login.trim());
+      const maskedLogin = configured ? proxy.login.substring(0,4) + '***' : '';
       proxyHtml = `<div class="card">
         <h3 style="font-size:13px;color:var(--text2);margin-bottom:8px;">Прокси</h3>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <span class="badge ${proxy.configured ? 'badge-green' : 'badge-red'}">${proxy.configured ? 'DataImpulse подключён' : 'Не настроен'}</span>
+          <span class="badge ${configured ? 'badge-green' : 'badge-red'}">${configured ? 'DataImpulse подключён' : 'Не настроен'}</span>
         </div>
-        ${proxy.configured ? `<div style="font-size:12px;color:var(--text2);">
-          <div>Логин: ${esc(proxy.login||'')}</div>
+        ${configured ? `<div style="font-size:12px;color:var(--text2);">
+          <div>Логин: ${esc(maskedLogin)}</div>
           <div>Хост: ${esc(proxy.host||'')}:${proxy.port||823}</div>
           <div>Тип: ${esc(proxy.proxy_type||'datacenter')}</div>
-        </div>` : '<div style="font-size:12px;color:var(--text2);">Задайте DATAIMPULSE_LOGIN и DATAIMPULSE_PASSWORD в .env</div>'}
+        </div>` : '<div style="font-size:12px;color:var(--text2);">Настройте DataImpulse в разделе Конфиг → proxy</div>'}
       </div>`;
     }
     el.innerHTML = `

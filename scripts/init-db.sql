@@ -500,7 +500,13 @@ INSERT INTO bot_config (category, key, value, value_type, label, description, mi
     ('default_payout', 'avg_payout', '1350', 'number', 'Средняя выплата по умолч. ($)', 'Фоллбэк-выплата для неизвестных гео', '100', '5000'),
     ('default_payout', 'avg_approval', '0.055', 'number', 'Средний апрув по умолч.', 'Фоллбэк-апрув для неизвестных гео', '0.01', '0.50'),
     ('default_payout', 'min_bid', '0.01', 'number', 'Мин. ставка по умолч. ($)', 'Фоллбэк-мин. ставка для неизвестных гео', '0.001', '0.50'),
-    ('default_payout', 'max_bid', '0.15', 'number', 'Макс. ставка по умолч. ($)', 'Фоллбэк-макс. ставка для неизвестных гео', '0.01', '1.0');
+    ('default_payout', 'max_bid', '0.15', 'number', 'Макс. ставка по умолч. ($)', 'Фоллбэк-макс. ставка для неизвестных гео', '0.01', '1.0'),
+    -- DataImpulse Proxy
+    ('proxy', 'dataimpulse_login', '', 'string', 'DataImpulse логин', 'Логин от DataImpulse аккаунта', NULL, NULL),
+    ('proxy', 'dataimpulse_password', '', 'password', 'DataImpulse пароль', 'Пароль от DataImpulse аккаунта', NULL, NULL),
+    ('proxy', 'dataimpulse_host', 'gw.dataimpulse.com', 'string', 'DataImpulse хост', 'Gateway хост прокси', NULL, NULL),
+    ('proxy', 'dataimpulse_port', '823', 'integer', 'DataImpulse порт', 'Gateway порт прокси', '1', '65535'),
+    ('proxy', 'dataimpulse_proxy_type', 'datacenter', 'string', 'Тип прокси', 'datacenter или residential', NULL, NULL);
 
 -- ============================================
 -- INDEXES
