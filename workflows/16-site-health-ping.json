@@ -118,7 +118,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "={{ \nconst items = $input.all().map(i => i.json);\nconst parts = items.map(i => \n  `UPDATE scan_targets SET ping_ok = ${i.ping_ok}, last_ping_at = NOW(), ping_error = ${i.ping_error ? \"'\" + i.ping_error.replace(/'/g, \"''\").substring(0, 500) + \"'\" : 'NULL'} WHERE id = ${i.id}`\n);\nparts.join(';\\n') + \"; SELECT 'ok' as result, \" + items.length + \" as pinged\"\n}}",
+        "query": "={{ $input.all().map(i => i.json).map(i => `UPDATE scan_targets SET ping_ok = ${i.ping_ok}, last_ping_at = NOW(), ping_error = ${i.ping_error ? \"'\" + String(i.ping_error).replace(/'/g, \"''\").substring(0, 500) + \"'\" : 'NULL'} WHERE id = ${i.id}`).join(';\\n') + \"; SELECT 'ok' as result\" }}",
         "options": {}
       },
       "id": "save-results",
