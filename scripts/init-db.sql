@@ -287,6 +287,7 @@ CREATE TABLE creatives (
     screenshot_path TEXT,
     archive_path TEXT,
     captured_at TIMESTAMPTZ,
+    landing_type VARCHAR(20) DEFAULT 'landing',
     first_seen_at TIMESTAMPTZ DEFAULT NOW(),
     last_seen_at TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW()
