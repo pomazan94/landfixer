@@ -1586,23 +1586,41 @@ async function loadCreatives() {
     loader.style.display = 'none';
   } finally {
     _spyLoading = false;
+    // If content doesn't fill the viewport yet, load more immediately
+    if (_spyHasMore) {
+      requestAnimationFrame(() => {
+        const endEl = $('spy-gallery-end');
+        if (endEl && endEl.getBoundingClientRect().top < window.innerHeight + 400) {
+          loadCreatives();
+        }
+      });
+    }
   }
 }
 
-// Infinite scroll — IntersectionObserver on the end marker
+// Infinite scroll — scroll event + resize handler
 (function initSpyScroll() {
-  const observer = new IntersectionObserver((entries) => {
-    if (entries[0].isIntersecting && _spyHasMore && !_spyLoading) {
+  function checkLoadMore() {
+    if (!_spyHasMore || _spyLoading) return;
+    const endEl = $('spy-gallery-end');
+    if (!endEl) return;
+    if (endEl.getBoundingClientRect().top < window.innerHeight + 400) {
       loadCreatives();
     }
-  }, { rootMargin: '400px' });
-  // Observe after DOM ready
-  const tryObserve = () => {
-    const endEl = $('spy-gallery-end');
-    if (endEl) { observer.observe(endEl); return; }
-    setTimeout(tryObserve, 100);
-  };
-  tryObserve();
+  }
+  let _scrollTick = false;
+  window.addEventListener('scroll', () => {
+    if (!_scrollTick) {
+      _scrollTick = true;
+      requestAnimationFrame(() => { checkLoadMore(); _scrollTick = false; });
+    }
+  }, { passive: true });
+  window.addEventListener('resize', () => {
+    if (!_scrollTick) {
+      _scrollTick = true;
+      requestAnimationFrame(() => { checkLoadMore(); _scrollTick = false; });
+    }
+  }, { passive: true });
 })();
 
 async function showCreativeDetail(id) {
