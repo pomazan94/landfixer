@@ -199,6 +199,7 @@ textarea { resize:vertical; min-height:60px; }
     <div class="nav-item" data-section="emergency-cfg">Аварийный контроллер</div>
     <div class="nav-item" data-section="schedules">Расписания</div>
     <div class="nav-item" data-section="general-cfg">Общие настройки</div>
+    <div class="nav-item" data-section="proxy-cfg">Прокси (DataImpulse)</div>
     <div class="nav-section">Данные</div>
     <div class="nav-item" data-section="geo-payouts">Гео и выплаты</div>
     <div class="nav-item" data-section="teasers">Тизеры</div>
@@ -300,6 +301,15 @@ textarea { resize:vertical; min-height:60px; }
       <div class="card"><h2>Настройки отката</h2><div id="cfg-rollback"><div class="loading">Загрузка...</div></div></div>
       <div class="card"><h2>Детектор аномалий</h2><div id="cfg-anomaly"><div class="loading">Загрузка...</div></div></div>
       <div class="card"><h2>Трекинг позиций</h2><div id="cfg-position"><div class="loading">Загрузка...</div></div></div>
+    </div>
+
+    <!-- PROXY CONFIG -->
+    <div class="section" id="sec-proxy-cfg">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div><h2 style="font-size:20px;">Прокси (DataImpulse)</h2><p style="color:var(--text2);font-size:12px;">Настройки DataImpulse прокси для сканера позиций и spy tool.</p></div>
+        <button class="btn btn-primary" onclick="saveCategory('proxy')">Сохранить</button>
+      </div>
+      <div class="card" id="cfg-proxy"><div class="loading">Загрузка...</div></div>
     </div>
 
     <!-- GEO PAYOUTS -->
@@ -567,6 +577,7 @@ function loadSection(sec) {
     'emergency-cfg': () => { loadConfig('emergency'); loadConfig('balance'); },
     'schedules': () => loadConfig('schedules'),
     'general-cfg': () => { ['general','default_payout','dead_creative','rollback','anomaly','position'].forEach(loadConfig); },
+    'proxy-cfg': () => loadConfig('proxy'),
     'geo-payouts': loadGeoPayouts,
     'teasers': () => { if (_teasersLoaded) { renderTeasersTree(_currentFilter); } else { loadTeasersTree(); } },
     'bid-history': loadBidHistory,
@@ -703,7 +714,7 @@ async function loadConfig(category) {
         <div class="desc">${c.description || ''}</div>
       </div>
       <div class="cfg-input">
-        <input type="${c.value_type === 'string' ? 'text' : 'number'}"
+        <input type="${c.value_type === 'password' ? 'password' : (c.value_type === 'string' ? 'text' : 'number')}"
           id="cfg-val-${c.id}"
           value="${c.value}"
           data-original="${c.value}"
