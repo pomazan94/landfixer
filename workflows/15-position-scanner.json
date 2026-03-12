@@ -588,14 +588,14 @@
       "main": [
         [
           {
-            "node": "Fetch Widget Render",
+            "node": "Merge Render HTML",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Merge Render HTML",
+            "node": "Fetch Widget Render",
             "type": "main",
             "index": 0
           }
