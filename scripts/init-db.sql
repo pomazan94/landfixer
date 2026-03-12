@@ -181,6 +181,7 @@ CREATE TABLE scan_targets (
     render_domain TEXT,
     block_uuids JSONB,
     extra_params JSONB,
+    geozo_block_id INTEGER,
     last_scan_at TIMESTAMPTZ,
     last_error TEXT,
     is_active BOOLEAN DEFAULT TRUE,

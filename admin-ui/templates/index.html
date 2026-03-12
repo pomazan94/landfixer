@@ -1557,12 +1557,13 @@ async function loadScanTargets() {
     const resp = await api('scan_targets');
     const data = resp.data || [];
     $('scan-targets-table').innerHTML = data.length ? `<table>
-      <tr><th>ID</th><th>URL сайта</th><th>Страна</th><th>TZ</th><th>Прокси</th><th>Render домен</th><th>Посл. скан</th><th>Актив</th><th>Действия</th></tr>
+      <tr><th>ID</th><th>URL сайта</th><th>Страна</th><th>TZ</th><th>Block ID</th><th>Прокси</th><th>Render домен</th><th>Посл. скан</th><th>Актив</th><th>Действия</th></tr>
       ${data.map(s => `<tr>
         <td>${s.id}</td>
         <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;">${esc(s.site_url)}</td>
         <td>${s.country_code}</td>
         <td>${s.timezone||3}</td>
+        <td style="font-size:11px;">${s.geozo_block_id || '<span style="color:var(--text2);">auto</span>'}</td>
         <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">${s.proxy_url || '<span style="color:var(--green);font-weight:600;">DataImpulse (auto)</span>'}</td>
         <td style="font-size:11px;">${s.render_domain||'-'}</td>
         <td style="font-size:11px;">${s.last_scan_at ? new Date(s.last_scan_at).toLocaleString('ru-RU') : '-'}${s.last_error ? ' <span style="color:var(--red);" title="'+esc(s.last_error)+'">!</span>' : ''}</td>
