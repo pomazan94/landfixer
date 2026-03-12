@@ -582,16 +582,16 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "loose"
           },
           "conditions": [
             {
-              "id": "skip-check",
-              "leftValue": "={{ $json.skip }}",
-              "rightValue": true,
+              "id": "has-landing-url",
+              "leftValue": "={{ $json.landing_url }}",
+              "rightValue": "",
               "operator": {
-                "type": "boolean",
-                "operation": "notEqual"
+                "type": "string",
+                "operation": "isNotEmpty"
               }
             }
           ],
@@ -635,16 +635,16 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "loose"
           },
           "conditions": [
             {
               "id": "not-captured",
               "leftValue": "={{ $json.already_captured }}",
-              "rightValue": true,
+              "rightValue": "true",
               "operator": {
-                "type": "boolean",
-                "operation": "notEqual"
+                "type": "string",
+                "operation": "notEquals"
               }
             }
           ],
