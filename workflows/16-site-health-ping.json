@@ -74,7 +74,7 @@
     },
     {
       "parameters": {
-        "method": "HEAD",
+        "method": "GET",
         "url": "={{ $json.site_url }}",
         "options": {
           "timeout": 15000,
@@ -82,6 +82,11 @@
             "redirect": {
               "followRedirects": true,
               "maxRedirects": 3
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
             }
           }
         }
@@ -99,7 +104,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const input = $input.all();\nconst splitItems = $('Split Targets').all();\nconst results = [];\n\nfor (let i = 0; i < splitItems.length; i++) {\n  const target = splitItems[i].json;\n  const pingResult = input[i];\n  const statusCode = pingResult?.json?.statusCode || pingResult?.json?.headers ? 200 : 0;\n  const hasError = pingResult?.json?.error || pingResult?.json?.message?.includes?.('ECONNREFUSED') || pingResult?.json?.message?.includes?.('ETIMEDOUT');\n  const isOk = !hasError && statusCode !== 0;\n  const errorMsg = hasError ? (pingResult.json.error || pingResult.json.message || 'Unknown error') : null;\n\n  results.push({\n    json: {\n      id: target.id,\n      ping_ok: isOk,\n      ping_error: isOk ? null : (errorMsg || 'No response')\n    }\n  });\n}\n\nreturn results;"
+        "jsCode": "const input = $input.all();\nconst splitItems = $('Split Targets').all();\nconst results = [];\n\nfor (let i = 0; i < splitItems.length; i++) {\n  const target = splitItems[i].json;\n  const r = input[i]?.json || {};\n\n  // Detect connection-level errors (ECONNREFUSED, ETIMEDOUT, ENOTFOUND, etc.)\n  const errMsg = r.error || r.message || '';\n  const errStr = typeof errMsg === 'object' ? JSON.stringify(errMsg) : String(errMsg);\n  const isConnectionError = errStr.includes('ECONNREFUSED') || errStr.includes('ETIMEDOUT') || errStr.includes('ENOTFOUND') || errStr.includes('ECONNRESET') || errStr.includes('ECONNABORTED') || errStr.includes('CERT_') || errStr.includes('socket hang up');\n\n  // If we got any HTTP status code (even 404, 403, 500), the server is alive\n  const statusCode = r.statusCode || 0;\n  const hasHttpResponse = statusCode > 0;\n\n  // Site is OK if: we got an HTTP response OR no connection error detected\n  // With neverError, successful responses come back as data (no error fields)\n  const isOk = hasHttpResponse ? true : !isConnectionError && !r.error;\n\n  let pingError = null;\n  if (!isOk) {\n    pingError = isConnectionError ? errStr.substring(0, 200) : (errStr || 'No response');\n  }\n\n  results.push({\n    json: {\n      id: target.id,\n      ping_ok: isOk,\n      ping_error: pingError\n    }\n  });\n}\n\nreturn results;"
       },
       "id": "check-results",
       "name": "Check Results",
