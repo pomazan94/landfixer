@@ -616,7 +616,7 @@ function loadSection(sec) {
 // API HELPER — calls n8n webhook
 // ============================================
 const WEBHOOK_URL = '/webhook/admin-api';
-const SCREENSHOT_SERVICE_URL = window.location.protocol + '//' + window.location.hostname + ':3000';
+const SCREENSHOT_SERVICE_URL = window.location.origin;
 async function api(action, params = {}) {
   const resp = await fetch(WEBHOOK_URL, {
     method: 'POST',
