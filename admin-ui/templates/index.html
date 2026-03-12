@@ -1507,7 +1507,21 @@ async function loadSpyStats() {
   const el = $('spy-stats-content');
   el.innerHTML = '<div class="loading">Загрузка...</div>';
   try {
-    const resp = await api('competitors_stats');
+    const [resp, proxy] = await Promise.all([api('competitors_stats'), api('proxy_status').catch(() => null)]);
+    let proxyHtml = '';
+    if (proxy) {
+      proxyHtml = `<div class="card">
+        <h3 style="font-size:13px;color:var(--text2);margin-bottom:8px;">Прокси</h3>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span class="badge ${proxy.configured ? 'badge-green' : 'badge-red'}">${proxy.configured ? 'DataImpulse подключён' : 'Не настроен'}</span>
+        </div>
+        ${proxy.configured ? `<div style="font-size:12px;color:var(--text2);">
+          <div>Логин: ${esc(proxy.login||'')}</div>
+          <div>Хост: ${esc(proxy.host||'')}:${proxy.port||823}</div>
+          <div>Тип: ${esc(proxy.proxy_type||'datacenter')}</div>
+        </div>` : '<div style="font-size:12px;color:var(--text2);">Задайте DATAIMPULSE_LOGIN и DATAIMPULSE_PASSWORD в .env</div>'}
+      </div>`;
+    }
     el.innerHTML = `
       <div class="card">
         <h2 style="font-size:16px;margin-bottom:8px;">Всего конкурентов: ${resp.total||0}</h2>
@@ -1517,7 +1531,8 @@ async function loadSpyStats() {
       <div class="card">
         <h3 style="font-size:13px;color:var(--text2);margin-bottom:8px;">Топ Landing доменов</h3>
         ${(resp.top_domains||[]).map(d => `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;"><span style="word-break:break-all;">${esc(d.landing_domain)}</span><span style="font-weight:600;margin-left:8px;">${d.cnt}</span></div>`).join('') || '<div style="color:var(--text2);font-size:12px;">Нет данных</div>'}
-      </div>`;
+      </div>
+      ${proxyHtml}`;
   } catch (e) {
     el.innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
@@ -1535,7 +1550,7 @@ async function loadScanTargets() {
         <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;">${esc(s.site_url)}</td>
         <td>${s.country_code}</td>
         <td>${s.timezone||3}</td>
-        <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">${s.proxy_url||'-'}</td>
+        <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">${s.proxy_url || '<span style="color:var(--green);font-weight:600;">DataImpulse (auto)</span>'}</td>
         <td style="font-size:11px;">${s.render_domain||'-'}</td>
         <td style="font-size:11px;">${s.last_scan_at ? new Date(s.last_scan_at).toLocaleString('ru-RU') : '-'}${s.last_error ? ' <span style="color:var(--red);" title="'+esc(s.last_error)+'">!</span>' : ''}</td>
         <td>${s.is_active ? '<span class="badge badge-green">Да</span>' : '<span class="badge badge-red">Нет</span>'}</td>
@@ -1559,7 +1574,7 @@ function showAddScanTarget() {
       <div class="form-group"><label>Код страны</label><input type="text" id="st-cc" maxlength="5" placeholder="FI" onchange="const tz=({FI:3,RU:3,KZ:6,DE:2,US:-5,UA:3,BY:3,PL:2,TR:3,JP:9,IN:5,BR:-3,GB:1,FR:2})[this.value.toUpperCase()];if(tz!==undefined)document.getElementById('st-tz').value=tz"></div>
       <div class="form-group"><label>Timezone</label><input type="number" id="st-tz" value="3" min="-12" max="14"></div>
     </div>
-    <div class="form-group"><label>Прокси URL (опционально)</label><input type="text" id="st-proxy" placeholder="socks5://user:pass@host:port"></div>
+    <div class="form-group"><label>Прокси URL (опционально)</label><input type="text" id="st-proxy" placeholder="Оставьте пустым для DataImpulse auto-proxy"></div>
     <div class="form-group"><label>Тип прокси</label><select id="st-ptype"><option>socks5</option><option>http</option><option>https</option></select></div>
     <div class="form-group"><label>Заметки</label><textarea id="st-notes"></textarea></div>
     <div class="modal-footer">
