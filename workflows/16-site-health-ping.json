@@ -1,0 +1,232 @@
+{
+  "name": "16 - Site Health Ping",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Every 24 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ping-targets",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "ping-targets"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, site_url, proxy_url, proxy_type FROM scan_targets WHERE is_active = TRUE ORDER BY id",
+        "options": {}
+      },
+      "id": "fetch-targets",
+      "name": "Fetch Active Targets",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        250,
+        100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const targets = $('Fetch Active Targets').all().map(i => i.json);\nconst results = [];\n\nfor (const target of targets) {\n  results.push({\n    json: {\n      id: target.id,\n      site_url: target.site_url,\n      proxy_url: target.proxy_url,\n      proxy_type: target.proxy_type\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "split-targets",
+      "name": "Split Targets",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "HEAD",
+        "url": "={{ $json.site_url }}",
+        "options": {
+          "timeout": 15000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": true,
+              "maxRedirects": 3
+            }
+          }
+        }
+      },
+      "id": "ping-site",
+      "name": "Ping Site",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        750,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.all();\nconst splitItems = $('Split Targets').all();\nconst results = [];\n\nfor (let i = 0; i < splitItems.length; i++) {\n  const target = splitItems[i].json;\n  const pingResult = input[i];\n  const statusCode = pingResult?.json?.statusCode || pingResult?.json?.headers ? 200 : 0;\n  const hasError = pingResult?.json?.error || pingResult?.json?.message?.includes?.('ECONNREFUSED') || pingResult?.json?.message?.includes?.('ETIMEDOUT');\n  const isOk = !hasError && statusCode !== 0;\n  const errorMsg = hasError ? (pingResult.json.error || pingResult.json.message || 'Unknown error') : null;\n\n  results.push({\n    json: {\n      id: target.id,\n      ping_ok: isOk,\n      ping_error: isOk ? null : (errorMsg || 'No response')\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "check-results",
+      "name": "Check Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ \nconst items = $input.all().map(i => i.json);\nconst parts = items.map(i => \n  `UPDATE scan_targets SET ping_ok = ${i.ping_ok}, last_ping_at = NOW(), ping_error = ${i.ping_error ? \"'\" + i.ping_error.replace(/'/g, \"''\").substring(0, 500) + \"'\" : 'NULL'} WHERE id = ${i.id}`\n);\nparts.join(';\\n') + \"; SELECT 'ok' as result, \" + items.length + \" as pinged\"\n}}",
+        "options": {}
+      },
+      "id": "save-results",
+      "name": "Save Ping Results",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1250,
+        100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, pinged: $input.all().length }) }}",
+        "options": {}
+      },
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1500,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Every 24 Hours": {
+      "main": [
+        [
+          {
+            "node": "Fetch Active Targets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Active Targets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Active Targets": {
+      "main": [
+        [
+          {
+            "node": "Split Targets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Targets": {
+      "main": [
+        [
+          {
+            "node": "Ping Site",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ping Site": {
+      "main": [
+        [
+          {
+            "node": "Check Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Results": {
+      "main": [
+        [
+          {
+            "node": "Save Ping Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Ping Results": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

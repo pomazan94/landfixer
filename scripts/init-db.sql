@@ -186,6 +186,9 @@ CREATE TABLE scan_targets (
     last_error TEXT,
     is_active BOOLEAN DEFAULT TRUE,
     notes TEXT,
+    ping_ok BOOLEAN,
+    last_ping_at TIMESTAMPTZ,
+    ping_error TEXT,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
