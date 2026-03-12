@@ -1415,11 +1415,15 @@ let _spyLoading = false;
 let _spyHasMore = true;
 let _spyTotal = 0;
 
-// Calculate batch size based on screen: fill ~2 rows worth of cards
-function getSpyBatchSize() {
+// Calculate batch size based on screen
+function getSpyBatchSize(initial) {
   const gridW = $('spy-gallery-grid') ? $('spy-gallery-grid').offsetWidth : window.innerWidth;
   const cols = Math.max(1, Math.floor(gridW / 280));
-  return cols * 4; // 4 rows per batch
+  const cardH = 230; // approx card height px
+  const viewH = window.innerHeight;
+  const rows = Math.ceil(viewH / cardH);
+  // Initial load: fill viewport + 1 extra row. Subsequent: 2 rows.
+  return initial ? cols * (rows + 1) : cols * 2;
 }
 let _spyCharts = {};
 
@@ -1522,16 +1526,16 @@ function resetAndLoadCreatives() {
   const grid = $('spy-gallery-grid');
   grid.innerHTML = '';
   $('spy-gallery-end').style.display = 'none';
-  loadCreatives();
+  loadCreatives(true);
 }
 
-async function loadCreatives() {
+async function loadCreatives(initial) {
   if (_spyLoading || !_spyHasMore) return;
   _spyLoading = true;
   const grid = $('spy-gallery-grid');
   const loader = $('spy-load-more');
   const endEl = $('spy-gallery-end');
-  const batchSize = getSpyBatchSize();
+  const batchSize = getSpyBatchSize(initial);
 
   if (_spyOffset === 0) {
     grid.innerHTML = '<div class="loading" style="grid-column:1/-1;">Загрузка...</div>';
@@ -1586,36 +1590,25 @@ async function loadCreatives() {
     loader.style.display = 'none';
   } finally {
     _spyLoading = false;
-    // If content doesn't fill the viewport yet, load more immediately
-    if (_spyHasMore) {
-      requestAnimationFrame(() => {
-        const endEl = $('spy-gallery-end');
-        if (endEl && endEl.getBoundingClientRect().top < window.innerHeight + 400) {
-          loadCreatives();
-        }
-      });
-    }
   }
 }
 
-// Infinite scroll — scroll event + resize handler
+// Infinite scroll — load more when user scrolls near bottom of grid
 (function initSpyScroll() {
   function checkLoadMore() {
     if (!_spyHasMore || _spyLoading) return;
-    const endEl = $('spy-gallery-end');
-    if (!endEl) return;
-    if (endEl.getBoundingClientRect().top < window.innerHeight + 400) {
-      loadCreatives();
+    const grid = $('spy-gallery-grid');
+    if (!grid || !grid.children.length) return;
+    // Distance from bottom of grid to bottom of viewport
+    const gridBottom = grid.getBoundingClientRect().bottom;
+    const viewBottom = window.innerHeight;
+    // Trigger when grid bottom is within 600px of viewport bottom
+    if (gridBottom < viewBottom + 600) {
+      loadCreatives(false);
     }
   }
   let _scrollTick = false;
   window.addEventListener('scroll', () => {
-    if (!_scrollTick) {
-      _scrollTick = true;
-      requestAnimationFrame(() => { checkLoadMore(); _scrollTick = false; });
-    }
-  }, { passive: true });
-  window.addEventListener('resize', () => {
     if (!_scrollTick) {
       _scrollTick = true;
       requestAnimationFrame(() => { checkLoadMore(); _scrollTick = false; });
