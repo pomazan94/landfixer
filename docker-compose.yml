@@ -24,6 +24,32 @@ services:
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
       - GENERIC_TIMEZONE=${TIMEZONE:-Europe/Moscow}
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+      # --- Geozo API ---
+      - GEOZO_API_BASE_URL=${GEOZO_API_BASE_URL:-https://api.geozo.com/v1}
+      - GEOZO_API_TOKEN=${GEOZO_API_TOKEN:-}
+      # --- Claude API ---
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY:-}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-20250514}
+      # --- Telegram Bot ---
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      # --- Image Generation ---
+      - IMAGE_GEN_API=${IMAGE_GEN_API:-stable-diffusion}
+      - STABLE_DIFFUSION_API_URL=${STABLE_DIFFUSION_API_URL:-http://localhost:7860}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # --- DataImpulse Proxy ---
+      - DATAIMPULSE_LOGIN=${DATAIMPULSE_LOGIN:-}
+      - DATAIMPULSE_PASSWORD=${DATAIMPULSE_PASSWORD:-}
+      - DATAIMPULSE_HOST=${DATAIMPULSE_HOST:-gw.dataimpulse.com}
+      - DATAIMPULSE_PORT=${DATAIMPULSE_PORT:-823}
+      - DATAIMPULSE_API_TOKEN=${DATAIMPULSE_API_TOKEN:-}
+      - DATAIMPULSE_PROXY_TYPE=${DATAIMPULSE_PROXY_TYPE:-datacenter}
+      # --- General ---
+      - DEFAULT_BID=${DEFAULT_BID:-0.01}
+      - MAX_BID_CEILING=${MAX_BID_CEILING:-0.10}
+      - DAILY_BUDGET_LIMIT=${DAILY_BUDGET_LIMIT:-50}
+      - MIN_BALANCE_ALERT=${MIN_BALANCE_ALERT:-10}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/home/node/workflows
