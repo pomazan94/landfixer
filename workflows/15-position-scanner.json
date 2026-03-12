@@ -490,7 +490,8 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "loose"
+            "typeValidation": "strict",
+            "version": 3
           },
           "conditions": [
             {
@@ -499,7 +500,8 @@
               "rightValue": true,
               "operator": {
                 "type": "boolean",
-                "operation": "equals"
+                "operation": "true",
+                "singleValue": true
               }
             }
           ],
@@ -510,7 +512,7 @@
       "id": "needs-resolve-check",
       "name": "Needs Resolve?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "typeVersion": 2.3,
       "position": [
         2460,
         -180
@@ -582,7 +584,8 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "loose"
+            "typeValidation": "strict",
+            "version": 3
           },
           "conditions": [
             {
@@ -591,7 +594,8 @@
               "rightValue": "",
               "operator": {
                 "type": "string",
-                "operation": "isNotEmpty"
+                "operation": "notEmpty",
+                "singleValue": true
               }
             }
           ],
@@ -602,7 +606,7 @@
       "id": "should-capture",
       "name": "Should Capture?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "typeVersion": 2.3,
       "position": [
         3760,
         -180
@@ -635,16 +639,18 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "loose"
+            "typeValidation": "strict",
+            "version": 3
           },
           "conditions": [
             {
               "id": "not-captured",
               "leftValue": "={{ $json.already_captured }}",
-              "rightValue": "true",
+              "rightValue": true,
               "operator": {
-                "type": "string",
-                "operation": "notEquals"
+                "type": "boolean",
+                "operation": "notTrue",
+                "singleValue": true
               }
             }
           ],
@@ -655,7 +661,7 @@
       "id": "not-yet-captured",
       "name": "Not Yet Captured?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
+      "typeVersion": 2.3,
       "position": [
         4160,
         -300
