@@ -61,7 +61,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const targets = $('Fetch Active Targets').all().map(i => i.json);\nconst results = [];\n\nfor (const target of targets) {\n  results.push({\n    json: {\n      id: target.id,\n      site_url: target.site_url,\n      proxy_url: target.proxy_url,\n      proxy_type: target.proxy_type\n    }\n  });\n}\n\nreturn results;"
+        "jsCode": "const targets = $('Fetch Active Targets').all().map(i => i.json);\nconst results = [];\n\nfor (const target of targets) {\n  let url = target.site_url || '';\n  if (!url.startsWith('http://') && !url.startsWith('https://')) {\n    url = 'https://' + url;\n  }\n  results.push({\n    json: {\n      id: target.id,\n      site_url: url,\n      proxy_url: target.proxy_url,\n      proxy_type: target.proxy_type\n    }\n  });\n}\n\nreturn results;"
       },
       "id": "split-targets",
       "name": "Split Targets",
