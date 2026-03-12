@@ -284,6 +284,9 @@ CREATE TABLE creatives (
     avg_cost DECIMAL(10,4),
     avg_show_rate DECIMAL(5,4),
     days_running INTEGER DEFAULT 0,
+    screenshot_path TEXT,
+    archive_path TEXT,
+    captured_at TIMESTAMPTZ,
     first_seen_at TIMESTAMPTZ DEFAULT NOW(),
     last_seen_at TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW()

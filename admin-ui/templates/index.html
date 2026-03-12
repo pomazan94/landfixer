@@ -615,6 +615,7 @@ function loadSection(sec) {
 // API HELPER — calls n8n webhook
 // ============================================
 const WEBHOOK_URL = '/webhook/admin-api';
+const SCREENSHOT_SERVICE_URL = window.location.protocol + '//' + window.location.hostname + ':3000';
 async function api(action, params = {}) {
   const resp = await fetch(WEBHOOK_URL, {
     method: 'POST',
@@ -642,6 +643,28 @@ function toast(msg, type = 'success') {
 function $(id) { return document.getElementById(id); }
 function fmt(n, d=2) { return n != null ? Number(n).toFixed(d) : '-'; }
 function fmtDate(s) { if (!s) return '-'; const d = new Date(s); return d.toLocaleDateString('ru') + ' ' + d.toLocaleTimeString('ru', {hour:'2-digit',minute:'2-digit'}); }
+
+function screenshotUrl(path) { return SCREENSHOT_SERVICE_URL + '/data/' + path; }
+
+function showScreenshot(path) {
+  $('modal-content').innerHTML = `
+    <h2 style="margin-bottom:12px;">Screenshot</h2>
+    <div style="max-height:80vh;overflow-y:auto;text-align:center;">
+      <img src="${screenshotUrl(path)}" style="max-width:100%;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.5);" onerror="this.outerHTML='<div style=\\'padding:24px;color:var(--text2);\\'>Screenshot not available</div>'">
+    </div>
+    <div class="modal-footer" style="margin-top:12px;">
+      <a href="${screenshotUrl(path)}" download class="btn btn-primary btn-sm">Download PNG</a>
+      <button class="btn btn-outline btn-sm" onclick="closeModal()">Close</button>
+    </div>`;
+  $('modal').classList.add('show');
+}
+
+function downloadArchive(path) {
+  const a = document.createElement('a');
+  a.href = screenshotUrl(path);
+  a.download = '';
+  a.click();
+}
 
 // ============================================
 // DASHBOARD
@@ -1502,6 +1525,11 @@ async function loadCreatives(page) {
             <span>pos: ${c.avg_position ? parseFloat(c.avg_position).toFixed(1) : '-'} | cost: ${c.avg_cost ? parseFloat(c.avg_cost).toFixed(3) : '-'}</span>
             <span>${c.last_seen_at ? new Date(c.last_seen_at).toLocaleDateString('ru-RU') : ''}</span>
           </div>
+          ${c.screenshot_path || c.archive_path ? `
+          <div style="display:flex;gap:6px;margin-top:6px;">
+            ${c.screenshot_path ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();showScreenshot('${esc(c.screenshot_path)}')" style="font-size:10px;padding:2px 8px;" title="Screenshot">Screenshot</button>` : ''}
+            ${c.archive_path ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();downloadArchive('${esc(c.archive_path)}')" style="font-size:10px;padding:2px 8px;" title="Download landing">Download</button>` : ''}
+          </div>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -1542,6 +1570,11 @@ async function showCreativeDetail(id) {
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Media ID</td><td>${c.media_id||'-'}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Гео</td><td>${countries||'-'}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Landing</td><td style="word-break:break-all;">${c.landing_url ? `<a href="${esc(c.landing_url)}" target="_blank" style="color:var(--accent);">${esc(c.landing_domain||c.landing_url)}</a>` : '-'}</td></tr>
+            ${c.screenshot_path || c.archive_path ? `<tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Landing Capture</td><td style="display:flex;gap:6px;">
+              ${c.screenshot_path ? `<button class="btn btn-sm btn-outline" onclick="showScreenshot('${esc(c.screenshot_path)}')" style="font-size:11px;">Screenshot</button>` : ''}
+              ${c.archive_path ? `<a href="${screenshotUrl(esc(c.archive_path))}" download class="btn btn-sm btn-outline" style="font-size:11px;">Download ZIP</a>` : ''}
+              ${c.captured_at ? `<span style="font-size:10px;color:var(--text2);align-self:center;">${new Date(c.captured_at).toLocaleString('ru-RU')}</span>` : ''}
+            </td></tr>` : ''}
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Gravity</td><td>${gravityBadge(c.gravity)} ${trendArrow(c.trend)}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Strength</td><td>${c.strength||0}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Avg Position</td><td>${c.avg_position ? parseFloat(c.avg_position).toFixed(1) : '-'}</td></tr>
@@ -1553,6 +1586,13 @@ async function showCreativeDetail(id) {
           </table>
         </div>
         <div style="min-width:0;overflow:hidden;">
+          ${c.screenshot_path ? `
+          <div class="card" style="padding:8px;margin-bottom:12px;">
+            <h3 style="font-size:12px;color:var(--text2);margin-bottom:6px;">Landing Page Screenshot</h3>
+            <div style="max-height:300px;overflow-y:auto;border-radius:6px;border:1px solid var(--border);cursor:pointer;" onclick="showScreenshot('${esc(c.screenshot_path)}')">
+              <img src="${screenshotUrl(esc(c.screenshot_path))}" style="width:100%;display:block;" onerror="this.parentElement.parentElement.style.display='none'">
+            </div>
+          </div>` : ''}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
             <div class="card" style="padding:8px;margin:0;"><canvas id="chart-position" height="140"></canvas></div>
             <div class="card" style="padding:8px;margin:0;"><canvas id="chart-cost" height="140"></canvas></div>

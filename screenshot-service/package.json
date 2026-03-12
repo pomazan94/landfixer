@@ -1,0 +1,14 @@
+{
+  "name": "screenshot-service",
+  "version": "1.0.0",
+  "description": "Landing page screenshot and download service using Playwright",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "playwright": "^1.49.0",
+    "archiver": "^7.0.1"
+  }
+}

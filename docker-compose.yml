@@ -89,10 +89,25 @@ services:
     networks:
       - geozo-net
 
+  screenshot-service:
+    build: ./screenshot-service
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - MAX_CONCURRENT=3
+      - PAGE_TIMEOUT=45000
+    volumes:
+      - landing_data:/data
+    networks:
+      - geozo-net
+
 volumes:
   n8n_data:
   postgres_data:
   redis_data:
+  landing_data:
 
 networks:
   geozo-net:
