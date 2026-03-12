@@ -17,10 +17,37 @@ const TIMEOUT = parseInt(process.env.PAGE_TIMEOUT || '45000', 10);
 // Ensure dirs exist
 [SCREENSHOTS_DIR, ARCHIVES_DIR].forEach(d => fs.mkdirSync(d, { recursive: true }));
 
-// Generate unique filename from URL
+// Strip tracking query params — same page with different affiliate params = same file
+function stripTrackingParams(url) {
+  try {
+    const u = new URL(url);
+    // Remove known tracking/affiliate params, keep meaningful ones
+    const trackingKeys = [
+      'utm_source','utm_medium','utm_campaign','utm_content','utm_term',
+      'subid','subid1','subid2','subid3','subid4','subid5',
+      'sid1','sid2','sid3','sid4','sid5','sid6','sid7',
+      'click_id','clickid','click','clid','gclid','fbclid',
+      'c1','c2','c3','c4','c5','mpc3',
+      'blockid','block','block_id','siteid','adid','ad_id',
+      'adgroupid','ad_campaign_id','creative_id',
+      'source','cost','bid','cs','price',
+      'ref','referrer','aff_id','offer_id','pid','tid',
+    ];
+    for (const key of trackingKeys) {
+      u.searchParams.delete(key);
+      u.searchParams.delete(key.toUpperCase());
+    }
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+// Generate unique filename from URL (ignores tracking params)
 function urlToFilename(url) {
-  const hash = crypto.createHash('md5').update(url).digest('hex').slice(0, 10);
-  const domain = url.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9.-]/g, '_').slice(0, 60);
+  const cleanUrl = stripTrackingParams(url);
+  const hash = crypto.createHash('md5').update(cleanUrl).digest('hex').slice(0, 10);
+  const domain = cleanUrl.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9.-]/g, '_').slice(0, 60);
   return `${domain}_${hash}`;
 }
 
@@ -99,8 +126,8 @@ async function inlineResources(page) {
   });
 }
 
-// Create ZIP archive from HTML content
-async function createArchive(htmlContent, baseName) {
+// Create ZIP archive with HTML + collected assets
+async function createArchive(htmlContent, assets, baseName) {
   const zipPath = path.join(ARCHIVES_DIR, `${baseName}.zip`);
   return new Promise((resolve, reject) => {
     const output = fs.createWriteStream(zipPath);
@@ -111,6 +138,10 @@ async function createArchive(htmlContent, baseName) {
 
     archive.pipe(output);
     archive.append(htmlContent, { name: 'index.html' });
+    // Add collected assets (images, css, js, fonts)
+    for (const asset of assets) {
+      archive.append(asset.buffer, { name: 'assets/' + asset.filename });
+    }
     archive.finalize();
   });
 }
@@ -185,14 +216,56 @@ app.post('/capture', async (req, res) => {
 
     const page = await context.newPage();
 
+    // Collect assets via network interception
+    const collectedAssets = [];
+    const assetUrls = new Map(); // url -> local filename
+    let assetIdx = 0;
+    page.on('response', async (response) => {
+      try {
+        const resUrl = response.url();
+        const contentType = response.headers()['content-type'] || '';
+        const status = response.status();
+        if (status < 200 || status >= 400) return;
+        // Collect images, CSS, JS, fonts
+        const isAsset = /\.(png|jpg|jpeg|gif|webp|svg|css|js|woff2?|ttf|eot|ico)(\?|$)/i.test(resUrl)
+          || /image\/|text\/css|javascript|font\//i.test(contentType);
+        if (isAsset && !assetUrls.has(resUrl)) {
+          const ext = (contentType.split('/')[1] || 'bin').split(';')[0].replace('javascript', 'js').replace('svg+xml', 'svg');
+          const filename = `${assetIdx++}_${crypto.createHash('md5').update(resUrl).digest('hex').slice(0, 8)}.${ext}`;
+          assetUrls.set(resUrl, filename);
+          const body = await response.body().catch(() => null);
+          if (body) {
+            collectedAssets.push({ url: resUrl, filename, buffer: body });
+          }
+        }
+      } catch {}
+    });
+
     // Navigate and wait for content
     await page.goto(url, {
       waitUntil: 'networkidle',
       timeout: TIMEOUT,
     });
 
-    // Wait a bit for lazy-loaded content
-    await page.waitForTimeout(2000);
+    // Wait for page to be fully rendered
+    await page.waitForTimeout(3000);
+
+    // Scroll down to trigger lazy-loaded images
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(1500);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(500);
+
+    // Check if page has visible content (anti-blank detection)
+    const hasContent = await page.evaluate(() => {
+      const body = document.body;
+      return body && body.innerText.trim().length > 10;
+    });
+
+    if (!hasContent) {
+      // Try waiting more for JS-heavy pages
+      await page.waitForTimeout(5000);
+    }
 
     // Take screenshot
     await page.screenshot({
@@ -201,18 +274,25 @@ app.post('/capture', async (req, res) => {
       type: 'png',
     });
 
-    // Get page content with inlined resources
+    // Build archive HTML — replace asset URLs with local paths
     let htmlContent;
     try {
-      htmlContent = await inlineResources(page);
-    } catch {
-      // Fallback to raw HTML if inlining fails
       htmlContent = await page.content();
+    } catch {
+      htmlContent = '<html><body>Failed to capture page content</body></html>';
     }
 
-    // Create ZIP archive
+    // Replace absolute URLs with local asset paths in HTML
+    for (const [assetUrl, filename] of assetUrls) {
+      // Escape special regex chars in URL
+      const escaped = assetUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      htmlContent = htmlContent.replace(new RegExp(escaped, 'g'), 'assets/' + filename);
+    }
+
+    // Create ZIP archive with HTML + assets
     const zipPath = await createArchive(
-      `<!DOCTYPE html>\n<html>\n${htmlContent}\n</html>`,
+      htmlContent,
+      collectedAssets,
       baseName
     );
 
