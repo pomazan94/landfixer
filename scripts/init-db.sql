@@ -253,43 +253,66 @@ CREATE TABLE content_queue (
     processed_at TIMESTAMP
 );
 
-CREATE TABLE competitors (
+-- ============================================
+-- CREATIVE ANALYTICS (spy tool)
+-- ============================================
+
+CREATE TABLE creatives (
     id SERIAL PRIMARY KEY,
     media_id INTEGER,
-    site_url TEXT,
     title TEXT NOT NULL,
     image_url TEXT,
-    destination_url TEXT,
-    position INTEGER,
-    block_id INTEGER,
+    landing_url TEXT,
     landing_domain TEXT,
-    geozo_ad_id INTEGER,
-    geozo_adgroup_id INTEGER,
-    geozo_site_id INTEGER,
-    country_code VARCHAR(5),
-    cost DECIMAL(10, 4),
-    render_domain TEXT,
     short_description TEXT,
     full_description TEXT,
     button_text TEXT,
-    show_rate DECIMAL(5,4) DEFAULT 0,
+    geozo_ad_id INTEGER,
+    geozo_adgroup_id INTEGER,
+    geozo_site_id INTEGER,
+    gravity DECIMAL(8,2) DEFAULT 0,
+    strength DECIMAL(8,2) DEFAULT 0,
+    trend VARCHAR(10) DEFAULT 'new',
+    total_placements INTEGER DEFAULT 0,
+    unique_sites INTEGER DEFAULT 0,
+    unique_blocks INTEGER DEFAULT 0,
+    countries TEXT[] DEFAULT '{}',
     avg_position DECIMAL(5,2),
-    position_stability DECIMAL(5,4),
-    last_rechecked_at TIMESTAMPTZ,
-    first_seen_at TIMESTAMP DEFAULT NOW(),
-    last_seen_at TIMESTAMP DEFAULT NOW(),
-    times_seen INTEGER DEFAULT 1
+    avg_cost DECIMAL(10,4),
+    avg_show_rate DECIMAL(5,4),
+    days_running INTEGER DEFAULT 0,
+    first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE competitor_history (
+CREATE TABLE placements (
     id SERIAL PRIMARY KEY,
-    competitor_id INTEGER REFERENCES competitors(id),
-    media_id INTEGER,
-    site_url TEXT,
+    creative_id INTEGER REFERENCES creatives(id),
+    publisher_site TEXT NOT NULL,
+    block_id INTEGER,
+    country_code VARCHAR(5),
     position INTEGER,
     cost DECIMAL(10,4),
     show_rate DECIMAL(5,4),
+    render_domain TEXT,
+    click_url TEXT,
     scanned_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE creative_daily_stats (
+    id SERIAL PRIMARY KEY,
+    creative_id INTEGER REFERENCES creatives(id),
+    stat_date DATE NOT NULL,
+    placements_count INTEGER DEFAULT 0,
+    unique_sites INTEGER DEFAULT 0,
+    avg_position DECIMAL(5,2),
+    min_position INTEGER,
+    max_position INTEGER,
+    avg_cost DECIMAL(10,4),
+    max_cost DECIMAL(10,4),
+    avg_show_rate DECIMAL(5,4),
+    UNIQUE(creative_id, stat_date)
 );
 
 CREATE TABLE anomalies (
@@ -558,11 +581,17 @@ CREATE INDEX idx_bid_expectations_unchecked ON bid_expectations(checked, created
 CREATE INDEX idx_bid_rollback_unchecked ON bid_rollback_snapshots(rollback_triggered, created_at);
 CREATE UNIQUE INDEX idx_emergency_state_active ON emergency_state(is_active) WHERE is_active = TRUE;
 CREATE INDEX idx_emergency_state_active_all ON emergency_state(is_active);
-CREATE UNIQUE INDEX idx_competitors_site_title ON competitors(site_url, title);
-CREATE UNIQUE INDEX idx_competitors_media_site ON competitors(media_id, site_url) WHERE media_id IS NOT NULL;
-CREATE INDEX idx_competitor_history_competitor ON competitor_history(competitor_id);
-CREATE INDEX idx_competitor_history_time ON competitor_history(scanned_at);
-CREATE INDEX idx_competitor_history_media_site ON competitor_history(media_id, site_url);
+CREATE UNIQUE INDEX idx_creatives_media_id ON creatives(media_id) WHERE media_id IS NOT NULL;
+CREATE INDEX idx_creatives_title ON creatives(title);
+CREATE INDEX idx_creatives_landing_domain ON creatives(landing_domain);
+CREATE INDEX idx_creatives_last_seen ON creatives(last_seen_at);
+CREATE INDEX idx_creatives_gravity ON creatives(gravity DESC);
+CREATE INDEX idx_placements_creative ON placements(creative_id);
+CREATE INDEX idx_placements_publisher ON placements(publisher_site);
+CREATE INDEX idx_placements_time ON placements(scanned_at);
+CREATE INDEX idx_placements_block ON placements(block_id);
+CREATE INDEX idx_creative_daily_creative ON creative_daily_stats(creative_id);
+CREATE INDEX idx_creative_daily_date ON creative_daily_stats(stat_date);
 
 -- ============================================
 -- SEED DATA: geo payouts (crypto)

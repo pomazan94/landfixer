@@ -165,6 +165,7 @@ textarea { resize:vertical; min-height:60px; }
 .login-box .btn { width:100%; padding:10px; font-size:14px; }
 .login-error { color:var(--red); font-size:13px; margin-top:8px; display:none; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -405,30 +406,52 @@ textarea { resize:vertical; min-height:60px; }
       </div>
     </div>
 
-    <!-- SPY TOOL -->
+    <!-- SPY TOOL / CREATIVE ANALYTICS -->
     <div class="section" id="sec-spy-tool">
       <!-- Sub-tabs -->
       <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid var(--border);">
-        <div class="spy-tab active" data-spy-tab="gallery" onclick="switchSpyTab('gallery')" style="padding:8px 16px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid var(--primary);color:var(--primary);">Галерея конкурентов</div>
+        <div class="spy-tab active" data-spy-tab="gallery" onclick="switchSpyTab('gallery')" style="padding:8px 16px;cursor:pointer;font-size:13px;font-weight:600;border-bottom:2px solid var(--accent);color:var(--accent);">Креативы</div>
+        <div class="spy-tab" data-spy-tab="analytics" onclick="switchSpyTab('analytics')" style="padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text2);border-bottom:2px solid transparent;">Аналитика</div>
+        <div class="spy-tab" data-spy-tab="publishers" onclick="switchSpyTab('publishers')" style="padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text2);border-bottom:2px solid transparent;">Паблишеры</div>
         <div class="spy-tab" data-spy-tab="targets" onclick="switchSpyTab('targets')" style="padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text2);border-bottom:2px solid transparent;">Цели сканирования</div>
-        <div class="spy-tab" data-spy-tab="history" onclick="switchSpyTab('history')" style="padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text2);border-bottom:2px solid transparent;">История</div>
-        <div class="spy-tab" data-spy-tab="stats" onclick="switchSpyTab('stats')" style="padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text2);border-bottom:2px solid transparent;">Статистика</div>
+        <div class="spy-tab" data-spy-tab="history" onclick="switchSpyTab('history')" style="padding:8px 16px;cursor:pointer;font-size:13px;color:var(--text2);border-bottom:2px solid transparent;">Позиции</div>
       </div>
 
-      <!-- GALLERY TAB -->
+      <!-- GALLERY TAB (Creatives) -->
       <div class="spy-panel" id="spy-gallery">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
-          <input type="text" id="spy-search" placeholder="Поиск по заголовку..." style="flex:1;min-width:200px;" onkeyup="if(event.key==='Enter')loadCompetitors()">
-          <select id="spy-geo" style="width:80px;" onchange="loadCompetitors()"><option value="">Все гео</option></select>
-          <select id="spy-site" style="width:180px;" onchange="loadCompetitors()"><option value="">Все сайты</option></select>
-          <input type="date" id="spy-from" style="width:130px;" onchange="loadCompetitors()">
-          <input type="date" id="spy-to" style="width:130px;" onchange="loadCompetitors()">
-          <button class="btn btn-primary btn-sm" onclick="loadCompetitors()">Поиск</button>
+          <input type="text" id="spy-search" placeholder="Поиск по заголовку..." style="flex:1;min-width:200px;" onkeyup="if(event.key==='Enter')loadCreatives()">
+          <select id="spy-geo" style="width:80px;" onchange="loadCreatives()"><option value="">Все гео</option></select>
+          <select id="spy-domain" style="width:180px;" onchange="loadCreatives()"><option value="">Все домены</option></select>
+          <select id="spy-sort" style="width:140px;" onchange="loadCreatives()">
+            <option value="gravity">Gravity</option>
+            <option value="strength">Strength</option>
+            <option value="last_seen_at">Последний</option>
+            <option value="days_running">Дней активен</option>
+            <option value="total_placements">Размещений</option>
+          </select>
+          <input type="date" id="spy-from" style="width:130px;" onchange="loadCreatives()">
+          <input type="date" id="spy-to" style="width:130px;" onchange="loadCreatives()">
+          <button class="btn btn-primary btn-sm" onclick="loadCreatives()">Поиск</button>
         </div>
-        <div id="spy-gallery-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;">
+        <div id="spy-gallery-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
           <div class="loading">Загрузка...</div>
         </div>
         <div id="spy-pagination" style="display:flex;justify-content:center;gap:8px;margin-top:16px;"></div>
+      </div>
+
+      <!-- ANALYTICS TAB -->
+      <div class="spy-panel" id="spy-analytics" style="display:none;">
+        <div id="spy-analytics-content">
+          <div class="loading">Загрузка...</div>
+        </div>
+      </div>
+
+      <!-- PUBLISHERS TAB -->
+      <div class="spy-panel" id="spy-publishers" style="display:none;">
+        <div id="spy-publishers-content">
+          <div class="loading">Загрузка...</div>
+        </div>
       </div>
 
       <!-- TARGETS TAB -->
@@ -442,18 +465,11 @@ textarea { resize:vertical; min-height:60px; }
         </div>
       </div>
 
-      <!-- HISTORY TAB -->
+      <!-- HISTORY TAB (Position tracking) -->
       <div class="spy-panel" id="spy-history" style="display:none;">
         <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Результаты сканирования — позиции тизеров и конкуренты в блоке.</p>
         <div class="card">
           <div class="table-wrap" id="position-tracking-table"><div class="loading">Загрузка...</div></div>
-        </div>
-      </div>
-
-      <!-- STATS TAB -->
-      <div class="spy-panel" id="spy-stats" style="display:none;">
-        <div class="grid grid-2" id="spy-stats-content">
-          <div class="loading">Загрузка...</div>
         </div>
       </div>
     </div>
@@ -1365,13 +1381,14 @@ async function deleteBlockList(id) {
 }
 
 // ============================================
-// SPY TOOL
+// CREATIVE ANALYTICS (SPY TOOL)
 // ============================================
 let _spyPage = 0;
 const SPY_PAGE_SIZE = 24;
+let _spyCharts = {};
 
 function loadSpyTool() {
-  loadCompetitors();
+  loadCreatives();
   loadSpyFilters();
 }
 
@@ -1383,38 +1400,52 @@ function switchSpyTab(tab) {
   });
   document.querySelectorAll('.spy-panel').forEach(el => el.style.display = 'none');
   const activeTab = document.querySelector(`.spy-tab[data-spy-tab="${tab}"]`);
-  if (activeTab) { activeTab.style.borderBottomColor = 'var(--primary)'; activeTab.style.color = 'var(--primary)'; activeTab.classList.add('active'); }
+  if (activeTab) { activeTab.style.borderBottomColor = 'var(--accent)'; activeTab.style.color = 'var(--accent)'; activeTab.classList.add('active'); }
   const panel = $('spy-' + tab);
   if (panel) panel.style.display = '';
-  if (tab === 'gallery') loadCompetitors();
+  if (tab === 'gallery') loadCreatives();
+  else if (tab === 'analytics') loadAnalyticsOverview();
+  else if (tab === 'publishers') loadPublishers();
   else if (tab === 'targets') loadScanTargets();
   else if (tab === 'history') loadPositionTracking();
-  else if (tab === 'stats') loadSpyStats();
 }
 
 async function loadSpyFilters() {
   try {
-    const resp = await api('competitors_stats');
+    const resp = await api('analytics_overview');
     const geoSel = $('spy-geo');
-    const siteSel = $('spy-site');
-    if (resp.by_geo) {
-      resp.by_geo.forEach(g => {
+    const domainSel = $('spy-domain');
+    if (resp.geos) {
+      resp.geos.forEach(g => {
         const opt = document.createElement('option');
-        opt.value = g.country_code; opt.textContent = `${g.country_code} (${g.cnt})`;
+        opt.value = g.geo; opt.textContent = `${g.geo} (${g.cnt})`;
         geoSel.appendChild(opt);
       });
     }
-    if (resp.top_sites) {
-      resp.top_sites.forEach(s => {
+    if (resp.top_domains) {
+      resp.top_domains.forEach(d => {
         const opt = document.createElement('option');
-        opt.value = s.site_url; opt.textContent = s.site_url.replace(/^https?:\/\//, '').substring(0, 30) + ` (${s.cnt})`;
-        siteSel.appendChild(opt);
+        opt.value = d.landing_domain; opt.textContent = (d.landing_domain||'').substring(0, 30) + ` (${d.cnt})`;
+        domainSel.appendChild(opt);
       });
     }
   } catch (e) {}
 }
 
-async function loadCompetitors(page) {
+function trendArrow(trend) {
+  if (trend === 'rising') return '<span style="color:var(--green);font-weight:700;">&#9650;</span>';
+  if (trend === 'falling') return '<span style="color:var(--red);font-weight:700;">&#9660;</span>';
+  if (trend === 'stable') return '<span style="color:var(--text2);">&#9654;</span>';
+  return '<span style="color:var(--purple);font-size:10px;">NEW</span>';
+}
+
+function gravityBadge(g) {
+  if (!g || g == 0) return '';
+  const color = g > 50 ? 'var(--green)' : g > 20 ? 'var(--yellow)' : 'var(--text2)';
+  return `<span style="background:${color};color:#000;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;">${parseFloat(g).toFixed(1)}</span>`;
+}
+
+async function loadCreatives(page) {
   if (page !== undefined) _spyPage = page;
   const grid = $('spy-gallery-grid');
   grid.innerHTML = '<div class="loading">Загрузка...</div>';
@@ -1424,47 +1455,59 @@ async function loadCompetitors(page) {
     if (search) params.search = search;
     const geo = $('spy-geo').value;
     if (geo) params.geo = geo;
-    const site = $('spy-site').value;
-    if (site) params.site_url = site;
+    const domain = $('spy-domain').value;
+    if (domain) params.landing_domain = domain;
+    const sort = $('spy-sort').value;
+    if (sort) params.sort_by = sort;
     const from = $('spy-from').value;
     if (from) params.date_from = from;
     const to = $('spy-to').value;
     if (to) params.date_to = to;
 
-    const resp = await api('competitors_list', params);
+    const resp = await api('creatives_list', params);
     const data = resp.data || [];
     const total = data.length > 0 ? (data[0].total_count || data.length) : 0;
 
     if (data.length === 0) {
-      grid.innerHTML = '<div style="padding:24px;color:var(--text2);grid-column:1/-1;text-align:center;">Нет данных. Тизеры конкурентов появятся после первого сканирования.</div>';
+      grid.innerHTML = '<div style="padding:24px;color:var(--text2);grid-column:1/-1;text-align:center;">Нет данных. Креативы появятся после первого сканирования.</div>';
       $('spy-pagination').innerHTML = '';
       return;
     }
 
-    grid.innerHTML = data.map(c => `
-      <div class="card" style="cursor:pointer;padding:0;overflow:hidden;" onclick="showCompetitorDetail(${c.id})">
-        <div style="height:160px;background:var(--bg2);position:relative;overflow:hidden;">
-          ${c.image_url ? `<img src="${esc(c.image_url)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text2);font-size:12px;">Нет изображения</div>'}
-          ${c.country_code ? `<span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.7);color:#fff;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:600;">${esc(c.country_code)}</span>` : ''}
-          ${c.times_seen > 1 ? `<span style="position:absolute;top:6px;right:6px;background:var(--primary);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">x${c.times_seen}</span>` : ''}
+    grid.innerHTML = data.map(c => {
+      const countries = (c.countries || []).join(', ');
+      return `
+      <div class="card" style="cursor:pointer;padding:0;overflow:hidden;" onclick="showCreativeDetail(${c.id})">
+        <div style="height:150px;background:var(--bg);position:relative;overflow:hidden;">
+          ${c.image_url ? `<img src="${esc(c.image_url)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text2);font-size:12px;">No image</div>'}
+          <div style="position:absolute;top:6px;left:6px;display:flex;gap:4px;">
+            ${countries ? `<span style="background:rgba(0,0,0,0.7);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">${esc(countries)}</span>` : ''}
+          </div>
+          <div style="position:absolute;top:6px;right:6px;display:flex;gap:4px;align-items:center;">
+            ${gravityBadge(c.gravity)}
+            ${trendArrow(c.trend)}
+          </div>
+          ${c.days_running > 0 ? `<span style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,0.7);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">${c.days_running}d</span>` : ''}
         </div>
         <div style="padding:10px;">
           <div style="font-size:13px;font-weight:600;line-height:1.3;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${esc(c.title)}</div>
-          ${c.short_description ? `<div style="font-size:11px;color:var(--text2);margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;">${esc(c.short_description)}</div>` : ''}
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-top:6px;">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-top:4px;">
             <span>${c.landing_domain || '-'}</span>
+            <span>${c.total_placements||0} plc / ${c.unique_sites||0} sites</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-top:2px;">
+            <span>pos: ${c.avg_position ? parseFloat(c.avg_position).toFixed(1) : '-'} | cost: ${c.avg_cost ? parseFloat(c.avg_cost).toFixed(3) : '-'}</span>
             <span>${c.last_seen_at ? new Date(c.last_seen_at).toLocaleDateString('ru-RU') : ''}</span>
           </div>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
 
-    // Pagination
     const totalPages = Math.ceil(total / SPY_PAGE_SIZE);
     if (totalPages > 1) {
       let pagHtml = '';
       for (let p = 0; p < Math.min(totalPages, 10); p++) {
-        pagHtml += `<button class="btn btn-sm ${p === _spyPage ? 'btn-primary' : 'btn-outline'}" onclick="loadCompetitors(${p})">${p + 1}</button>`;
+        pagHtml += `<button class="btn btn-sm ${p === _spyPage ? 'btn-primary' : 'btn-outline'}" onclick="loadCreatives(${p})">${p + 1}</button>`;
       }
       if (totalPages > 10) pagHtml += `<span style="color:var(--text2);font-size:12px;">...${totalPages} стр.</span>`;
       $('spy-pagination').innerHTML = pagHtml;
@@ -1476,76 +1519,185 @@ async function loadCompetitors(page) {
   }
 }
 
-async function showCompetitorDetail(id) {
+async function showCreativeDetail(id) {
   try {
-    const resp = await api('competitors_detail', { id });
-    const c = (resp.data && resp.data[0]) || resp;
+    const resp = await api('creative_detail', { id });
+    const c = resp.creative || {};
+    const placements = resp.placements || [];
+    const dailyStats = resp.daily_stats || [];
+    const countries = (c.countries || []).join(', ');
+
     $('modal-content').innerHTML = `
-      <h2 style="margin-bottom:12px;">Тизер конкурента</h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <h2 style="margin-bottom:12px;">Креатив #${c.id} ${trendArrow(c.trend)}</h2>
+      <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:16px;">
         <div>
-          ${c.image_url ? `<img src="${esc(c.image_url)}" style="width:100%;border-radius:8px;max-height:300px;object-fit:cover;" onerror="this.style.display='none'">` : ''}
-        </div>
-        <div>
-          <div style="font-size:16px;font-weight:700;margin-bottom:8px;">${esc(c.title||'')}</div>
-          ${c.short_description ? `<div style="color:var(--text2);font-size:13px;margin-bottom:4px;">${esc(c.short_description)}</div>` : ''}
-          ${c.full_description ? `<div style="color:var(--text2);font-size:12px;margin-bottom:8px;">${esc(c.full_description)}</div>` : ''}
+          ${c.image_url ? `<img src="${esc(c.image_url)}" style="width:100%;border-radius:8px;max-height:250px;object-fit:cover;" onerror="this.style.display='none'">` : ''}
+          <div style="font-size:15px;font-weight:700;margin:8px 0;">${esc(c.title||'')}</div>
+          ${c.short_description ? `<div style="color:var(--text2);font-size:12px;margin-bottom:4px;">${esc(c.short_description)}</div>` : ''}
           ${c.button_text ? `<div style="margin-bottom:8px;"><span class="badge badge-blue">${esc(c.button_text)}</span></div>` : ''}
           <table style="font-size:12px;width:100%;">
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Media ID</td><td>${c.media_id||'-'}</td></tr>
-            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Гео</td><td>${c.country_code||'-'}</td></tr>
-            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Сайт</td><td style="word-break:break-all;">${esc(c.site_url||'-')}</td></tr>
-            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Landing</td><td style="word-break:break-all;">${c.destination_url ? `<a href="${esc(c.destination_url)}" target="_blank" style="color:var(--primary);">${esc(c.landing_domain||c.destination_url)}</a>` : '-'}</td></tr>
-            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Render домен</td><td>${c.render_domain||'-'}</td></tr>
-            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Позиция</td><td>${c.position||'-'}</td></tr>
-            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Geozo Ad ID</td><td>${c.geozo_ad_id||'-'}</td></tr>
-            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Geozo Group</td><td>${c.geozo_adgroup_id||'-'}</td></tr>
-            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Cost</td><td>${c.cost||'-'}</td></tr>
-            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Замечен</td><td>${c.times_seen||1} раз</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Гео</td><td>${countries||'-'}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Landing</td><td style="word-break:break-all;">${c.landing_url ? `<a href="${esc(c.landing_url)}" target="_blank" style="color:var(--accent);">${esc(c.landing_domain||c.landing_url)}</a>` : '-'}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Gravity</td><td>${gravityBadge(c.gravity)} ${trendArrow(c.trend)}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Strength</td><td>${c.strength||0}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Avg Position</td><td>${c.avg_position ? parseFloat(c.avg_position).toFixed(1) : '-'}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Avg Cost</td><td>${c.avg_cost ? parseFloat(c.avg_cost).toFixed(4) : '-'}</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Размещений</td><td>${c.total_placements||0} (${c.unique_sites||0} сайтов, ${c.unique_blocks||0} блоков)</td></tr>
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Дней активен</td><td>${c.days_running||0}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Первый раз</td><td>${c.first_seen_at ? new Date(c.first_seen_at).toLocaleString('ru-RU') : '-'}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Последний раз</td><td>${c.last_seen_at ? new Date(c.last_seen_at).toLocaleString('ru-RU') : '-'}</td></tr>
           </table>
+        </div>
+        <div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+            <div class="card" style="padding:8px;margin:0;"><canvas id="chart-position" height="140"></canvas></div>
+            <div class="card" style="padding:8px;margin:0;"><canvas id="chart-cost" height="140"></canvas></div>
+          </div>
+          <div class="card" style="padding:8px;margin-bottom:12px;"><canvas id="chart-placements" height="100"></canvas></div>
+          <h3 style="font-size:12px;color:var(--text2);margin-bottom:6px;">Последние размещения</h3>
+          <div style="max-height:200px;overflow-y:auto;">
+            <table style="font-size:11px;">
+              <tr><th>Сайт</th><th>Block</th><th>Гео</th><th>Pos</th><th>Cost</th><th>Дата</th></tr>
+              ${placements.slice(0,50).map(p => `<tr>
+                <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">${esc(p.publisher_site||'')}</td>
+                <td>${p.block_id||'-'}</td>
+                <td>${p.country_code||'-'}</td>
+                <td>${p.position||'-'}</td>
+                <td>${p.cost ? parseFloat(p.cost).toFixed(3) : '-'}</td>
+                <td>${p.scanned_at ? new Date(p.scanned_at).toLocaleString('ru-RU') : '-'}</td>
+              </tr>`).join('')}
+            </table>
+          </div>
         </div>
       </div>
       <div class="modal-footer" style="margin-top:16px;">
         <button class="btn btn-outline" onclick="closeModal()">Закрыть</button>
       </div>`;
     $('modal').classList.add('show');
+
+    // Render charts
+    if (dailyStats.length > 0) {
+      const labels = dailyStats.map(d => d.stat_date);
+      const chartOpts = { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#8b90a0', font: { size: 9 } }, grid: { color: '#2e3345' } }, y: { ticks: { color: '#8b90a0', font: { size: 9 } }, grid: { color: '#2e3345' } } } };
+
+      new Chart(document.getElementById('chart-position'), {
+        type: 'line', data: { labels, datasets: [{ label: 'Avg Position', data: dailyStats.map(d => d.avg_position), borderColor: '#5b8af5', backgroundColor: 'rgba(91,138,245,0.1)', fill: true, tension: 0.3, pointRadius: 2 }] },
+        options: { ...chartOpts, plugins: { ...chartOpts.plugins, title: { display: true, text: 'Position', color: '#8b90a0', font: { size: 11 } } }, scales: { ...chartOpts.scales, y: { ...chartOpts.scales.y, reverse: true } } }
+      });
+      new Chart(document.getElementById('chart-cost'), {
+        type: 'line', data: { labels, datasets: [{ label: 'Avg Cost', data: dailyStats.map(d => d.avg_cost), borderColor: '#fb923c', backgroundColor: 'rgba(251,146,60,0.1)', fill: true, tension: 0.3, pointRadius: 2 }] },
+        options: { ...chartOpts, plugins: { ...chartOpts.plugins, title: { display: true, text: 'Cost', color: '#8b90a0', font: { size: 11 } } } }
+      });
+      new Chart(document.getElementById('chart-placements'), {
+        type: 'bar', data: { labels, datasets: [{ label: 'Placements', data: dailyStats.map(d => d.placements_count), backgroundColor: 'rgba(52,211,153,0.6)', borderRadius: 3 }] },
+        options: { ...chartOpts, plugins: { ...chartOpts.plugins, title: { display: true, text: 'Placements / day', color: '#8b90a0', font: { size: 11 } } } }
+      });
+    }
   } catch (e) { toast(e.message, 'error'); }
 }
 
-async function loadSpyStats() {
-  const el = $('spy-stats-content');
+async function loadAnalyticsOverview() {
+  const el = $('spy-analytics-content');
   el.innerHTML = '<div class="loading">Загрузка...</div>';
   try {
-    const [resp, proxy] = await Promise.all([api('competitors_stats'), api('proxy_status').catch(() => null)]);
-    let proxyHtml = '';
-    if (proxy) {
-      const configured = !!(proxy.login && proxy.login.trim());
-      const maskedLogin = configured ? proxy.login.substring(0,4) + '***' : '';
-      proxyHtml = `<div class="card">
-        <h3 style="font-size:13px;color:var(--text2);margin-bottom:8px;">Прокси</h3>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <span class="badge ${configured ? 'badge-green' : 'badge-red'}">${configured ? 'DataImpulse подключён' : 'Не настроен'}</span>
-        </div>
-        ${configured ? `<div style="font-size:12px;color:var(--text2);">
-          <div>Логин: ${esc(maskedLogin)}</div>
-          <div>Хост: ${esc(proxy.host||'')}:${proxy.port||823}</div>
-          <div>Тип: ${esc(proxy.proxy_type||'datacenter')}</div>
-        </div>` : '<div style="font-size:12px;color:var(--text2);">Настройте DataImpulse в разделе Конфиг → proxy</div>'}
-      </div>`;
-    }
+    const resp = await api('analytics_overview');
     el.innerHTML = `
-      <div class="card">
-        <h2 style="font-size:16px;margin-bottom:8px;">Всего конкурентов: ${resp.total||0}</h2>
-        <h3 style="font-size:13px;color:var(--text2);margin-bottom:8px;">По гео</h3>
-        ${(resp.by_geo||[]).map(g => `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;"><span>${g.country_code}</span><span style="font-weight:600;">${g.cnt}</span></div>`).join('') || '<div style="color:var(--text2);font-size:12px;">Нет данных</div>'}
+      <div class="grid grid-4" style="margin-bottom:16px;">
+        <div class="stat blue"><div class="label">Всего креативов</div><div class="value">${resp.total_creatives||0}</div></div>
+        <div class="stat green"><div class="label">Активны сегодня</div><div class="value">${resp.active_today||0}</div></div>
+        <div class="stat purple"><div class="label">Новых сегодня</div><div class="value">${resp.new_today||0}</div></div>
+        <div class="stat orange"><div class="label">Гео</div><div class="value">${(resp.geos||[]).length}</div></div>
       </div>
-      <div class="card">
-        <h3 style="font-size:13px;color:var(--text2);margin-bottom:8px;">Топ Landing доменов</h3>
-        ${(resp.top_domains||[]).map(d => `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;"><span style="word-break:break-all;">${esc(d.landing_domain)}</span><span style="font-weight:600;margin-left:8px;">${d.cnt}</span></div>`).join('') || '<div style="color:var(--text2);font-size:12px;">Нет данных</div>'}
+      <div class="grid grid-2">
+        <div class="card">
+          <h2>Активность по дням</h2>
+          <canvas id="chart-activity" height="200"></canvas>
+        </div>
+        <div class="card">
+          <h2>Домены лендингов</h2>
+          <canvas id="chart-domains" height="200"></canvas>
+        </div>
       </div>
-      ${proxyHtml}`;
+      <div class="card" style="margin-top:16px;">
+        <h2>Top 10 по Gravity</h2>
+        <div class="table-wrap">
+          <table>
+            <tr><th></th><th>Title</th><th>Domain</th><th>Gravity</th><th>Strength</th><th>Trend</th><th>Placements</th><th>Days</th><th>Geos</th></tr>
+            ${(resp.top_gravity||[]).map(c => `<tr style="cursor:pointer;" onclick="showCreativeDetail(${c.id})">
+              <td>${c.image_url ? `<img src="${esc(c.image_url)}" style="width:40px;height:30px;object-fit:cover;border-radius:4px;" onerror="this.style.display='none'">` : ''}</td>
+              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${esc(c.title)}</td>
+              <td style="font-size:11px;">${c.landing_domain||'-'}</td>
+              <td>${gravityBadge(c.gravity)}</td>
+              <td>${parseFloat(c.strength||0).toFixed(1)}</td>
+              <td>${trendArrow(c.trend)}</td>
+              <td>${c.total_placements||0}</td>
+              <td>${c.days_running||0}</td>
+              <td style="font-size:11px;">${(c.countries||[]).join(', ')}</td>
+            </tr>`).join('')}
+          </table>
+        </div>
+      </div>
+      <div class="grid grid-2" style="margin-top:16px;">
+        <div class="card">
+          <h2>По гео</h2>
+          ${(resp.geos||[]).map(g => `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;"><span>${g.geo}</span><span style="font-weight:600;">${g.cnt}</span></div>`).join('') || '<div style="color:var(--text2);font-size:12px;">Нет данных</div>'}
+        </div>
+        <div class="card">
+          <h2>Top домены</h2>
+          ${(resp.top_domains||[]).map(d => `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;"><span style="word-break:break-all;">${esc(d.landing_domain)}</span><span style="font-weight:600;margin-left:8px;">${d.cnt} (avg grav: ${d.avg_gravity||0})</span></div>`).join('') || '<div style="color:var(--text2);font-size:12px;">Нет данных</div>'}
+        </div>
+      </div>`;
+
+    // Activity chart
+    const actData = resp.activity_by_day || [];
+    if (actData.length > 0) {
+      new Chart(document.getElementById('chart-activity'), {
+        type: 'bar', data: {
+          labels: actData.map(d => d.day),
+          datasets: [
+            { label: 'Placements', data: actData.map(d => d.total_placements), backgroundColor: 'rgba(91,138,245,0.6)', borderRadius: 3 },
+            { label: 'Active Creatives', data: actData.map(d => d.active_creatives), backgroundColor: 'rgba(52,211,153,0.6)', borderRadius: 3 }
+          ]
+        },
+        options: { responsive: true, plugins: { legend: { labels: { color: '#8b90a0' } } }, scales: { x: { ticks: { color: '#8b90a0', font: { size: 9 } }, grid: { color: '#2e3345' } }, y: { ticks: { color: '#8b90a0' }, grid: { color: '#2e3345' } } } }
+      });
+    }
+
+    // Domains pie chart
+    const domData = resp.top_domains || [];
+    if (domData.length > 0) {
+      const colors = ['#5b8af5','#34d399','#fb923c','#f87171','#a78bfa','#fbbf24','#38bdf8','#e879f9','#4ade80','#f472b6','#818cf8','#22d3ee','#facc15','#fb7185','#2dd4bf'];
+      new Chart(document.getElementById('chart-domains'), {
+        type: 'doughnut', data: {
+          labels: domData.map(d => d.landing_domain),
+          datasets: [{ data: domData.map(d => d.cnt), backgroundColor: colors.slice(0, domData.length) }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#8b90a0', font: { size: 10 } } } } }
+      });
+    }
+  } catch (e) {
+    el.innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
+  }
+}
+
+async function loadPublishers() {
+  const el = $('spy-publishers-content');
+  el.innerHTML = '<div class="loading">Загрузка...</div>';
+  try {
+    const resp = await api('analytics_publishers', { limit: 100 });
+    const data = resp.data || [];
+    el.innerHTML = data.length ? `<div class="card"><div class="table-wrap"><table>
+      <tr><th>Сайт</th><th>Всего размещений</th><th>Уникальных креативов</th><th>Avg Position</th><th>Avg Cost</th><th>Последний скан</th></tr>
+      ${data.map(p => `<tr>
+        <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;">${esc(p.publisher_site)}</td>
+        <td>${p.total_placements}</td>
+        <td>${p.unique_creatives}</td>
+        <td>${p.avg_position ? parseFloat(p.avg_position).toFixed(1) : '-'}</td>
+        <td>${p.avg_cost ? parseFloat(p.avg_cost).toFixed(4) : '-'}</td>
+        <td>${p.last_seen_at ? new Date(p.last_seen_at).toLocaleString('ru-RU') : '-'}</td>
+      </tr>`).join('')}
+    </table></div></div>` : '<div style="padding:24px;color:var(--text2);text-align:center;">Нет данных о паблишерах.</div>';
   } catch (e) {
     el.innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
