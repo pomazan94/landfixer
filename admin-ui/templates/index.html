@@ -144,7 +144,7 @@ textarea { resize:vertical; min-height:60px; }
 /* Modal */
 .modal-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.6); z-index:500; align-items:center; justify-content:center; }
 .modal-overlay.show { display:flex; }
-.modal { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:24px; width:500px; max-width:90vw; max-height:80vh; overflow-y:auto; }
+.modal { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:24px; width:700px; max-width:90vw; max-height:80vh; overflow-y:auto; }
 .modal h2 { margin-bottom:16px; }
 .modal-footer { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
 
@@ -1653,7 +1653,7 @@ async function loadPositionTracking() {
           <td>${r.ad_id || '-'}</td>
           <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${esc(r.teaser_title || '-')}</td>
           <td><span class="badge ${r.position <= 2 ? 'badge-green' : r.position <= 5 ? 'badge-yellow' : 'badge-red'}">${r.position || '-'}</span></td>
-          <td>${r.total_teasers_in_block || '-'}</td>
+          <td>${r.total_teasers_in_block ? `<a href="#" onclick="showBlockTeasers(${r.id}, event)" style="color:var(--accent);text-decoration:underline;cursor:pointer;">${r.total_teasers_in_block}</a>` : '-'}</td>
           <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">${compText}</td>
           <td>${r.scanned_at ? new Date(r.scanned_at).toLocaleString('ru-RU') : '-'}</td>
         </tr>`;
@@ -1662,6 +1662,48 @@ async function loadPositionTracking() {
   } catch (e) {
     $('position-tracking-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
+}
+
+function showBlockTeasers(trackingId, e) {
+  e.preventDefault();
+  // Find the row data from the last loaded position tracking
+  const resp = api('position_tracking').then(resp => {
+    const data = resp.data || [];
+    const row = data.find(r => r.id === trackingId);
+    if (!row || !row.competitor_titles) {
+      $('modal-content').innerHTML = '<h2>Блок тизеров</h2><p>Нет данных о тизерах.</p><div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Закрыть</button></div>';
+      $('modal').classList.add('show');
+      return;
+    }
+    const ct = typeof row.competitor_titles === 'string' ? JSON.parse(row.competitor_titles) : row.competitor_titles;
+    const teasers = ct.teasers || [];
+    const sorted = [...teasers].sort((a, b) => (a.position || 999) - (b.position || 999));
+    const siteUrl = ct.site_url || row.site_url || '';
+    const country = ct.country_code || '';
+    const blockIds = ct.block_ids || [];
+    $('modal-content').innerHTML = `
+      <h2>Блок тизеров (${sorted.length} шт.)</h2>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">
+        ${esc(siteUrl)}<br>
+        ${country ? `Гео: ${country}` : ''} ${blockIds.length ? `| Block: ${esc(blockIds[0])}` : ''}
+      </div>
+      ${sorted.length ? `<table>
+        <tr><th>#</th><th>Позиция</th><th>Картинка</th><th>Заголовок</th><th>Media ID</th></tr>
+        ${sorted.map((t, i) => `<tr style="${t.media_id && row.ad_id && String(t.media_id) === String(row.ad_id) ? 'background:rgba(46,204,113,.15);font-weight:600;' : ''}">
+          <td>${i + 1}</td>
+          <td><span class="badge ${(t.position||999) <= 2 ? 'badge-green' : (t.position||999) <= 5 ? 'badge-yellow' : 'badge-red'}">${t.position || '-'}</span></td>
+          <td>${t.image_url ? `<img src="${esc(t.image_url)}" style="width:60px;height:40px;object-fit:cover;border-radius:4px;" onerror="this.style.display='none'">` : '-'}</td>
+          <td style="max-width:300px;">${esc(t.title || '-')}${t.short_description ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;">${esc(t.short_description)}</div>` : ''}</td>
+          <td style="font-size:11px;">${t.media_id || '-'}</td>
+        </tr>`).join('')}
+      </table>` : '<p>Тизеры не найдены в данных блока.</p>'}
+      <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Закрыть</button></div>
+    `;
+    $('modal').classList.add('show');
+  }).catch(e => {
+    $('modal-content').innerHTML = `<h2>Ошибка</h2><p>${e.message}</p><div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Закрыть</button></div>`;
+    $('modal').classList.add('show');
+  });
 }
 
 // ============================================
