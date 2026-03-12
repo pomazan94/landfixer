@@ -134,7 +134,93 @@
     },
     {
       "parameters": {
-        "jsCode": "// Process ALL proxy responses, not just the first one\nconst items = $input.all();\nconst scanRequests = $('Prepare Scan Requests').all().map(i => i.json);\n\nconst MAX_REFRESHES = 5;\n\nfunction genUuid() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {\n    const r = Math.random() * 16 | 0;\n    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);\n  });\n}\n\nconst results = [];\n\nfor (let idx = 0; idx < items.length; idx++) {\n  const input = items[idx].json;\n  const html = input.data || input.body || (typeof input === 'string' ? input : '');\n  const scanReq = idx < scanRequests.length ? scanRequests[idx] : scanRequests[0];\n  const siteUrl = scanReq.site_url;\n  const geo = scanReq.country_code;\n  const proxyUrl = scanReq.proxy_url;\n  const userAgent = scanReq.user_agent;\n  const tz = scanReq.timezone || 3;\n  const acceptLang = scanReq.accept_language || 'en-US,en;q=0.9';\n\n  if (input.error || input.code >= 400) {\n    results.push({ json: {\n      site_url: siteUrl,\n      country_code: geo,\n      widget_found: false,\n      block_ids: [],\n      error: input.error || `HTTP ${input.code || 'unknown'}`,\n      proxy_url: proxyUrl,\n      scanned_at: $now.toISO()\n    }});\n    continue;\n  }\n\n  // --- Always use render.geozo.com as render domain ---\n  const renderDomain = 'render.geozo.com';\n\n  // Find data-gz-block UUIDs\n  const blockIds = [];\n  const seen = new Set();\n  const blockRegex1 = /data-gz-block=[\"']([0-9a-f-]{36})[\"']/gi;\n  let m;\n  while ((m = blockRegex1.exec(html)) !== null) {\n    if (!seen.has(m[1])) { seen.add(m[1]); blockIds.push(m[1]); }\n  }\n  const blockRegex2 = /data-gz-block=\\\\+[\"']([0-9a-f-]{36})\\\\+[\"']/gi;\n  while ((m = blockRegex2.exec(html)) !== null) {\n    if (!seen.has(m[1])) { seen.add(m[1]); blockIds.push(m[1]); }\n  }\n\n  // Parse extra data-* attributes from block div\n  const extraParams = {};\n  const blockDivRegex = /<div[^>]*data-gz-block=[\"'][0-9a-f-]{36}[\"']([^>]*)>/gi;\n  const bdm = blockDivRegex.exec(html);\n  if (bdm && bdm[1]) {\n    const attrRegex = /data-([a-z0-9_]+)=[\"']([^\"']+)[\"']/gi;\n    let am;\n    while ((am = attrRegex.exec(bdm[1])) !== null) {\n      if (am[1] !== 'gz-block') extraParams[am[1]] = am[2];\n    }\n  }\n\n  // Fallback: if no block UUIDs found in HTML, use cached from DB\n  if (blockIds.length === 0 && scanReq.cached_block_uuids) {\n    try {\n      const cached = typeof scanReq.cached_block_uuids === 'string' ? JSON.parse(scanReq.cached_block_uuids) : scanReq.cached_block_uuids;\n      const arr = Array.isArray(cached) ? cached : [cached];\n      arr.forEach(id => {\n        const s = String(id).trim();\n        if (/^[0-9a-f-]{36}$/.test(s) && !seen.has(s)) { seen.add(s); blockIds.push(s); }\n      });\n    } catch(e) { /* ignore parse errors */ }\n  }\n\n  if (blockIds.length === 0) {\n    results.push({ json: {\n      site_url: siteUrl,\n      country_code: geo,\n      widget_found: false,\n      block_ids: [],\n      render_url: '',\n      render_domain: renderDomain,\n      proxy_url: proxyUrl,\n      user_agent: userAgent,\n      accept_language: acceptLang,\n      scanned_at: $now.toISO()\n    }});\n    continue;\n  }\n\n  // Generate N render URLs per proxy with different UUIDs\n  const blockUuid = blockIds[0];\n  for (let round = 0; round < MAX_REFRESHES; round++) {\n    const surferUuid = genUuid();\n    const pageLoadUuid = genUuid();\n    // Build extra params string from data-* attributes\n    let extraQs = '';\n    for (const [k, v] of Object.entries(extraParams)) {\n      extraQs += `&${encodeURIComponent(k)}=${encodeURIComponent(v)}`;\n    }\n    const renderUrl = `https://${renderDomain}/v5/render?surfer_uuid=${surferUuid}&referrer=${encodeURIComponent(siteUrl)}&pre_referrer=${encodeURIComponent(siteUrl)}&time_zone=${tz}&page_load_uuid=${pageLoadUuid}&page_depth=1&block_uuid=${blockUuid}&refresh_depth=${round + 1}${extraQs}`;\n    results.push({ json: {\n      site_url: siteUrl,\n      country_code: geo,\n      widget_found: true,\n      block_ids: blockIds,\n      render_url: renderUrl,\n      render_domain: renderDomain,\n      refresh_round: round + 1,\n      proxy_url: proxyUrl,\n      user_agent: userAgent,\n      accept_language: acceptLang,\n      scanned_at: $now.toISO()\n    }});\n  }\n}\n\nif (results.length === 0) {\n  return [{ json: { widget_found: false, block_ids: [], error: 'No valid responses from any proxy' } }];\n}\nreturn results;"
+        "jsCode": "// Pick a random article link from the homepage HTML\n// If site_url is already a specific article (has path segments), pass through\n// If site_url is a homepage/root, parse article links and pick one randomly\nconst items = $input.all();\nconst scanRequests = $('Prepare Scan Requests').all().map(i => i.json);\nconst results = [];\n\nfor (let idx = 0; idx < items.length; idx++) {\n  const input = items[idx].json;\n  const html = String(input.data || input.body || '');\n  const scanReq = idx < scanRequests.length ? scanRequests[idx] : scanRequests[0];\n  const siteUrl = scanReq.site_url;\n\n  // Detect if site_url is a homepage (no meaningful path)\n  let isHomepage = false;\n  try {\n    const pathPart = siteUrl.replace(/^https?:\\/\\/[^/]+/, '');\n    isHomepage = !pathPart || pathPart === '/' || pathPart === '/index.html' || pathPart === '/index.php';\n  } catch(e) { isHomepage = false; }\n\n  if (!isHomepage || html.length < 100) {\n    // Already a specific article or no HTML — pass through\n    results.push({ json: { ...input, article_url: siteUrl, is_random_article: false } });\n    continue;\n  }\n\n  // Parse all <a href=\"...\"> links from homepage\n  const baseMatch = siteUrl.match(/^(https?:\\/\\/[^/]+)/);\n  const baseDomain = baseMatch ? baseMatch[1] : '';\n  const hostname = baseDomain.replace(/^https?:\\/\\//, '');\n  const links = new Set();\n\n  const linkRegex = /<a[^>]*href=[\"']([^\"'#]+)[\"'][^>]*>/gi;\n  let lm;\n  while ((lm = linkRegex.exec(html)) !== null) {\n    let href = lm[1].replace(/&amp;/g, '&');\n    // Skip external links, anchors, category/tag pages, feeds, admin\n    if (href.startsWith('//')) href = 'https:' + href;\n    if (href.startsWith('/')) href = baseDomain + href;\n    if (!href.startsWith('http')) continue;\n    if (!href.includes(hostname)) continue;\n    // Must have a meaningful path (at least 2 segments or a slug)\n    const path = href.replace(/^https?:\\/\\/[^/]+/, '').replace(/[?#].*$/, '');\n    if (!path || path === '/' || path.length < 5) continue;\n    // Skip common non-article paths\n    if (/\\/(wp-|feed|admin|login|register|search|tag\\/|category\\/|author\\/|page\\/|\\?)/i.test(path)) continue;\n    // Prefer paths that look like articles (have date segments or long slugs)\n    const segments = path.split('/').filter(Boolean);\n    if (segments.length >= 2 || (segments.length === 1 && segments[0].length > 10)) {\n      links.add(href.split('?')[0].split('#')[0]);\n    }\n  }\n\n  const articleLinks = Array.from(links);\n\n  if (articleLinks.length === 0) {\n    // No articles found — pass through with original URL\n    results.push({ json: { ...input, article_url: siteUrl, is_random_article: false } });\n    continue;\n  }\n\n  // Pick a random article\n  const randomArticle = articleLinks[Math.floor(Math.random() * articleLinks.length)];\n  results.push({ json: {\n    ...input,\n    article_url: randomArticle,\n    homepage_url: siteUrl,\n    is_random_article: true,\n    articles_found: articleLinks.length\n  }});\n}\n\nreturn results;"
+      },
+      "id": "pick-random-article",
+      "name": "Pick Random Article",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.article_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "={{ $('Prepare Scan Requests').first().json.user_agent }}"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "={{ $('Prepare Scan Requests').first().json.accept_language }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "proxy": "={{ $('Prepare Scan Requests').first().json.proxy_url_page }}",
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-article",
+      "name": "Fetch Article Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1080,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "is-random",
+              "leftValue": "={{ $json.is_random_article }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "need-article-fetch",
+      "name": "Need Article Fetch?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process ALL proxy responses, not just the first one\nconst items = $input.all();\nconst scanRequests = $('Prepare Scan Requests').all().map(i => i.json);\n\nconst MAX_REFRESHES = 5;\n\nfunction genUuid() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {\n    const r = Math.random() * 16 | 0;\n    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);\n  });\n}\n\nconst results = [];\n\nfor (let idx = 0; idx < items.length; idx++) {\n  const input = items[idx].json;\n  const html = input.data || input.body || (typeof input === 'string' ? input : '');\n  const scanReq = idx < scanRequests.length ? scanRequests[idx] : scanRequests[0];\n  // Use article_url from Pick Random Article if available, otherwise site_url\n  const articleData = $('Pick Random Article').all();\n  const articleItem = idx < articleData.length ? articleData[idx].json : (articleData[0] || {}).json || {};\n  const siteUrl = articleItem.article_url || scanReq.site_url;\n  const geo = scanReq.country_code;\n  const proxyUrl = scanReq.proxy_url;\n  const userAgent = scanReq.user_agent;\n  const tz = scanReq.timezone || 3;\n  const acceptLang = scanReq.accept_language || 'en-US,en;q=0.9';\n\n  if (input.error || input.code >= 400) {\n    results.push({ json: {\n      site_url: siteUrl,\n      country_code: geo,\n      widget_found: false,\n      block_ids: [],\n      error: input.error || `HTTP ${input.code || 'unknown'}`,\n      proxy_url: proxyUrl,\n      scanned_at: $now.toISO()\n    }});\n    continue;\n  }\n\n  // --- Always use render.geozo.com as render domain ---\n  const renderDomain = 'render.geozo.com';\n\n  // Find data-gz-block UUIDs\n  const blockIds = [];\n  const seen = new Set();\n  const blockRegex1 = /data-gz-block=[\"']([0-9a-f-]{36})[\"']/gi;\n  let m;\n  while ((m = blockRegex1.exec(html)) !== null) {\n    if (!seen.has(m[1])) { seen.add(m[1]); blockIds.push(m[1]); }\n  }\n  const blockRegex2 = /data-gz-block=\\\\+[\"']([0-9a-f-]{36})\\\\+[\"']/gi;\n  while ((m = blockRegex2.exec(html)) !== null) {\n    if (!seen.has(m[1])) { seen.add(m[1]); blockIds.push(m[1]); }\n  }\n\n  // Parse extra data-* attributes from block div\n  const extraParams = {};\n  const blockDivRegex = /<div[^>]*data-gz-block=[\"'][0-9a-f-]{36}[\"']([^>]*)>/gi;\n  const bdm = blockDivRegex.exec(html);\n  if (bdm && bdm[1]) {\n    const attrRegex = /data-([a-z0-9_]+)=[\"']([^\"']+)[\"']/gi;\n    let am;\n    while ((am = attrRegex.exec(bdm[1])) !== null) {\n      if (am[1] !== 'gz-block') extraParams[am[1]] = am[2];\n    }\n  }\n\n  // Fallback: if no block UUIDs found in HTML, use cached from DB\n  if (blockIds.length === 0 && scanReq.cached_block_uuids) {\n    try {\n      const cached = typeof scanReq.cached_block_uuids === 'string' ? JSON.parse(scanReq.cached_block_uuids) : scanReq.cached_block_uuids;\n      const arr = Array.isArray(cached) ? cached : [cached];\n      arr.forEach(id => {\n        const s = String(id).trim();\n        if (/^[0-9a-f-]{36}$/.test(s) && !seen.has(s)) { seen.add(s); blockIds.push(s); }\n      });\n    } catch(e) { /* ignore parse errors */ }\n  }\n\n  if (blockIds.length === 0) {\n    results.push({ json: {\n      site_url: siteUrl,\n      country_code: geo,\n      widget_found: false,\n      block_ids: [],\n      render_url: '',\n      render_domain: renderDomain,\n      proxy_url: proxyUrl,\n      user_agent: userAgent,\n      accept_language: acceptLang,\n      scanned_at: $now.toISO()\n    }});\n    continue;\n  }\n\n  // Generate N render URLs per proxy with different UUIDs\n  const blockUuid = blockIds[0];\n  for (let round = 0; round < MAX_REFRESHES; round++) {\n    const surferUuid = genUuid();\n    const pageLoadUuid = genUuid();\n    // Build extra params string from data-* attributes\n    let extraQs = '';\n    for (const [k, v] of Object.entries(extraParams)) {\n      extraQs += `&${encodeURIComponent(k)}=${encodeURIComponent(v)}`;\n    }\n    const renderUrl = `https://${renderDomain}/v5/render?surfer_uuid=${surferUuid}&referrer=${encodeURIComponent(siteUrl)}&pre_referrer=${encodeURIComponent(siteUrl)}&time_zone=${tz}&page_load_uuid=${pageLoadUuid}&page_depth=1&block_uuid=${blockUuid}&refresh_depth=${round + 1}${extraQs}`;\n    results.push({ json: {\n      site_url: siteUrl,\n      country_code: geo,\n      widget_found: true,\n      block_ids: blockIds,\n      render_url: renderUrl,\n      render_domain: renderDomain,\n      refresh_round: round + 1,\n      proxy_url: proxyUrl,\n      user_agent: userAgent,\n      accept_language: acceptLang,\n      scanned_at: $now.toISO()\n    }});\n  }\n}\n\nif (results.length === 0) {\n  return [{ json: { widget_found: false, block_ids: [], error: 'No valid responses from any proxy' } }];\n}\nreturn results;"
       },
       "id": "extract-block-ids",
       "name": "Extract Block IDs",
@@ -545,6 +631,46 @@
       ]
     },
     "Fetch Page via Proxy": {
+      "main": [
+        [
+          {
+            "node": "Pick Random Article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Random Article": {
+      "main": [
+        [
+          {
+            "node": "Need Article Fetch?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Need Article Fetch?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Article Page",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract Block IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Article Page": {
       "main": [
         [
           {
