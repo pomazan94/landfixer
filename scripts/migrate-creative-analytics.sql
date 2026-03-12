@@ -142,6 +142,7 @@ WHERE co.title IS NOT NULL AND co.title != '' AND co.title != 'undefined';
 
 -- ============================================
 -- 4. MIGRATE competitor_history → placements
+--    (skip rows that overlap with competitors — those were already inserted in step 3)
 -- ============================================
 
 INSERT INTO placements (creative_id, publisher_site, block_id, country_code, position, cost, show_rate, scanned_at)
@@ -159,7 +160,13 @@ JOIN creatives cr ON (
     (ch.media_id IS NOT NULL AND cr.media_id = ch.media_id)
     OR (ch.media_id IS NULL AND cr.media_id IS NULL AND cr.title IN (SELECT title FROM competitors WHERE id = ch.competitor_id))
 )
-WHERE ch.scanned_at IS NOT NULL;
+WHERE ch.scanned_at IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM placements p
+    WHERE p.creative_id = cr.id
+      AND p.publisher_site = regexp_replace(ch.site_url, '^(https?://[^/]+).*$', '\1')
+      AND p.scanned_at = ch.scanned_at
+  );
 
 -- ============================================
 -- 5. BUILD INITIAL DAILY STATS
@@ -200,7 +207,56 @@ FROM (
 WHERE c.id = sub.creative_id;
 
 -- ============================================
--- 7. RENAME OLD TABLES (keep as backup)
+-- 7. DEDUPLICATE PLACEMENTS
+--    Remove rows without country_code when a duplicate with country_code exists
+-- ============================================
+
+DELETE FROM placements p1
+WHERE p1.country_code IS NULL
+  AND EXISTS (
+    SELECT 1 FROM placements p2
+    WHERE p2.creative_id = p1.creative_id
+      AND p2.publisher_site = p1.publisher_site
+      AND p2.position = p1.position
+      AND p2.scanned_at = p1.scanned_at
+      AND p2.country_code IS NOT NULL
+  );
+
+-- Recalculate aggregate stats after dedup
+UPDATE creatives c SET
+    total_placements = sub.total_p,
+    unique_sites = sub.sites,
+    unique_blocks = sub.blocks
+FROM (
+    SELECT creative_id,
+           COUNT(*) AS total_p,
+           COUNT(DISTINCT publisher_site) AS sites,
+           COUNT(DISTINCT block_id) FILTER (WHERE block_id IS NOT NULL) AS blocks
+    FROM placements
+    GROUP BY creative_id
+) sub
+WHERE c.id = sub.creative_id;
+
+-- Rebuild daily stats after dedup
+TRUNCATE creative_daily_stats;
+INSERT INTO creative_daily_stats (creative_id, stat_date, placements_count, unique_sites, avg_position, min_position, max_position, avg_cost, max_cost, avg_show_rate)
+SELECT
+    creative_id,
+    scanned_at::date,
+    COUNT(*),
+    COUNT(DISTINCT publisher_site),
+    ROUND(AVG(position)::numeric, 2),
+    MIN(position),
+    MAX(position),
+    ROUND(AVG(cost)::numeric, 4),
+    MAX(cost),
+    ROUND(AVG(show_rate)::numeric, 4)
+FROM placements
+GROUP BY creative_id, scanned_at::date
+ON CONFLICT (creative_id, stat_date) DO NOTHING;
+
+-- ============================================
+-- 8. RENAME OLD TABLES (keep as backup)
 -- ============================================
 
 ALTER TABLE IF EXISTS competitors RENAME TO competitors_legacy;
