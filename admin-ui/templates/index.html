@@ -420,24 +420,25 @@ textarea { resize:vertical; min-height:60px; }
       <!-- GALLERY TAB (Creatives) -->
       <div class="spy-panel" id="spy-gallery">
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
-          <input type="text" id="spy-search" placeholder="Поиск по заголовку..." style="flex:1;min-width:200px;" onkeyup="if(event.key==='Enter')loadCreatives()">
-          <select id="spy-geo" style="width:80px;" onchange="loadCreatives()"><option value="">Все гео</option></select>
-          <select id="spy-domain" style="width:180px;" onchange="loadCreatives()"><option value="">Все домены</option></select>
-          <select id="spy-sort" style="width:140px;" onchange="loadCreatives()">
+          <input type="text" id="spy-search" placeholder="Поиск по заголовку..." style="flex:1;min-width:200px;" onkeyup="if(event.key==='Enter')resetAndLoadCreatives()">
+          <select id="spy-geo" style="width:80px;" onchange="resetAndLoadCreatives()"><option value="">Все гео</option></select>
+          <select id="spy-domain" style="width:180px;" onchange="resetAndLoadCreatives()"><option value="">Все домены</option></select>
+          <select id="spy-sort" style="width:140px;" onchange="resetAndLoadCreatives()">
             <option value="gravity">Gravity</option>
             <option value="strength">Strength</option>
             <option value="last_seen_at">Последний</option>
             <option value="days_running">Дней активен</option>
             <option value="total_placements">Размещений</option>
           </select>
-          <input type="date" id="spy-from" style="width:130px;" onchange="loadCreatives()">
-          <input type="date" id="spy-to" style="width:130px;" onchange="loadCreatives()">
-          <button class="btn btn-primary btn-sm" onclick="loadCreatives()">Поиск</button>
+          <input type="date" id="spy-from" style="width:130px;" onchange="resetAndLoadCreatives()">
+          <input type="date" id="spy-to" style="width:130px;" onchange="resetAndLoadCreatives()">
+          <button class="btn btn-primary btn-sm" onclick="resetAndLoadCreatives()">Поиск</button>
         </div>
         <div id="spy-gallery-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
           <div class="loading">Загрузка...</div>
         </div>
-        <div id="spy-pagination" style="display:flex;justify-content:center;gap:8px;margin-top:16px;"></div>
+        <div id="spy-load-more" style="display:none;text-align:center;padding:16px;color:var(--text2);font-size:13px;">Загрузка...</div>
+        <div id="spy-gallery-end" style="display:none;text-align:center;padding:12px;color:var(--text2);font-size:12px;"></div>
       </div>
 
       <!-- ANALYTICS TAB -->
@@ -1409,12 +1410,21 @@ async function deleteBlockList(id) {
 // ============================================
 // CREATIVE ANALYTICS (SPY TOOL)
 // ============================================
-let _spyPage = 0;
-const SPY_PAGE_SIZE = 24;
+let _spyOffset = 0;
+let _spyLoading = false;
+let _spyHasMore = true;
+let _spyTotal = 0;
+
+// Calculate batch size based on screen: fill ~2 rows worth of cards
+function getSpyBatchSize() {
+  const gridW = $('spy-gallery-grid') ? $('spy-gallery-grid').offsetWidth : window.innerWidth;
+  const cols = Math.max(1, Math.floor(gridW / 280));
+  return cols * 4; // 4 rows per batch
+}
 let _spyCharts = {};
 
 function loadSpyTool() {
-  loadCreatives();
+  resetAndLoadCreatives();
   loadSpyFilters();
 }
 
@@ -1429,7 +1439,7 @@ function switchSpyTab(tab) {
   if (activeTab) { activeTab.style.borderBottomColor = 'var(--accent)'; activeTab.style.color = 'var(--accent)'; activeTab.classList.add('active'); }
   const panel = $('spy-' + tab);
   if (panel) panel.style.display = '';
-  if (tab === 'gallery') loadCreatives();
+  if (tab === 'gallery') resetAndLoadCreatives();
   else if (tab === 'analytics') loadAnalyticsOverview();
   else if (tab === 'publishers') loadPublishers();
   else if (tab === 'targets') loadScanTargets();
@@ -1471,12 +1481,66 @@ function gravityBadge(g) {
   return `<span style="background:${color};color:#000;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;">${parseFloat(g).toFixed(1)}</span>`;
 }
 
-async function loadCreatives(page) {
-  if (page !== undefined) _spyPage = page;
+function renderCreativeCard(c) {
+  const countries = (c.countries || []).join(', ');
+  return `
+  <div class="card" style="cursor:pointer;padding:0;overflow:hidden;" onclick="showCreativeDetail(${c.id})">
+    <div style="height:150px;background:var(--bg);position:relative;overflow:hidden;">
+      ${c.image_url ? `<img src="${esc(c.image_url)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text2);font-size:12px;">No image</div>'}
+      <div style="position:absolute;top:6px;left:6px;display:flex;gap:4px;">
+        ${countries ? `<span style="background:rgba(0,0,0,0.7);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">${esc(countries)}</span>` : ''}
+      </div>
+      <div style="position:absolute;top:6px;right:6px;display:flex;gap:4px;align-items:center;">
+        ${gravityBadge(c.gravity)}
+        ${trendArrow(c.trend)}
+      </div>
+      ${c.days_running > 0 ? `<span style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,0.7);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">${c.days_running}d</span>` : ''}
+    </div>
+    <div style="padding:10px;">
+      <div style="font-size:13px;font-weight:600;line-height:1.3;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${esc(c.title)}</div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-top:4px;">
+        <span>${c.landing_domain || '-'}</span>
+        <span>${c.total_placements||0} plc / ${c.unique_sites||0} sites</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-top:2px;">
+        <span>pos: ${c.avg_position ? parseFloat(c.avg_position).toFixed(1) : '-'} | cost: ${c.avg_cost ? parseFloat(c.avg_cost).toFixed(3) : '-'}</span>
+        <span>${c.last_seen_at ? new Date(c.last_seen_at).toLocaleDateString('ru-RU') : ''}</span>
+      </div>
+      ${c.screenshot_path || c.archive_path ? `
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        ${c.screenshot_path ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();showScreenshot('${esc(c.screenshot_path)}')" style="font-size:10px;padding:2px 8px;" title="Screenshot">Screenshot</button>` : ''}
+        ${c.archive_path ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();downloadArchive('${esc(c.archive_path)}')" style="font-size:10px;padding:2px 8px;" title="Download landing">Download</button>` : ''}
+      </div>` : ''}
+    </div>
+  </div>`;
+}
+
+function resetAndLoadCreatives() {
+  _spyOffset = 0;
+  _spyHasMore = true;
+  _spyTotal = 0;
   const grid = $('spy-gallery-grid');
-  grid.innerHTML = '<div class="loading">Загрузка...</div>';
+  grid.innerHTML = '';
+  $('spy-gallery-end').style.display = 'none';
+  loadCreatives();
+}
+
+async function loadCreatives() {
+  if (_spyLoading || !_spyHasMore) return;
+  _spyLoading = true;
+  const grid = $('spy-gallery-grid');
+  const loader = $('spy-load-more');
+  const endEl = $('spy-gallery-end');
+  const batchSize = getSpyBatchSize();
+
+  if (_spyOffset === 0) {
+    grid.innerHTML = '<div class="loading" style="grid-column:1/-1;">Загрузка...</div>';
+  } else {
+    loader.style.display = 'block';
+  }
+
   try {
-    const params = { limit: SPY_PAGE_SIZE, offset: _spyPage * SPY_PAGE_SIZE };
+    const params = { limit: batchSize, offset: _spyOffset };
     const search = $('spy-search').value.trim();
     if (search) params.search = search;
     const geo = $('spy-geo').value;
@@ -1492,63 +1556,54 @@ async function loadCreatives(page) {
 
     const resp = await api('creatives_list', params);
     const data = resp.data || [];
-    const total = data.length > 0 ? (data[0].total_count || data.length) : 0;
+    _spyTotal = data.length > 0 ? (data[0].total_count || _spyTotal) : _spyTotal;
 
-    if (data.length === 0) {
+    if (_spyOffset === 0) grid.innerHTML = '';
+
+    if (data.length === 0 && _spyOffset === 0) {
       grid.innerHTML = '<div style="padding:24px;color:var(--text2);grid-column:1/-1;text-align:center;">Нет данных. Креативы появятся после первого сканирования.</div>';
-      $('spy-pagination').innerHTML = '';
+      _spyHasMore = false;
+      loader.style.display = 'none';
       return;
     }
 
-    grid.innerHTML = data.map(c => {
-      const countries = (c.countries || []).join(', ');
-      return `
-      <div class="card" style="cursor:pointer;padding:0;overflow:hidden;" onclick="showCreativeDetail(${c.id})">
-        <div style="height:150px;background:var(--bg);position:relative;overflow:hidden;">
-          ${c.image_url ? `<img src="${esc(c.image_url)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'">` : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text2);font-size:12px;">No image</div>'}
-          <div style="position:absolute;top:6px;left:6px;display:flex;gap:4px;">
-            ${countries ? `<span style="background:rgba(0,0,0,0.7);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;">${esc(countries)}</span>` : ''}
-          </div>
-          <div style="position:absolute;top:6px;right:6px;display:flex;gap:4px;align-items:center;">
-            ${gravityBadge(c.gravity)}
-            ${trendArrow(c.trend)}
-          </div>
-          ${c.days_running > 0 ? `<span style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,0.7);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;">${c.days_running}d</span>` : ''}
-        </div>
-        <div style="padding:10px;">
-          <div style="font-size:13px;font-weight:600;line-height:1.3;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${esc(c.title)}</div>
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-top:4px;">
-            <span>${c.landing_domain || '-'}</span>
-            <span>${c.total_placements||0} plc / ${c.unique_sites||0} sites</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-top:2px;">
-            <span>pos: ${c.avg_position ? parseFloat(c.avg_position).toFixed(1) : '-'} | cost: ${c.avg_cost ? parseFloat(c.avg_cost).toFixed(3) : '-'}</span>
-            <span>${c.last_seen_at ? new Date(c.last_seen_at).toLocaleDateString('ru-RU') : ''}</span>
-          </div>
-          ${c.screenshot_path || c.archive_path ? `
-          <div style="display:flex;gap:6px;margin-top:6px;">
-            ${c.screenshot_path ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();showScreenshot('${esc(c.screenshot_path)}')" style="font-size:10px;padding:2px 8px;" title="Screenshot">Screenshot</button>` : ''}
-            ${c.archive_path ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();downloadArchive('${esc(c.archive_path)}')" style="font-size:10px;padding:2px 8px;" title="Download landing">Download</button>` : ''}
-          </div>` : ''}
-        </div>
-      </div>`;
-    }).join('');
+    grid.insertAdjacentHTML('beforeend', data.map(renderCreativeCard).join(''));
+    _spyOffset += data.length;
+    _spyHasMore = data.length >= batchSize && _spyOffset < _spyTotal;
 
-    const totalPages = Math.ceil(total / SPY_PAGE_SIZE);
-    if (totalPages > 1) {
-      let pagHtml = '';
-      for (let p = 0; p < Math.min(totalPages, 10); p++) {
-        pagHtml += `<button class="btn btn-sm ${p === _spyPage ? 'btn-primary' : 'btn-outline'}" onclick="loadCreatives(${p})">${p + 1}</button>`;
-      }
-      if (totalPages > 10) pagHtml += `<span style="color:var(--text2);font-size:12px;">...${totalPages} стр.</span>`;
-      $('spy-pagination').innerHTML = pagHtml;
+    loader.style.display = 'none';
+    if (!_spyHasMore && _spyOffset > 0) {
+      endEl.textContent = `Показано ${_spyOffset} из ${_spyTotal} креативов`;
+      endEl.style.display = 'block';
     } else {
-      $('spy-pagination').innerHTML = '';
+      endEl.style.display = 'none';
     }
   } catch (e) {
-    grid.innerHTML = `<div class="alert-banner alert-danger" style="grid-column:1/-1;">${e.message}</div>`;
+    if (_spyOffset === 0) {
+      grid.innerHTML = `<div class="alert-banner alert-danger" style="grid-column:1/-1;">${e.message}</div>`;
+    }
+    _spyHasMore = false;
+    loader.style.display = 'none';
+  } finally {
+    _spyLoading = false;
   }
 }
+
+// Infinite scroll — IntersectionObserver on the end marker
+(function initSpyScroll() {
+  const observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting && _spyHasMore && !_spyLoading) {
+      loadCreatives();
+    }
+  }, { rootMargin: '400px' });
+  // Observe after DOM ready
+  const tryObserve = () => {
+    const endEl = $('spy-gallery-end');
+    if (endEl) { observer.observe(endEl); return; }
+    setTimeout(tryObserve, 100);
+  };
+  tryObserve();
+})();
 
 async function showCreativeDetail(id) {
   try {
