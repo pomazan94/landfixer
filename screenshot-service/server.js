@@ -95,6 +95,129 @@ function parseProxy(proxyUrl) {
   }
 }
 
+// Fingerprint profiles for cloaker bypass retry rotation
+// Each attempt uses a different profile to fool antifraud checks
+const FINGERPRINT_PROFILES = [
+  // Profile 0: use caller-provided params (mobile from workflow) — handled separately
+  null,
+  // Profile 1: Desktop Chrome (Windows) — fresh, like SunBrowser
+  {
+    user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.41 Safari/537.36',
+    viewport: { width: 1920, height: 1080 },
+    isMobile: false,
+    hasTouch: false,
+  },
+  // Profile 2: Desktop Chrome (Mac)
+  {
+    user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.7387.92 Safari/537.36',
+    viewport: { width: 1440, height: 900 },
+    isMobile: false,
+    hasTouch: false,
+  },
+  // Profile 3: Mobile Samsung (Android 15)
+  {
+    user_agent: 'Mozilla/5.0 (Linux; Android 15; SM-S926B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.41 Mobile Safari/537.36',
+    viewport: { width: 412, height: 915 },
+    isMobile: true,
+    hasTouch: true,
+  },
+];
+
+const MAX_CAPTURE_RETRIES = parseInt(process.env.MAX_CAPTURE_RETRIES || '3', 10);
+
+// Build Playwright context options from fingerprint params
+function buildContextOptions(params, retryProfile) {
+  const profile = retryProfile || {};
+  const ua = profile.user_agent || params.user_agent
+    || 'Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.41 Mobile Safari/537.36';
+  const vp = profile.viewport || params.viewport || { width: 412, height: 915 };
+
+  const opts = {
+    viewport: { width: vp.width || 412, height: vp.height || 915 },
+    userAgent: ua,
+    locale: params.locale || 'en-US',
+    ignoreHTTPSErrors: true,
+  };
+  if (params.timezone_id) opts.timezoneId = params.timezone_id;
+  if (params.accept_language) opts.extraHTTPHeaders = { 'Accept-Language': params.accept_language };
+
+  // Mobile flags from profile or auto-detect from UA
+  if (profile.isMobile !== undefined) {
+    opts.isMobile = profile.isMobile;
+    opts.hasTouch = profile.hasTouch;
+  } else if (ua.toLowerCase().includes('mobile')) {
+    opts.isMobile = true;
+    opts.hasTouch = true;
+  }
+
+  return opts;
+}
+
+// Single capture attempt — returns { success, errorReason, httpStatus, page, browser, collectedAssets, assetUrls }
+async function attemptCapture(url, proxyConfig, contextOptions) {
+  const launchOptions = { headless: true };
+  if (proxyConfig) launchOptions.proxy = proxyConfig;
+
+  const browser = await chromium.launch(launchOptions);
+  const context = await browser.newContext(contextOptions);
+  const page = await context.newPage();
+
+  // Collect assets via network interception
+  const collectedAssets = [];
+  const assetUrls = new Map();
+  let assetIdx = 0;
+  page.on('response', async (response) => {
+    try {
+      const resUrl = response.url();
+      const contentType = response.headers()['content-type'] || '';
+      const status = response.status();
+      if (status < 200 || status >= 400) return;
+      const isAsset = /\.(png|jpg|jpeg|gif|webp|svg|css|js|woff2?|ttf|eot|ico)(\?|$)/i.test(resUrl)
+        || /image\/|text\/css|javascript|font\//i.test(contentType);
+      if (isAsset && !assetUrls.has(resUrl)) {
+        let localPath = '';
+        try {
+          const parsed = new URL(resUrl);
+          const safeDomain = parsed.hostname.replace(/[^a-zA-Z0-9.-]/g, '_');
+          let safePath = parsed.pathname.replace(/^\/+/, '').replace(/[^a-zA-Z0-9._\/-]/g, '_');
+          if (!safePath || safePath.endsWith('/')) {
+            const ext = (contentType.split('/')[1] || 'bin').split(';')[0].replace('javascript', 'js').replace('svg+xml', 'svg');
+            safePath += `index_${assetIdx}.${ext}`;
+          }
+          localPath = `${safeDomain}/${safePath}`;
+        } catch {
+          const ext = (contentType.split('/')[1] || 'bin').split(';')[0].replace('javascript', 'js').replace('svg+xml', 'svg');
+          localPath = `unknown/${assetIdx}.${ext}`;
+        }
+        assetIdx++;
+        assetUrls.set(resUrl, localPath);
+        const body = await response.body().catch(() => null);
+        if (body) {
+          collectedAssets.push({ url: resUrl, filename: localPath, buffer: body });
+        }
+      }
+    } catch {}
+  });
+
+  // Navigate and wait for content
+  const response = await page.goto(url, { waitUntil: 'networkidle', timeout: TIMEOUT });
+  const httpStatus = response ? response.status() : 0;
+
+  // Wait for page to be fully rendered
+  await page.waitForTimeout(3000);
+
+  // Scroll down to trigger lazy-loaded images
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(500);
+
+  // Detect error/garbage pages
+  const errorReason = await detectErrorPage(page, httpStatus);
+
+  return { success: !errorReason, errorReason, httpStatus, page, browser, collectedAssets, assetUrls };
+}
+
 // Inline external resources (CSS, images) as data URIs for offline viewing
 async function inlineResources(page) {
   return await page.evaluate(async () => {
@@ -207,8 +330,9 @@ function releaseSlot() {
 }
 
 // Main capture endpoint — screenshot + download
+// Retries with different fingerprint profiles if cloaker blocks the page
 app.post('/capture', async (req, res) => {
-  const { url, proxy, viewport, force } = req.body;
+  const { url, proxy, viewport, force, user_agent, locale, timezone_id, accept_language } = req.body;
 
   if (!url) {
     return res.status(400).json({ error: 'url is required' });
@@ -231,141 +355,86 @@ app.post('/capture', async (req, res) => {
   }
 
   await acquireSlot();
-  let browser;
+
+  const params = { user_agent, locale, timezone_id, accept_language, viewport };
+  const proxyConfig = parseProxy(proxy);
+  let lastErrorReason = null;
+  let lastHttpStatus = 0;
 
   try {
-    const launchOptions = { headless: true };
-    const proxyConfig = parseProxy(proxy);
-    if (proxyConfig) {
-      launchOptions.proxy = proxyConfig;
-    }
+    // Retry with different fingerprint profiles to bypass cloaker
+    for (let attempt = 0; attempt <= MAX_CAPTURE_RETRIES; attempt++) {
+      const profile = attempt === 0 ? null : FINGERPRINT_PROFILES[attempt] || FINGERPRINT_PROFILES[1];
+      const contextOptions = buildContextOptions(params, profile);
 
-    browser = await chromium.launch(launchOptions);
-    const context = await browser.newContext({
-      viewport: {
-        width: viewport?.width || 1280,
-        height: viewport?.height || 800,
-      },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-      locale: 'en-US',
-      ignoreHTTPSErrors: true,
-    });
+      const profileName = attempt === 0 ? 'caller' : `profile-${attempt} (${(profile?.user_agent || '').includes('Mobile') ? 'mobile' : 'desktop'})`;
+      console.log(`[capture] Attempt ${attempt + 1}/${MAX_CAPTURE_RETRIES + 1} for ${url} using ${profileName}`);
 
-    const page = await context.newPage();
-
-    // Collect assets via network interception
-    const collectedAssets = [];
-    const assetUrls = new Map(); // url -> local filename
-    let assetIdx = 0;
-    page.on('response', async (response) => {
+      let result;
       try {
-        const resUrl = response.url();
-        const contentType = response.headers()['content-type'] || '';
-        const status = response.status();
-        if (status < 200 || status >= 400) return;
-        // Collect images, CSS, JS, fonts
-        const isAsset = /\.(png|jpg|jpeg|gif|webp|svg|css|js|woff2?|ttf|eot|ico)(\?|$)/i.test(resUrl)
-          || /image\/|text\/css|javascript|font\//i.test(contentType);
-        if (isAsset && !assetUrls.has(resUrl)) {
-          // Preserve original path structure: domain/path/file.ext
-          let localPath = '';
+        result = await attemptCapture(url, proxyConfig, contextOptions);
+      } catch (err) {
+        console.log(`[capture] Attempt ${attempt + 1} failed with error: ${err.message}`);
+        lastErrorReason = err.message;
+        continue;
+      }
+
+      if (result.success) {
+        // Capture succeeded — take screenshot and build archive
+        try {
+          await result.page.screenshot({ path: screenshotPath, fullPage: true, type: 'png' });
+
+          let htmlContent;
           try {
-            const parsed = new URL(resUrl);
-            const safeDomain = parsed.hostname.replace(/[^a-zA-Z0-9.-]/g, '_');
-            let safePath = parsed.pathname.replace(/^\/+/, '').replace(/[^a-zA-Z0-9._\/-]/g, '_');
-            if (!safePath || safePath.endsWith('/')) {
-              const ext = (contentType.split('/')[1] || 'bin').split(';')[0].replace('javascript', 'js').replace('svg+xml', 'svg');
-              safePath += `index_${assetIdx}.${ext}`;
-            }
-            localPath = `${safeDomain}/${safePath}`;
+            htmlContent = await result.page.content();
           } catch {
-            const ext = (contentType.split('/')[1] || 'bin').split(';')[0].replace('javascript', 'js').replace('svg+xml', 'svg');
-            localPath = `unknown/${assetIdx}.${ext}`;
+            htmlContent = '<html><body>Failed to capture page content</body></html>';
           }
-          assetIdx++;
-          assetUrls.set(resUrl, localPath);
-          const body = await response.body().catch(() => null);
-          if (body) {
-            collectedAssets.push({ url: resUrl, filename: localPath, buffer: body });
+
+          for (const [assetUrl, localPath] of result.assetUrls) {
+            const escaped = assetUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            htmlContent = htmlContent.replace(new RegExp(escaped, 'g'), localPath);
           }
+
+          await createArchive(htmlContent, result.collectedAssets, baseName);
+
+          await result.browser.close();
+
+          if (attempt > 0) {
+            console.log(`[capture] SUCCESS on attempt ${attempt + 1} for ${url}`);
+          }
+
+          return res.json({
+            captured: true,
+            screenshot_path: screenshotRelative,
+            archive_path: archiveRelative,
+            cached: false,
+            attempts: attempt + 1,
+          });
+        } catch (err) {
+          try { await result.browser.close(); } catch {}
+          throw err;
         }
-      } catch {}
-    });
-
-    // Navigate and wait for content
-    const response = await page.goto(url, {
-      waitUntil: 'networkidle',
-      timeout: TIMEOUT,
-    });
-    const httpStatus = response ? response.status() : 0;
-
-    // Wait for page to be fully rendered
-    await page.waitForTimeout(3000);
-
-    // Scroll down to trigger lazy-loaded images
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await page.waitForTimeout(1500);
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.waitForTimeout(500);
-
-    // Detect error/garbage pages — don't cache these
-    // Return 200 with captured:false instead of 422 so n8n HTTP Request node
-    // doesn't throw AxiosError — the request itself is valid, the target page is bad
-    const errorReason = await detectErrorPage(page, httpStatus);
-    if (errorReason) {
-      await browser.close();
-      browser = null;
-      return res.json({
-        captured: false,
-        reason: errorReason,
-        http_status: httpStatus,
-        screenshot_path: null,
-        archive_path: null,
-      });
+      } else {
+        // Cloaker blocked — close browser (gets new IP on residential proxy) and retry
+        lastErrorReason = result.errorReason;
+        lastHttpStatus = result.httpStatus;
+        console.log(`[capture] Attempt ${attempt + 1} blocked: ${result.errorReason}`);
+        try { await result.browser.close(); } catch {}
+      }
     }
 
-    // Take screenshot
-    await page.screenshot({
-      path: screenshotPath,
-      fullPage: true,
-      type: 'png',
-    });
-
-    // Build archive HTML — replace asset URLs with local paths
-    let htmlContent;
-    try {
-      htmlContent = await page.content();
-    } catch {
-      htmlContent = '<html><body>Failed to capture page content</body></html>';
-    }
-
-    // Replace absolute URLs with local asset paths in HTML
-    for (const [assetUrl, localPath] of assetUrls) {
-      // Escape special regex chars in URL
-      const escaped = assetUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      htmlContent = htmlContent.replace(new RegExp(escaped, 'g'), localPath);
-    }
-
-    // Create ZIP archive with HTML + assets
-    const zipPath = await createArchive(
-      htmlContent,
-      collectedAssets,
-      baseName
-    );
-
-    await browser.close();
-    browser = null;
-
-    res.json({
-      captured: true,
-      screenshot_path: screenshotRelative,
-      archive_path: archiveRelative,
-      cached: false,
+    // All attempts exhausted
+    console.log(`[capture] All ${MAX_CAPTURE_RETRIES + 1} attempts failed for ${url}: ${lastErrorReason}`);
+    return res.json({
+      captured: false,
+      reason: lastErrorReason,
+      http_status: lastHttpStatus,
+      screenshot_path: null,
+      archive_path: null,
+      attempts: MAX_CAPTURE_RETRIES + 1,
     });
   } catch (err) {
-    if (browser) {
-      try { await browser.close(); } catch {}
-    }
     console.error(`Capture failed for ${url}:`, err.message);
     res.status(500).json({
       error: err.message,
@@ -377,9 +446,9 @@ app.post('/capture', async (req, res) => {
   }
 });
 
-// Screenshot only
+// Screenshot only (with retry logic)
 app.post('/screenshot', async (req, res) => {
-  const { url, proxy, viewport, force } = req.body;
+  const { url, proxy, viewport, force, user_agent, locale, timezone_id, accept_language } = req.body;
   if (!url) return res.status(400).json({ error: 'url is required' });
 
   const baseName = urlToFilename(url);
@@ -391,37 +460,45 @@ app.post('/screenshot', async (req, res) => {
   }
 
   await acquireSlot();
-  let browser;
+  const params = { user_agent, locale, timezone_id, accept_language, viewport };
+  const proxyConfig = parseProxy(proxy);
+  let lastErrorReason = null;
+
   try {
-    const launchOptions = { headless: true };
-    const proxyConfig = parseProxy(proxy);
-    if (proxyConfig) launchOptions.proxy = proxyConfig;
+    for (let attempt = 0; attempt <= MAX_CAPTURE_RETRIES; attempt++) {
+      const profile = attempt === 0 ? null : FINGERPRINT_PROFILES[attempt] || FINGERPRINT_PROFILES[1];
+      const contextOptions = buildContextOptions(params, profile);
+      let browser;
+      try {
+        const launchOptions = { headless: true };
+        if (proxyConfig) launchOptions.proxy = proxyConfig;
+        browser = await chromium.launch(launchOptions);
+        const context = await browser.newContext(contextOptions);
+        const page = await context.newPage();
+        const response = await page.goto(url, { waitUntil: 'networkidle', timeout: TIMEOUT });
+        const httpStatus = response ? response.status() : 0;
+        await page.waitForTimeout(2000);
 
-    browser = await chromium.launch(launchOptions);
-    const context = await browser.newContext({
-      viewport: { width: viewport?.width || 1280, height: viewport?.height || 800 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-      ignoreHTTPSErrors: true,
-    });
-    const page = await context.newPage();
-    const response = await page.goto(url, { waitUntil: 'networkidle', timeout: TIMEOUT });
-    const httpStatus = response ? response.status() : 0;
-    await page.waitForTimeout(2000);
+        const errorReason = await detectErrorPage(page, httpStatus);
+        if (errorReason) {
+          lastErrorReason = errorReason;
+          await browser.close();
+          console.log(`[screenshot] Attempt ${attempt + 1} blocked: ${errorReason}`);
+          continue;
+        }
 
-    const errorReason = await detectErrorPage(page, httpStatus);
-    if (errorReason) {
-      await browser.close();
-      browser = null;
-      return res.json({ captured: false, reason: errorReason, screenshot_path: null });
+        await page.screenshot({ path: screenshotPath, fullPage: true, type: 'png' });
+        await browser.close();
+        return res.json({ captured: true, screenshot_path: screenshotRelative, cached: false, attempts: attempt + 1 });
+      } catch (err) {
+        if (browser) try { await browser.close(); } catch {}
+        lastErrorReason = err.message;
+        console.log(`[screenshot] Attempt ${attempt + 1} error: ${err.message}`);
+      }
     }
 
-    await page.screenshot({ path: screenshotPath, fullPage: true, type: 'png' });
-    await browser.close();
-    browser = null;
-
-    res.json({ captured: true, screenshot_path: screenshotRelative, cached: false });
+    res.json({ captured: false, reason: lastErrorReason, screenshot_path: null, attempts: MAX_CAPTURE_RETRIES + 1 });
   } catch (err) {
-    if (browser) try { await browser.close(); } catch {}
     console.error(`Screenshot failed for ${url}:`, err.message);
     res.status(500).json({ error: err.message });
   } finally {
