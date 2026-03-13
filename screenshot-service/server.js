@@ -102,21 +102,21 @@ const FINGERPRINT_PROFILES = [
   null,
   // Profile 1: Desktop Chrome (Windows) — fresh, like SunBrowser
   {
-    user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.41 Safari/537.36',
+    user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7535.50 Safari/537.36',
     viewport: { width: 1920, height: 1080 },
     isMobile: false,
     hasTouch: false,
   },
   // Profile 2: Desktop Chrome (Mac)
   {
-    user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.7387.92 Safari/537.36',
+    user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7535.50 Safari/537.36',
     viewport: { width: 1440, height: 900 },
     isMobile: false,
     hasTouch: false,
   },
-  // Profile 3: Mobile Samsung (Android 15)
+  // Profile 3: Mobile Samsung (Android 16)
   {
-    user_agent: 'Mozilla/5.0 (Linux; Android 15; SM-S926B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.41 Mobile Safari/537.36',
+    user_agent: 'Mozilla/5.0 (Linux; Android 16; SM-S936B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7535.50 Mobile Safari/537.36',
     viewport: { width: 412, height: 915 },
     isMobile: true,
     hasTouch: true,
@@ -129,7 +129,7 @@ const MAX_CAPTURE_RETRIES = parseInt(process.env.MAX_CAPTURE_RETRIES || '3', 10)
 function buildContextOptions(params, retryProfile) {
   const profile = retryProfile || {};
   const ua = profile.user_agent || params.user_agent
-    || 'Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.7499.41 Mobile Safari/537.36';
+    || 'Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7535.50 Mobile Safari/537.36';
   const vp = profile.viewport || params.viewport || { width: 412, height: 915 };
 
   const opts = {
