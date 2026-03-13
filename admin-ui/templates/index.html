@@ -471,10 +471,19 @@ textarea { resize:vertical; min-height:60px; }
 
       <!-- HISTORY TAB (Position tracking) -->
       <div class="spy-panel" id="spy-history" style="display:none;">
-        <p style="color:var(--text2);font-size:12px;margin-bottom:12px;">Результаты сканирования — позиции тизеров и конкуренты в блоке.</p>
-        <div class="card">
-          <div class="table-wrap" id="position-tracking-table"><div class="loading">Загрузка...</div></div>
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+          <select id="pos-filter-geo" onchange="renderPositions()" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer;">
+            <option value="">Все страны</option>
+          </select>
+          <select id="pos-filter-status" onchange="renderPositions()" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer;">
+            <option value="">Все сайты</option>
+            <option value="found">Только с нашим тизером</option>
+            <option value="notfound">Без нашего тизера</option>
+          </select>
+          <input id="pos-filter-search" oninput="renderPositions()" placeholder="Поиск по сайту..." style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:13px;width:200px;">
         </div>
+        <div id="pos-stats-bar" style="display:flex;gap:24px;margin-bottom:12px;padding:10px 16px;background:var(--bg2);border-radius:8px;font-size:13px;border:1px solid var(--border);"></div>
+        <div id="position-tracking-table"><div class="loading">Загрузка...</div></div>
       </div>
     </div>
 
@@ -1920,79 +1929,194 @@ async function deleteScanTarget(id) {
 }
 
 // ── POSITION TRACKING ──
+let _posData = []; // raw API data
+let _posSites = []; // grouped by site
+
+function posBadge(pos) {
+  if (!pos && pos !== 0) return '<span class="badge badge-gray">-</span>';
+  const cls = pos <= 2 ? 'badge-green' : pos <= 5 ? 'badge-yellow' : 'badge-red';
+  return `<span class="badge ${cls}">${pos}</span>`;
+}
+
+function posTrendArrow(history) {
+  if (history.length < 2) return '';
+  const recent = history.filter(h => h !== null);
+  if (recent.length < 2) return '<span style="color:var(--text2);font-size:14px;">→</span>';
+  const last = recent[recent.length - 1];
+  const prev = recent[recent.length - 2];
+  if (last < prev) return '<span style="color:#2ecc71;font-size:14px;" title="Улучшение">↑</span>';
+  if (last > prev) return '<span style="color:#e74c3c;font-size:14px;" title="Падение">↓</span>';
+  return '<span style="color:var(--text2);font-size:14px;">→</span>';
+}
+
+function posTrendHistory(history) {
+  return history.map(h => {
+    if (h === null) return '<span style="color:var(--text2);">-</span>';
+    const c = h <= 2 ? '#2ecc71' : h <= 5 ? '#f39c12' : '#e74c3c';
+    return `<span style="color:${c};font-weight:${history.indexOf(h)===history.length-1?'700':'400'};">${h}</span>`;
+  }).join('<span style="color:var(--text2);margin:0 2px;">→</span>');
+}
+
+function groupPositionsBySite(data) {
+  const siteMap = new Map();
+  // data is sorted by scanned_at DESC
+  for (const r of data) {
+    const key = r.site_url;
+    if (!siteMap.has(key)) {
+      siteMap.set(key, { site_url: key, scans: [] });
+    }
+    siteMap.get(key).scans.push(r);
+  }
+  const sites = [];
+  for (const [url, s] of siteMap) {
+    const latest = s.scans[0]; // most recent
+    const ct = latest.competitor_titles;
+    const ctObj = ct && typeof ct === 'object' ? ct : (ct ? JSON.parse(ct) : {});
+    const teasers = ctObj.teasers || [];
+    const country = ctObj.country_code || '';
+    const blockIds = ctObj.block_ids || [];
+    // Build position history (last 5 scans, oldest first)
+    const historyScans = s.scans.slice(0, 5).reverse();
+    const posHistory = historyScans.map(sc => sc.position != null ? sc.position : null);
+    const hasOur = latest.ad_id != null && latest.position != null;
+    sites.push({
+      site_url: url,
+      country,
+      block_ids: blockIds,
+      position: latest.position,
+      ad_id: latest.ad_id,
+      teaser_title: latest.teaser_title || '',
+      total: latest.total_teasers_in_block || teasers.length,
+      teasers: teasers.sort((a, b) => (a.position || 999) - (b.position || 999)),
+      scanned_at: latest.scanned_at,
+      posHistory,
+      hasOur,
+      noWidget: ctObj.widget_found === false,
+      latestId: latest.id,
+    });
+  }
+  // Sort: our teaser first (by position), then without, then no widget
+  sites.sort((a, b) => {
+    if (a.hasOur && !b.hasOur) return -1;
+    if (!a.hasOur && b.hasOur) return 1;
+    if (a.hasOur && b.hasOur) return (a.position || 999) - (b.position || 999);
+    if (a.noWidget && !b.noWidget) return 1;
+    if (!a.noWidget && b.noWidget) return -1;
+    return new Date(b.scanned_at) - new Date(a.scanned_at);
+  });
+  return sites;
+}
+
 async function loadPositionTracking() {
   try {
-    const resp = await api('position_tracking');
-    const data = resp.data || [];
-    $('position-tracking-table').innerHTML = data.length ? `<table>
-      <tr><th>ID</th><th>URL сайта</th><th>Ad ID</th><th>Тизер</th><th>Позиция</th><th>Всего в блоке</th><th>Конкуренты</th><th>Сканировано</th></tr>
-      ${data.map(r => {
-        const ct = r.competitor_titles;
-        let compText = '-';
-        if (ct && typeof ct === 'object' && ct.teasers) {
-          const teasers = ct.teasers || [];
-          compText = teasers.length ? teasers.slice(0,3).map(t => esc(t.title||'')).join(', ') + (teasers.length > 3 ? ` (+${teasers.length-3})` : '') : '-';
-        } else if (ct) {
-          const arr = typeof ct === 'string' ? JSON.parse(ct) : (Array.isArray(ct) ? ct : []);
-          compText = arr.length ? arr.slice(0,3).join(', ') + (arr.length > 3 ? ` (+${arr.length-3})` : '') : '-';
-        }
-        return `<tr>
-          <td>${r.id}</td>
-          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${esc(r.site_url)}</td>
-          <td>${r.ad_id || '-'}</td>
-          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${esc(r.teaser_title || '-')}</td>
-          <td><span class="badge ${r.position <= 2 ? 'badge-green' : r.position <= 5 ? 'badge-yellow' : 'badge-red'}">${r.position || '-'}</span></td>
-          <td>${r.total_teasers_in_block ? `<a href="#" onclick="showBlockTeasers(${r.id}, event)" style="color:var(--accent);text-decoration:underline;cursor:pointer;">${r.total_teasers_in_block}</a>` : '-'}</td>
-          <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;font-size:11px;">${compText}</td>
-          <td>${r.scanned_at ? new Date(r.scanned_at).toLocaleString('ru-RU') : '-'}</td>
-        </tr>`;
-      }).join('')}
-    </table>` : '<div style="padding:12px;color:var(--text2);">Нет данных о позициях.</div>';
+    const resp = await api('position_tracking', { limit: 500 });
+    _posData = resp.data || [];
+    _posSites = groupPositionsBySite(_posData);
+    // Populate geo filter
+    const geos = new Set();
+    _posSites.forEach(s => { if (s.country) geos.add(s.country); });
+    const geoSel = $('pos-filter-geo');
+    const curGeo = geoSel.value;
+    geoSel.innerHTML = '<option value="">Все страны</option>' + [...geos].sort().map(g => `<option value="${g}">${g}</option>`).join('');
+    geoSel.value = curGeo;
+    renderPositions();
   } catch (e) {
     $('position-tracking-table').innerHTML = `<div class="alert-banner alert-danger">${e.message}</div>`;
   }
 }
 
-function showBlockTeasers(trackingId, e) {
-  e.preventDefault();
-  // Find the row data from the last loaded position tracking
-  const resp = api('position_tracking').then(resp => {
-    const data = resp.data || [];
-    const row = data.find(r => r.id === trackingId);
-    if (!row || !row.competitor_titles) {
-      $('modal-content').innerHTML = '<h2>Блок тизеров</h2><p>Нет данных о тизерах.</p><div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Закрыть</button></div>';
-      $('modal').classList.add('show');
-      return;
-    }
-    const ct = typeof row.competitor_titles === 'string' ? JSON.parse(row.competitor_titles) : row.competitor_titles;
-    const teasers = ct.teasers || [];
-    const sorted = [...teasers].sort((a, b) => (a.position || 999) - (b.position || 999));
-    const siteUrl = ct.site_url || row.site_url || '';
-    const country = ct.country_code || '';
-    const blockIds = ct.block_ids || [];
-    $('modal-content').innerHTML = `
-      <h2>Блок тизеров (${sorted.length} шт.)</h2>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">
-        ${esc(siteUrl)}<br>
-        ${country ? `Гео: ${country}` : ''} ${blockIds.length ? `| Block: ${esc(blockIds[0])}` : ''}
-      </div>
-      ${sorted.length ? `<table>
-        <tr><th>#</th><th>Позиция</th><th>Картинка</th><th>Заголовок</th><th>Media ID</th></tr>
-        ${sorted.map((t, i) => `<tr style="${t.media_id && row.ad_id && String(t.media_id) === String(row.ad_id) ? 'background:rgba(46,204,113,.15);font-weight:600;' : ''}">
-          <td>${i + 1}</td>
-          <td><span class="badge ${(t.position||999) <= 2 ? 'badge-green' : (t.position||999) <= 5 ? 'badge-yellow' : 'badge-red'}">${t.position || '-'}</span></td>
-          <td>${t.image_url ? `<img src="${esc(t.image_url)}" style="width:60px;height:40px;object-fit:cover;border-radius:4px;" onerror="this.style.display='none'">` : '-'}</td>
-          <td style="max-width:300px;">${esc(t.title || '-')}${t.short_description ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;">${esc(t.short_description)}</div>` : ''}</td>
-          <td style="font-size:11px;">${t.media_id || '-'}</td>
-        </tr>`).join('')}
-      </table>` : '<p>Тизеры не найдены в данных блока.</p>'}
-      <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Закрыть</button></div>
-    `;
-    $('modal').classList.add('show');
-  }).catch(e => {
-    $('modal-content').innerHTML = `<h2>Ошибка</h2><p>${e.message}</p><div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Закрыть</button></div>`;
-    $('modal').classList.add('show');
+function renderPositions() {
+  const geoFilter = $('pos-filter-geo').value;
+  const statusFilter = $('pos-filter-status').value;
+  const search = ($('pos-filter-search').value || '').toLowerCase();
+
+  let sites = _posSites.filter(s => {
+    if (geoFilter && s.country !== geoFilter) return false;
+    if (statusFilter === 'found' && !s.hasOur) return false;
+    if (statusFilter === 'notfound' && s.hasOur) return false;
+    if (search && !s.site_url.toLowerCase().includes(search)) return false;
+    return true;
   });
+
+  // Stats
+  const totalSites = sites.length;
+  const withOur = sites.filter(s => s.hasOur).length;
+  const positions = sites.filter(s => s.hasOur && s.position).map(s => s.position);
+  const avgPos = positions.length ? (positions.reduce((a, b) => a + b, 0) / positions.length).toFixed(1) : '-';
+  const bestPos = positions.length ? Math.min(...positions) : '-';
+  const worstPos = positions.length ? Math.max(...positions) : '-';
+
+  $('pos-stats-bar').innerHTML = `
+    <span>Сайтов: <strong style="color:var(--accent);">${totalSites}</strong></span>
+    <span>Наш тизер: <strong style="color:#2ecc71;">${withOur}</strong> из ${totalSites}</span>
+    <span>Средняя поз: <strong style="color:var(--accent);">${avgPos}</strong></span>
+    <span>Лучшая: <strong style="color:#2ecc71;">${bestPos}</strong></span>
+    <span>Худшая: <strong style="color:#e74c3c;">${worstPos}</strong></span>
+  `;
+
+  if (!sites.length) {
+    $('position-tracking-table').innerHTML = '<div style="padding:20px;color:var(--text2);text-align:center;">Нет данных о позициях.</div>';
+    return;
+  }
+
+  $('position-tracking-table').innerHTML = `
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg2);">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <tr style="background:var(--bg3);">
+          <th style="text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);font-weight:500;">Сайт</th>
+          <th style="text-align:left;padding:10px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);font-weight:500;">Гео</th>
+          <th style="text-align:left;padding:10px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);font-weight:500;">Позиция</th>
+          <th style="text-align:left;padding:10px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);font-weight:500;">История (последние 5)</th>
+          <th style="text-align:center;padding:10px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);font-weight:500;">Тренд</th>
+          <th style="text-align:left;padding:10px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);font-weight:500;">Блок</th>
+          <th style="text-align:left;padding:10px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);font-weight:500;max-width:180px;">Наш тизер</th>
+          <th style="text-align:left;padding:10px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);font-weight:500;">Скан</th>
+        </tr>
+        ${sites.map(s => `
+          <tr onclick="togglePosExpand(this)" style="cursor:pointer;border-bottom:1px solid var(--border);${s.hasOur ? 'background:rgba(108,124,255,.04);' : ''}${s.noWidget || !s.hasOur ? 'opacity:0.6;' : ''}" data-site="${esc(s.site_url)}">
+            <td style="padding:10px 12px;font-weight:${s.hasOur?'600':'400'};">${esc(s.site_url.replace(/^https?:\\/\\//, '').replace(/\\/+$/, ''))}</td>
+            <td style="padding:10px 8px;">${s.country || '-'}</td>
+            <td style="padding:10px 8px;">${s.noWidget ? '<span class="badge badge-gray">Нет виджета</span>' : posBadge(s.position)}</td>
+            <td style="padding:10px 8px;">${s.noWidget ? '' : posTrendHistory(s.posHistory)}</td>
+            <td style="padding:10px 8px;text-align:center;">${s.noWidget ? '' : posTrendArrow(s.posHistory)}</td>
+            <td style="padding:10px 8px;">${s.total ? s.total + ' шт.' : '-'}</td>
+            <td style="padding:10px 8px;font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.hasOur ? esc(s.teaser_title || 'id:' + s.ad_id) : (s.noWidget ? '-' : 'Не найден')}</td>
+            <td style="padding:10px 8px;font-size:12px;color:var(--text2);">${s.scanned_at ? new Date(s.scanned_at).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '-'}</td>
+          </tr>
+          <tr class="pos-expand-row" style="display:none;" data-expand="${esc(s.site_url)}">
+            <td colspan="8" style="padding:0;background:var(--bg3);">
+              <div style="padding:12px 16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <span style="font-size:12px;color:var(--text2);">${esc(s.site_url)} ${s.country ? '| ' + s.country : ''} ${s.block_ids.length ? '| Block: ' + s.block_ids[0] : ''}</span>
+                  <span style="font-size:11px;color:var(--text2);">${s.total} тизеров в блоке</span>
+                </div>
+                ${s.teasers.length ? s.teasers.map(t => {
+                  const isOur = t.media_id && s.ad_id && String(t.media_id) === String(s.ad_id);
+                  return `<div style="display:flex;align-items:center;gap:8px;padding:5px ${isOur?'13px':'16px'};font-size:12px;${isOur ? 'background:rgba(108,124,255,.12);border-left:3px solid var(--accent);font-weight:600;border-radius:0 4px 4px 0;margin:2px 0;' : ''}">
+                    <span style="width:20px;text-align:center;font-weight:600;color:${isOur?'var(--accent)':'var(--text2)'};flex-shrink:0;">${t.position || '-'}</span>
+                    ${t.image_url ? `<img src="${esc(t.image_url)}" style="width:40px;height:28px;border-radius:3px;object-fit:cover;flex-shrink:0;background:var(--bg);" onerror="this.style.display='none'">` : '<div style="width:40px;height:28px;border-radius:3px;background:var(--bg);flex-shrink:0;"></div>'}
+                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(t.title || '-')}</span>
+                    <span style="font-size:10px;color:var(--text2);flex-shrink:0;">${t.media_id ? 'id:' + t.media_id : ''}</span>
+                  </div>`;
+                }).join('') : '<div style="padding:8px 16px;color:var(--text2);font-size:12px;">Нет данных о тизерах</div>'}
+              </div>
+            </td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text2);">Клик на строку раскрывает полный блок тизеров</div>
+  `;
+}
+
+function togglePosExpand(row) {
+  const site = row.getAttribute('data-site');
+  const expandRow = document.querySelector(`tr.pos-expand-row[data-expand="${site}"]`);
+  if (!expandRow) return;
+  const isVisible = expandRow.style.display !== 'none';
+  // Close all other expanded rows
+  document.querySelectorAll('tr.pos-expand-row').forEach(r => r.style.display = 'none');
+  if (!isVisible) expandRow.style.display = '';
 }
 
 // ============================================
