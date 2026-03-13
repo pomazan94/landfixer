@@ -679,6 +679,42 @@ function downloadArchive(path) {
 }
 
 // ============================================
+// MANUAL CAPTURE — screenshot + download landing
+// ============================================
+async function captureCreative(id, landingUrl, btnEl) {
+  if (!landingUrl) { toast('Нет landing URL для этого креатива', 'error'); return; }
+  const origText = btnEl.textContent;
+  btnEl.disabled = true;
+  btnEl.textContent = 'Capturing...';
+  try {
+    // 1. Call screenshot service to capture
+    const captureResp = await fetch('/capture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: landingUrl }),
+    });
+    if (!captureResp.ok) throw new Error('Screenshot service error: ' + captureResp.status);
+    const result = await captureResp.json();
+
+    // 2. Save paths to database
+    await api('update_creative_capture', {
+      id,
+      screenshot_path: result.screenshot_path || '',
+      archive_path: result.archive_path || '',
+    });
+
+    toast(`Capture done${result.cached ? ' (cached)' : ''}`, 'success');
+
+    // 3. Refresh detail modal
+    showCreativeDetail(id);
+  } catch (e) {
+    toast('Capture failed: ' + e.message, 'error');
+    btnEl.disabled = false;
+    btnEl.textContent = origText;
+  }
+}
+
+// ============================================
 // DASHBOARD
 // ============================================
 async function loadDashboard() {
@@ -1521,11 +1557,11 @@ function renderCreativeCard(c) {
         <span>pos: ${c.avg_position ? parseFloat(c.avg_position).toFixed(1) : '-'} | cost: ${c.avg_cost ? parseFloat(c.avg_cost).toFixed(3) : '-'}</span>
         <span>${c.last_seen_at ? new Date(c.last_seen_at).toLocaleDateString('ru-RU') : ''}</span>
       </div>
-      ${hasCapture(c) || hasArchive(c) ? `
       <div style="display:flex;gap:6px;margin-top:6px;">
         ${hasCapture(c) ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();showScreenshot('${esc(c.screenshot_path)}')" style="font-size:10px;padding:2px 8px;" title="Screenshot">Screenshot</button>` : ''}
         ${hasArchive(c) ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();downloadArchive('${esc(c.archive_path)}')" style="font-size:10px;padding:2px 8px;" title="Download landing">Download</button>` : ''}
-      </div>` : ''}
+        ${!hasCapture(c) && c.landing_url ? `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();captureCreative(${c.id}, '${esc(c.landing_url)}', this)" style="font-size:10px;padding:2px 8px;" title="Capture screenshot & landing">Capture</button>` : ''}
+      </div>
     </div>
   </div>`;
 }
@@ -1647,11 +1683,12 @@ async function showCreativeDetail(id) {
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Media ID</td><td>${c.media_id||'-'}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Гео</td><td>${countries||'-'}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Landing</td><td style="word-break:break-all;">${c.landing_url ? `<a href="${esc(c.landing_url)}" target="_blank" style="color:var(--accent);">${esc(c.landing_domain||c.landing_url)}</a>` : '-'}</td></tr>
-            ${hasCapture(c) || hasArchive(c) ? `<tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Landing Capture</td><td style="display:flex;gap:6px;">
+            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Landing Capture</td><td style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
               ${hasCapture(c) ? `<button class="btn btn-sm btn-outline" onclick="showScreenshot('${esc(c.screenshot_path)}')" style="font-size:11px;">Screenshot</button>` : ''}
               ${hasArchive(c) ? `<a href="${screenshotUrl(esc(c.archive_path))}" download class="btn btn-sm btn-outline" style="font-size:11px;">Download ZIP</a>` : ''}
+              ${c.landing_url ? `<button class="btn btn-sm btn-primary" id="btn-capture-${c.id}" onclick="captureCreative(${c.id}, '${esc(c.landing_url)}', this)" style="font-size:11px;">${hasCapture(c) ? 'Re-capture' : 'Capture'}</button>` : ''}
               ${c.captured_at ? `<span style="font-size:10px;color:var(--text2);align-self:center;">${new Date(c.captured_at).toLocaleString('ru-RU')}</span>` : ''}
-            </td></tr>` : ''}
+            </td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Gravity</td><td>${gravityBadge(c.gravity)} ${trendArrow(c.trend)}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Strength</td><td>${c.strength||0}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Avg Position</td><td>${c.avg_position ? parseFloat(c.avg_position).toFixed(1) : '-'}</td></tr>
