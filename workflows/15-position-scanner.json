@@ -696,7 +696,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE creatives SET screenshot_path = '{{ ($json.body.screenshot_path || \"\").replace(/'/g, \"''\") }}', archive_path = '{{ ($json.body.archive_path || \"\").replace(/'/g, \"''\") }}', captured_at = NOW() WHERE split_part(landing_url, '?', 1) = split_part('{{ ($('Check Needs Capture').item.json.capture_url || \"\").replace(/'/g, \"''\") }}', '?', 1) AND screenshot_path IS NULL\n  AND '{{ ($json.body.screenshot_path || \"\").replace(/'/g, \"''\") }}' != ''",
+        "query": "UPDATE creatives SET screenshot_path = '{{ (($json.body && $json.body.screenshot_path && $json.body.screenshot_path !== 'undefined') ? $json.body.screenshot_path : \"\").replace(/'/g, \"''\") }}', archive_path = '{{ (($json.body && $json.body.archive_path && $json.body.archive_path !== 'undefined') ? $json.body.archive_path : \"\").replace(/'/g, \"''\") }}', captured_at = NOW() WHERE split_part(landing_url, '?', 1) = split_part('{{ ($('Check Needs Capture').item.json.capture_url || \"\").replace(/'/g, \"''\") }}', '?', 1) AND screenshot_path IS NULL\n  AND '{{ (($json.body && $json.body.screenshot_path && $json.body.screenshot_path !== 'undefined') ? $json.body.screenshot_path : \"\").replace(/'/g, \"''\") }}' != ''",
         "options": {}
       },
       "id": "update-capture-paths",
