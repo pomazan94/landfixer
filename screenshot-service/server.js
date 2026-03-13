@@ -277,7 +277,7 @@ app.post('/capture', async (req, res) => {
           assetUrls.set(resUrl, localPath);
           const body = await response.body().catch(() => null);
           if (body) {
-            collectedAssets.push({ url: resUrl, filename, buffer: body });
+            collectedAssets.push({ url: resUrl, filename: localPath, buffer: body });
           }
         }
       } catch {}
