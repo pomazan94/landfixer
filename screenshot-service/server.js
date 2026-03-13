@@ -225,12 +225,35 @@ const STEALTH_SCRIPTS = `
   delete window.__pw_manual;
 `;
 
+// Extract referer from cloaker URL — `blp` param contains the publisher page URL
+function extractReferer(url) {
+  try {
+    const u = new URL(url);
+    // Common cloaker params that contain the referrer/publisher URL
+    const refParam = u.searchParams.get('blp') || u.searchParams.get('ref')
+      || u.searchParams.get('referrer') || u.searchParams.get('back_url');
+    if (refParam && refParam.startsWith('http')) return refParam;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Build Chrome Sec-CH-UA header from User-Agent
+function buildSecChUa(ua) {
+  const chromeMatch = ua.match(/Chrome\/(\d+)/);
+  const ver = chromeMatch ? chromeMatch[1] : '145';
+  // Chromium-based browsers send these brand hints
+  return `"Chromium";v="${ver}", "Google Chrome";v="${ver}", "Not-A.Brand";v="99"`;
+}
+
 // Build Playwright context options from fingerprint params
-function buildContextOptions(params, retryProfile) {
+function buildContextOptions(params, retryProfile, captureUrl) {
   const profile = retryProfile || {};
   const ua = profile.user_agent || params.user_agent
     || 'Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7535.50 Mobile Safari/537.36';
   const vp = profile.viewport || params.viewport || { width: 412, height: 915 };
+  const isMobile = profile.isMobile !== undefined ? profile.isMobile : ua.toLowerCase().includes('mobile');
 
   const opts = {
     viewport: { width: vp.width || 412, height: vp.height || 915 },
@@ -239,23 +262,62 @@ function buildContextOptions(params, retryProfile) {
     ignoreHTTPSErrors: true,
   };
   if (params.timezone_id) opts.timezoneId = params.timezone_id;
-  if (params.accept_language) opts.extraHTTPHeaders = { 'Accept-Language': params.accept_language };
 
-  // Mobile flags from profile or auto-detect from UA
-  if (profile.isMobile !== undefined) {
-    opts.isMobile = profile.isMobile;
-    opts.hasTouch = profile.hasTouch;
-  } else if (ua.toLowerCase().includes('mobile')) {
+  // Mobile flags
+  if (isMobile) {
     opts.isMobile = true;
     opts.hasTouch = true;
   }
+
+  // Build HTTP headers that real Chrome sends — cloakers check these server-side
+  const headers = {};
+
+  // Accept-Language
+  if (params.accept_language) {
+    headers['Accept-Language'] = params.accept_language;
+  }
+
+  // Sec-CH-UA client hints — Chrome sends these on every request
+  headers['Sec-CH-UA'] = buildSecChUa(ua);
+  headers['Sec-CH-UA-Mobile'] = isMobile ? '?1' : '?0';
+  headers['Sec-CH-UA-Platform'] = ua.includes('Windows') ? '"Windows"'
+    : ua.includes('Macintosh') ? '"macOS"'
+    : ua.includes('Android') ? '"Android"'
+    : ua.includes('iPhone') || ua.includes('iPad') ? '"iOS"'
+    : '"Linux"';
+
+  // Sec-Fetch-* headers — real browsers always send these for navigation
+  headers['Sec-Fetch-Dest'] = 'document';
+  headers['Sec-Fetch-Mode'] = 'navigate';
+  headers['Sec-Fetch-Site'] = 'cross-site';
+  headers['Sec-Fetch-User'] = '?1';
+  headers['Upgrade-Insecure-Requests'] = '1';
+
+  // Referer — critical for cloakers that check traffic source
+  // Extract from URL params (blp, ref) or use a search engine
+  const referer = extractReferer(captureUrl) || params.referer || '';
+  if (referer) {
+    headers['Referer'] = referer;
+  }
+
+  opts.extraHTTPHeaders = headers;
 
   return opts;
 }
 
 // Single capture attempt — returns { success, errorReason, httpStatus, page, browser, collectedAssets, assetUrls }
 async function attemptCapture(url, proxyConfig, contextOptions) {
-  const launchOptions = { headless: true };
+  const launchOptions = {
+    headless: true,
+    args: [
+      '--disable-blink-features=AutomationControlled',  // removes navigator.webdriver at browser level
+      '--disable-features=IsolateOrigins,site-per-process',  // reduce fingerprint differences
+      '--disable-site-isolation-trials',
+      '--disable-web-security',   // allow cross-origin for TDS redirects
+      '--no-first-run',
+      '--no-default-browser-check',
+    ],
+  };
   if (proxyConfig) launchOptions.proxy = proxyConfig;
 
   const browser = await chromium.launch(launchOptions);
@@ -307,6 +369,15 @@ async function attemptCapture(url, proxyConfig, contextOptions) {
   const startUrl = url;
   const response = await page.goto(url, { waitUntil: 'networkidle', timeout: TIMEOUT });
   const httpStatus = response ? response.status() : 0;
+
+  // Debug: log HTTP response details for the main navigation
+  if (response) {
+    const respHeaders = response.headers();
+    const contentType = respHeaders['content-type'] || 'none';
+    const contentLength = respHeaders['content-length'] || 'unknown';
+    const server = respHeaders['server'] || respHeaders['x-powered-by'] || 'unknown';
+    console.log(`[capture] HTTP ${httpStatus} | content-type: ${contentType} | content-length: ${contentLength} | server: ${server} | final-url: ${page.url()}`);
+  }
 
   // Wait for page to be fully rendered
   await page.waitForTimeout(3000);
@@ -522,7 +593,7 @@ app.post('/capture', async (req, res) => {
     // Retry with different fingerprint profiles to bypass cloaker
     for (let attempt = 0; attempt <= MAX_CAPTURE_RETRIES; attempt++) {
       const profile = attempt === 0 ? null : FINGERPRINT_PROFILES[attempt] || FINGERPRINT_PROFILES[1];
-      const contextOptions = buildContextOptions(params, profile);
+      const contextOptions = buildContextOptions(params, profile, url);
 
       const profileName = attempt === 0 ? 'caller' : `profile-${attempt} (${(profile?.user_agent || '').includes('Mobile') ? 'mobile' : 'desktop'})`;
       console.log(`[capture] Attempt ${attempt + 1}/${MAX_CAPTURE_RETRIES + 1} for ${url} using ${profileName}`);
@@ -624,13 +695,22 @@ app.post('/screenshot', async (req, res) => {
   try {
     for (let attempt = 0; attempt <= MAX_CAPTURE_RETRIES; attempt++) {
       const profile = attempt === 0 ? null : FINGERPRINT_PROFILES[attempt] || FINGERPRINT_PROFILES[1];
-      const contextOptions = buildContextOptions(params, profile);
+      const contextOptions = buildContextOptions(params, profile, url);
       let browser;
       try {
-        const launchOptions = { headless: true };
+        const launchOptions = {
+          headless: true,
+          args: [
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--no-first-run',
+            '--no-default-browser-check',
+          ],
+        };
         if (proxyConfig) launchOptions.proxy = proxyConfig;
         browser = await chromium.launch(launchOptions);
         const context = await browser.newContext(contextOptions);
+        await context.addInitScript(STEALTH_SCRIPTS);
         const page = await context.newPage();
         const response = await page.goto(url, { waitUntil: 'networkidle', timeout: TIMEOUT });
         const httpStatus = response ? response.status() : 0;
