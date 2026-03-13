@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Позиции — варианты UI</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --bg2: #1a1d27;
+  --bg3: #242834;
+  --border: #2e3345;
+  --text: #e4e6f0;
+  --text2: #8b8fa3;
+  --accent: #6c7cff;
+  --green: #2ecc71;
+  --yellow: #f39c12;
+  --red: #e74c3c;
+  --our-bg: rgba(108,124,255,0.12);
+  --our-border: rgba(108,124,255,0.3);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; padding:20px; }
+h1 { font-size:20px; margin-bottom:24px; color:var(--text); }
+h2 { font-size:16px; margin-bottom:16px; color:var(--accent); }
+.variant-selector { display:flex; gap:0; margin-bottom:24px; border-bottom:2px solid var(--border); }
+.variant-tab { padding:10px 24px; cursor:pointer; font-size:14px; color:var(--text2); border-bottom:2px solid transparent; margin-bottom:-2px; transition:all .2s; }
+.variant-tab:hover { color:var(--text); }
+.variant-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.variant-panel { display:none; }
+.variant-panel.active { display:block; }
+
+/* Common */
+.filters { display:flex; gap:12px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+.filter-select { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:6px 12px; border-radius:6px; font-size:13px; cursor:pointer; }
+.filter-select:focus { outline:none; border-color:var(--accent); }
+.search-input { background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:6px 12px; border-radius:6px; font-size:13px; width:200px; }
+.search-input::placeholder { color:var(--text2); }
+.search-input:focus { outline:none; border-color:var(--accent); }
+.stats-bar { display:flex; gap:24px; margin-bottom:16px; padding:10px 16px; background:var(--bg3); border-radius:8px; font-size:13px; }
+.stats-bar .stat { display:flex; gap:6px; align-items:center; }
+.stats-bar .stat-value { font-weight:600; color:var(--accent); }
+.badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600; }
+.badge-green { background:rgba(46,204,113,.15); color:var(--green); }
+.badge-yellow { background:rgba(243,156,18,.15); color:var(--yellow); }
+.badge-red { background:rgba(231,76,60,.15); color:var(--red); }
+.badge-gray { background:rgba(139,143,163,.15); color:var(--text2); }
+.card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+
+/* Variant A */
+.site-card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:16px; margin-bottom:10px; cursor:pointer; transition:border-color .2s; }
+.site-card:hover { border-color:var(--accent); }
+.site-card.has-our { border-left:3px solid var(--accent); }
+.site-card.no-our { border-left:3px solid var(--border); }
+.site-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.site-name { font-weight:600; font-size:14px; }
+.site-meta { display:flex; gap:12px; font-size:12px; color:var(--text2); }
+.our-position { display:flex; align-items:center; gap:8px; }
+.pos-dots { display:flex; gap:3px; }
+.pos-dot { width:8px; height:8px; border-radius:50%; background:var(--border); }
+.pos-dot.filled { background:var(--accent); }
+.site-details { margin-top:10px; padding-top:10px; border-top:1px solid var(--border); display:none; }
+.site-card.expanded .site-details { display:block; }
+.teaser-row { display:flex; align-items:center; gap:10px; padding:6px 0; font-size:13px; }
+.teaser-row.is-our { background:var(--our-bg); margin:0 -8px; padding:6px 8px; border-radius:6px; border:1px solid var(--our-border); }
+.teaser-img { width:50px; height:34px; border-radius:4px; object-fit:cover; background:var(--bg3); flex-shrink:0; }
+.teaser-pos { width:28px; text-align:center; font-weight:600; flex-shrink:0; }
+.teaser-title { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.teaser-mid { font-size:11px; color:var(--text2); width:70px; text-align:right; flex-shrink:0; }
+.expand-hint { font-size:11px; color:var(--text2); text-align:center; margin-top:6px; }
+
+/* Variant B */
+.pos-table { width:100%; border-collapse:collapse; font-size:13px; }
+.pos-table th { text-align:left; padding:10px 12px; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text2); border-bottom:1px solid var(--border); background:var(--bg3); font-weight:500; }
+.pos-table td { padding:10px 12px; border-bottom:1px solid var(--border); }
+.pos-table tr:hover { background:rgba(108,124,255,.05); }
+.pos-table tr.row-our { background:var(--our-bg); }
+.trend-history { display:flex; gap:4px; align-items:center; font-size:12px; }
+.trend-num { padding:1px 4px; border-radius:3px; font-size:11px; }
+.trend-arrow { font-size:14px; margin-left:4px; }
+.trend-up { color:var(--green); }
+.trend-down { color:var(--red); }
+.trend-same { color:var(--text2); }
+
+/* Variant C */
+.cards-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:12px; }
+.block-card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; overflow:hidden; transition:border-color .2s; }
+.block-card:hover { border-color:var(--accent); }
+.block-card-header { padding:12px 16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); }
+.block-card-site { font-weight:600; font-size:13px; }
+.block-card-geo { font-size:12px; color:var(--text2); }
+.block-card-body { padding:8px 0; }
+.block-teaser { display:flex; align-items:center; gap:8px; padding:5px 16px; font-size:12px; }
+.block-teaser.is-our { background:var(--our-bg); border-left:3px solid var(--accent); padding-left:13px; font-weight:600; }
+.block-teaser-pos { width:20px; font-weight:600; color:var(--text2); flex-shrink:0; text-align:center; }
+.block-teaser.is-our .block-teaser-pos { color:var(--accent); }
+.block-teaser-img { width:40px; height:28px; border-radius:3px; object-fit:cover; background:var(--bg3); flex-shrink:0; }
+.block-teaser-title { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.block-card-footer { padding:8px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-size:11px; color:var(--text2); }
+.block-more { text-align:center; padding:4px 16px 8px; font-size:11px; color:var(--text2); }
+.our-found { color:var(--accent); font-size:11px; font-weight:600; }
+.our-notfound { color:var(--text2); font-size:11px; }
+</style>
+</head>
+<body>
+
+<h1>Позиции — варианты UI</h1>
+
+<div class="variant-selector">
+  <div class="variant-tab active" onclick="showVariant('a')">A: Сайт-карточки</div>
+  <div class="variant-tab" onclick="showVariant('b')">B: Таблица + история</div>
+  <div class="variant-tab" onclick="showVariant('c')">C: Карточки-блоки</div>
+</div>
+
+<!-- ==================== VARIANT A ==================== -->
+<div class="variant-panel active" id="variant-a">
+  <h2>Вариант A: Группировка по сайтам</h2>
+
+  <div class="filters">
+    <select class="filter-select">
+      <option>Все страны</option>
+      <option>DE - Germany</option>
+      <option>FR - France</option>
+      <option>IT - Italy</option>
+      <option>ES - Spain</option>
+    </select>
+    <select class="filter-select">
+      <option>Все сайты</option>
+      <option>Только с нашим тизером</option>
+      <option>Без нашего тизера</option>
+    </select>
+    <input class="search-input" placeholder="Поиск по сайту...">
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat">Сайтов отсканировано: <span class="stat-value">12</span></div>
+    <div class="stat">Наш тизер найден: <span class="stat-value" style="color:var(--green);">5 из 12</span></div>
+    <div class="stat">Средняя позиция: <span class="stat-value">3.2</span></div>
+    <div class="stat">Последний скан: <span class="stat-value">14:30</span></div>
+  </div>
+
+  <!-- Site with our teaser, position 1 -->
+  <div class="site-card has-our expanded" onclick="this.classList.toggle('expanded')">
+    <div class="site-header">
+      <div>
+        <span class="site-name">tech-world.es</span>
+        <span style="font-size:11px;color:var(--text2);margin-left:8px;">ES</span>
+      </div>
+      <div class="site-meta">
+        <span>8 тизеров</span>
+        <span>14:20</span>
+      </div>
+    </div>
+    <div class="our-position">
+      <span class="badge badge-green">Позиция 1</span>
+      <div class="pos-dots">
+        <div class="pos-dot filled"></div>
+        <div class="pos-dot"></div>
+        <div class="pos-dot"></div>
+        <div class="pos-dot"></div>
+        <div class="pos-dot"></div>
+      </div>
+      <span style="font-size:12px;color:var(--text2);">Trend: 1 → 1 → 1</span>
+      <span class="trend-arrow trend-same">→</span>
+    </div>
+    <div class="site-details">
+      <div class="teaser-row is-our">
+        <div class="teaser-pos" style="color:var(--accent);">1</div>
+        <div class="teaser-img" style="background:linear-gradient(135deg,#6c7cff,#4a5adf);"></div>
+        <div class="teaser-title">Испанцы в шоке от нового крипто-робота...</div>
+        <div class="teaser-mid">id: 84521</div>
+      </div>
+      <div class="teaser-row">
+        <div class="teaser-pos">2</div>
+        <div class="teaser-img" style="background:linear-gradient(135deg,#e74c3c,#c0392b);"></div>
+        <div class="teaser-title">Nueva forma de ganar dinero desde casa</div>
+        <div class="teaser-mid">id: 72103</div>
+      </div>
+      <div class="teaser-row">
+        <div class="teaser-pos">3</div>
+        <div class="teaser-img" style="background:linear-gradient(135deg,#f39c12,#e67e22);"></div>
+        <div class="teaser-title">Descubre cómo multiplicar tu inversión</div>
+        <div class="teaser-mid">id: 65891</div>
+      </div>
+      <div class="teaser-row">
+        <div class="teaser-pos">4</div>
+        <div class="teaser-img" style="background:linear-gradient(135deg,#2ecc71,#27ae60);"></div>
+        <div class="teaser-title">El secreto que los bancos no quieren...</div>
+        <div class="teaser-mid">id: 91245</div>
+      </div>
+      <div class="teaser-row">
+        <div class="teaser-pos">5</div>
+        <div class="teaser-img" style="background:linear-gradient(135deg,#9b59b6,#8e44ad);"></div>
+        <div class="teaser-title">Gana 3000 euros al mes con esta app</div>
+        <div class="teaser-mid">id: 44320</div>
+      </div>
+      <div class="expand-hint">...ещё 3 тизера</div>
+    </div>
+  </div>
+
+  <!-- Site with our teaser, position 3 -->
+  <div class="site-card has-our" onclick="this.classList.toggle('expanded')">
+    <div class="site-header">
+      <div>
+        <span class="site-name">example-news.com</span>
+        <span style="font-size:11px;color:var(--text2);margin-left:8px;">DE</span>
+      </div>
+      <div class="site-meta">
+        <span>10 тизеров</span>
+        <span>14:30</span>
+      </div>
+    </div>
+    <div class="our-position">
+      <span class="badge badge-yellow">Позиция 3</span>
+      <div class="pos-dots">
+        <div class="pos-dot"></div>
+        <div class="pos-dot"></div>
+        <div class="pos-dot filled"></div>
+        <div class="pos-dot"></div>
+        <div class="pos-dot"></div>
+      </div>
+      <span style="font-size:12px;color:var(--text2);">Trend: 5 → 4 → 3</span>
+      <span class="trend-arrow trend-up">↑</span>
+    </div>
+    <div class="site-details">
+      <div class="teaser-row">
+        <div class="teaser-pos">1</div>
+        <div class="teaser-img" style="background:linear-gradient(135deg,#e74c3c,#c0392b);"></div>
+        <div class="teaser-title">Deutsche sind schockiert von neuem...</div>
+        <div class="teaser-mid">id: 55103</div>
+      </div>
+      <div class="teaser-row">
+        <div class="teaser-pos">2</div>
+        <div class="teaser-img" style="background:linear-gradient(135deg,#f39c12,#e67e22);"></div>
+        <div class="teaser-title">Neuer Krypto-Bot macht alle reich</div>
+        <div class="teaser-mid">id: 33891</div>
+      </div>
+      <div class="teaser-row is-our">
+        <div class="teaser-pos" style="color:var(--accent);">3</div>
+        <div class="teaser-img" style="background:linear-gradient(135deg,#6c7cff,#4a5adf);"></div>
+        <div class="teaser-title">Этот робот зарабатывает 3000€ в день...</div>
+        <div class="teaser-mid">id: 84521</div>
+      </div>
+      <div class="teaser-row">
+        <div class="teaser-pos">4</div>
+        <div class="teaser-img" style="background:linear-gradient(135deg,#2ecc71,#27ae60);"></div>
+        <div class="teaser-title">Verdienen Sie 5000€ pro Woche von Zuhause</div>
+        <div class="teaser-mid">id: 91002</div>
+      </div>
+      <div class="expand-hint">Клик чтобы раскрыть ▾</div>
+    </div>
+  </div>
+
+  <!-- Site with our teaser falling -->
+  <div class="site-card has-our" onclick="this.classList.toggle('expanded')">
+    <div class="site-header">
+      <div>
+        <span class="site-name">sport-daily.fr</span>
+        <span style="font-size:11px;color:var(--text2);margin-left:8px;">FR</span>
+      </div>
+      <div class="site-meta">
+        <span>12 тизеров</span>
+        <span>14:25</span>
+      </div>
+    </div>
+    <div class="our-position">
+      <span class="badge badge-red">Позиция 7</span>
+      <div class="pos-dots">
+        <div class="pos-dot"></div>
+        <div class="pos-dot"></div>
+        <div class="pos-dot"></div>
+        <div class="pos-dot"></div>
+        <div class="pos-dot"></div>
+      </div>
+      <span style="font-size:12px;color:var(--text2);">Trend: 3 → 5 → 7</span>
+      <span class="trend-arrow trend-down">↓</span>
+    </div>
+    <div class="site-details"></div>
+  </div>
+
+  <!-- Site WITHOUT our teaser -->
+  <div class="site-card no-our" onclick="this.classList.toggle('expanded')">
+    <div class="site-header">
+      <div>
+        <span class="site-name">finance-portal.it</span>
+        <span style="font-size:11px;color:var(--text2);margin-left:8px;">IT</span>
+      </div>
+      <div class="site-meta">
+        <span>14 тизеров</span>
+        <span>14:28</span>
+      </div>
+    </div>
+    <div class="our-position">
+      <span class="badge badge-gray">Не найден</span>
+      <span style="font-size:12px;color:var(--text2);">Наш тизер отсутствует в блоке</span>
+    </div>
+    <div class="site-details"></div>
+  </div>
+
+  <!-- Site without widget -->
+  <div class="site-card no-our" onclick="this.classList.toggle('expanded')">
+    <div class="site-header">
+      <div>
+        <span class="site-name">broken-site.nl</span>
+        <span style="font-size:11px;color:var(--text2);margin-left:8px;">NL</span>
+      </div>
+      <div class="site-meta">
+        <span style="color:var(--red);">Виджет не найден</span>
+        <span>14:15</span>
+      </div>
+    </div>
+    <div class="our-position">
+      <span class="badge badge-gray">Нет виджета</span>
+      <span style="font-size:12px;color:var(--text2);">Geozo блок не обнаружен на странице</span>
+    </div>
+    <div class="site-details"></div>
+  </div>
+</div>
+
+<!-- ==================== VARIANT B ==================== -->
+<div class="variant-panel" id="variant-b">
+  <h2>Вариант B: Таблица с историей позиций</h2>
+
+  <div class="filters">
+    <select class="filter-select">
+      <option>Все страны</option>
+      <option>DE - Germany</option>
+      <option>FR - France</option>
+    </select>
+    <select class="filter-select">
+      <option>Период: 7 дней</option>
+      <option>Период: 24 часа</option>
+      <option>Период: 30 дней</option>
+    </select>
+    <label style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+      <input type="checkbox" checked> Только с нашим тизером
+    </label>
+    <input class="search-input" placeholder="Поиск по сайту...">
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat">Сайтов: <span class="stat-value">12</span></div>
+    <div class="stat">Наш найден: <span class="stat-value" style="color:var(--green);">5</span></div>
+    <div class="stat">Лучшая поз: <span class="stat-value" style="color:var(--green);">1</span></div>
+    <div class="stat">Средняя поз: <span class="stat-value">3.2</span></div>
+    <div class="stat">Худшая поз: <span class="stat-value" style="color:var(--red);">7</span></div>
+  </div>
+
+  <div class="card">
+    <table class="pos-table">
+      <tr>
+        <th>Сайт</th>
+        <th>Гео</th>
+        <th>Позиция</th>
+        <th>История (последние 5 сканов)</th>
+        <th>Тренд</th>
+        <th>Блок</th>
+        <th>Наш тизер</th>
+        <th>Последний скан</th>
+      </tr>
+      <tr class="row-our" style="cursor:pointer;">
+        <td><strong>tech-world.es</strong></td>
+        <td>ES</td>
+        <td><span class="badge badge-green">1</span></td>
+        <td>
+          <div class="trend-history">
+            <span class="trend-num" style="color:var(--green);">1</span>→
+            <span class="trend-num" style="color:var(--green);">1</span>→
+            <span class="trend-num" style="color:var(--green);">1</span>→
+            <span class="trend-num" style="color:var(--green);">1</span>→
+            <span class="trend-num" style="color:var(--green);font-weight:700;">1</span>
+          </div>
+        </td>
+        <td><span class="trend-arrow trend-same" style="font-size:16px;">→</span></td>
+        <td>8 шт.</td>
+        <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Испанцы в шоке от нового...</td>
+        <td style="font-size:12px;color:var(--text2);">14:20</td>
+      </tr>
+      <tr class="row-our" style="cursor:pointer;">
+        <td><strong>crypto-news.nl</strong></td>
+        <td>NL</td>
+        <td><span class="badge badge-green">2</span></td>
+        <td>
+          <div class="trend-history">
+            <span class="trend-num" style="color:var(--red);">6</span>→
+            <span class="trend-num" style="color:var(--yellow);">5</span>→
+            <span class="trend-num" style="color:var(--yellow);">4</span>→
+            <span class="trend-num" style="color:var(--yellow);">3</span>→
+            <span class="trend-num" style="color:var(--green);font-weight:700;">2</span>
+          </div>
+        </td>
+        <td><span class="trend-arrow trend-up" style="font-size:16px;">↑</span></td>
+        <td>8 шт.</td>
+        <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Nederland ontdekt nieuw crypto...</td>
+        <td style="font-size:12px;color:var(--text2);">14:15</td>
+      </tr>
+      <tr class="row-our" style="cursor:pointer;">
+        <td><strong>example-news.com</strong></td>
+        <td>DE</td>
+        <td><span class="badge badge-yellow">3</span></td>
+        <td>
+          <div class="trend-history">
+            <span class="trend-num" style="color:var(--red);">7</span>→
+            <span class="trend-num" style="color:var(--yellow);">5</span>→
+            <span class="trend-num" style="color:var(--yellow);">5</span>→
+            <span class="trend-num" style="color:var(--yellow);">4</span>→
+            <span class="trend-num" style="color:var(--yellow);font-weight:700;">3</span>
+          </div>
+        </td>
+        <td><span class="trend-arrow trend-up" style="font-size:16px;">↑</span></td>
+        <td>10 шт.</td>
+        <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Этот робот зарабатывает 3000...</td>
+        <td style="font-size:12px;color:var(--text2);">14:30</td>
+      </tr>
+      <tr class="row-our" style="cursor:pointer;">
+        <td><strong>sport-daily.fr</strong></td>
+        <td>FR</td>
+        <td><span class="badge badge-red">7</span></td>
+        <td>
+          <div class="trend-history">
+            <span class="trend-num" style="color:var(--green);">2</span>→
+            <span class="trend-num" style="color:var(--yellow);">3</span>→
+            <span class="trend-num" style="color:var(--yellow);">4</span>→
+            <span class="trend-num" style="color:var(--yellow);">5</span>→
+            <span class="trend-num" style="color:var(--red);font-weight:700;">7</span>
+          </div>
+        </td>
+        <td><span class="trend-arrow trend-down" style="font-size:16px;">↓</span></td>
+        <td>12 шт.</td>
+        <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Les Francais choqués par...</td>
+        <td style="font-size:12px;color:var(--text2);">14:25</td>
+      </tr>
+      <tr class="row-our" style="cursor:pointer;">
+        <td><strong>lifestyle-blog.at</strong></td>
+        <td>AT</td>
+        <td><span class="badge badge-yellow">4</span></td>
+        <td>
+          <div class="trend-history">
+            <span class="trend-num" style="color:var(--yellow);">4</span>→
+            <span class="trend-num" style="color:var(--yellow);">3</span>→
+            <span class="trend-num" style="color:var(--yellow);">4</span>→
+            <span class="trend-num" style="color:var(--yellow);">4</span>→
+            <span class="trend-num" style="color:var(--yellow);font-weight:700;">4</span>
+          </div>
+        </td>
+        <td><span class="trend-arrow trend-same" style="font-size:16px;">→</span></td>
+        <td>6 шт.</td>
+        <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Osterreicher entdecken neues...</td>
+        <td style="font-size:12px;color:var(--text2);">14:10</td>
+      </tr>
+      <tr style="cursor:pointer;opacity:0.6;">
+        <td>finance-portal.it</td>
+        <td>IT</td>
+        <td><span class="badge badge-gray">-</span></td>
+        <td>
+          <div class="trend-history" style="color:var(--text2);">
+            <span>-</span>→
+            <span>-</span>→
+            <span>-</span>→
+            <span>-</span>→
+            <span>-</span>
+          </div>
+        </td>
+        <td></td>
+        <td>14 шт.</td>
+        <td style="font-size:11px;color:var(--text2);">Не найден</td>
+        <td style="font-size:12px;color:var(--text2);">14:28</td>
+      </tr>
+      <tr style="cursor:pointer;opacity:0.6;">
+        <td>morning-gazette.se</td>
+        <td>SE</td>
+        <td><span class="badge badge-gray">-</span></td>
+        <td>
+          <div class="trend-history" style="color:var(--text2);">
+            <span>3</span>→
+            <span>4</span>→
+            <span>-</span>→
+            <span>-</span>→
+            <span>-</span>
+          </div>
+        </td>
+        <td><span class="trend-arrow trend-down" style="font-size:16px;">↓</span></td>
+        <td>10 шт.</td>
+        <td style="font-size:11px;color:var(--text2);">Выбыл</td>
+        <td style="font-size:12px;color:var(--text2);">14:05</td>
+      </tr>
+    </table>
+  </div>
+  <div style="margin-top:12px;font-size:12px;color:var(--text2);">Клик на строку раскрывает полный блок тизеров на сайте</div>
+</div>
+
+<!-- ==================== VARIANT C ==================== -->
+<div class="variant-panel" id="variant-c">
+  <h2>Вариант C: Карточки-блоки с мини-списком</h2>
+
+  <div class="filters">
+    <select class="filter-select">
+      <option>Все страны</option>
+      <option>DE - Germany</option>
+      <option>FR - France</option>
+    </select>
+    <select class="filter-select">
+      <option>Все сайты</option>
+      <option>Только с нашим тизером</option>
+    </select>
+    <input class="search-input" placeholder="Поиск...">
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat">Найден на <span class="stat-value" style="color:var(--green);">5</span> из <span class="stat-value">12</span> сайтов</div>
+    <div class="stat">Средняя позиция: <span class="stat-value">3.2</span></div>
+  </div>
+
+  <div class="cards-grid">
+    <!-- Card 1: Position 1 -->
+    <div class="block-card">
+      <div class="block-card-header">
+        <div>
+          <div class="block-card-site">tech-world.es</div>
+          <div class="block-card-geo">ES | Block: 44281</div>
+        </div>
+        <span class="our-found">Позиция 1</span>
+      </div>
+      <div class="block-card-body">
+        <div class="block-teaser is-our">
+          <div class="block-teaser-pos">1</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#6c7cff,#4a5adf);"></div>
+          <div class="block-teaser-title">Испанцы в шоке от нового крипто-робота</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">2</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#e74c3c,#c0392b);"></div>
+          <div class="block-teaser-title">Nueva forma de ganar dinero desde casa</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">3</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#f39c12,#e67e22);"></div>
+          <div class="block-teaser-title">Descubre como multiplicar tu inversion</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">4</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#2ecc71,#27ae60);"></div>
+          <div class="block-teaser-title">El secreto que los bancos no quieren</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">5</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#9b59b6,#8e44ad);"></div>
+          <div class="block-teaser-title">Gana 3000 euros al mes con esta app</div>
+        </div>
+        <div class="block-more">...ещё 3 тизера</div>
+      </div>
+      <div class="block-card-footer">
+        <span>8 тизеров в блоке</span>
+        <span>Скан: 14:20</span>
+      </div>
+    </div>
+
+    <!-- Card 2: Position 3 -->
+    <div class="block-card">
+      <div class="block-card-header">
+        <div>
+          <div class="block-card-site">example-news.com</div>
+          <div class="block-card-geo">DE | Block: 55102</div>
+        </div>
+        <span class="our-found">Позиция 3 ↑</span>
+      </div>
+      <div class="block-card-body">
+        <div class="block-teaser">
+          <div class="block-teaser-pos">1</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#e74c3c,#c0392b);"></div>
+          <div class="block-teaser-title">Deutsche sind schockiert von neuem Krypto</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">2</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#f39c12,#e67e22);"></div>
+          <div class="block-teaser-title">Neuer Krypto-Bot macht alle reich</div>
+        </div>
+        <div class="block-teaser is-our">
+          <div class="block-teaser-pos">3</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#6c7cff,#4a5adf);"></div>
+          <div class="block-teaser-title">Dieser Roboter verdient 3000 pro Tag</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">4</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#2ecc71,#27ae60);"></div>
+          <div class="block-teaser-title">Verdienen Sie 5000 pro Woche von Zuhause</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">5</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#9b59b6,#8e44ad);"></div>
+          <div class="block-teaser-title">Geheimes System der Millionare enthullt</div>
+        </div>
+        <div class="block-more">...ещё 5 тизеров</div>
+      </div>
+      <div class="block-card-footer">
+        <span>10 тизеров в блоке</span>
+        <span>Скан: 14:30</span>
+      </div>
+    </div>
+
+    <!-- Card 3: Position 7, falling -->
+    <div class="block-card">
+      <div class="block-card-header">
+        <div>
+          <div class="block-card-site">sport-daily.fr</div>
+          <div class="block-card-geo">FR | Block: 33045</div>
+        </div>
+        <span class="our-found" style="color:var(--red);">Позиция 7 ↓</span>
+      </div>
+      <div class="block-card-body">
+        <div class="block-teaser">
+          <div class="block-teaser-pos">1</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#e74c3c,#c0392b);"></div>
+          <div class="block-teaser-title">Les Francais decouvrent un nouveau robot</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">2</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#f39c12,#e67e22);"></div>
+          <div class="block-teaser-title">Gagner 5000 euros par mois facilement</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">3</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#2ecc71,#27ae60);"></div>
+          <div class="block-teaser-title">Le secret des traders professionnels</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">4</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#3498db,#2980b9);"></div>
+          <div class="block-teaser-title">Investissement revolutionnaire en 2026</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">5</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#1abc9c,#16a085);"></div>
+          <div class="block-teaser-title">Comment devenir riche en 30 jours</div>
+        </div>
+        <div class="block-more">...наш на позиции 7 (+ещё 5)</div>
+      </div>
+      <div class="block-card-footer">
+        <span>12 тизеров в блоке</span>
+        <span>Скан: 14:25</span>
+      </div>
+    </div>
+
+    <!-- Card 4: Not found -->
+    <div class="block-card" style="opacity:0.7;">
+      <div class="block-card-header">
+        <div>
+          <div class="block-card-site">finance-portal.it</div>
+          <div class="block-card-geo">IT | Block: 22190</div>
+        </div>
+        <span class="our-notfound">Не найден</span>
+      </div>
+      <div class="block-card-body">
+        <div class="block-teaser">
+          <div class="block-teaser-pos">1</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#e74c3c,#c0392b);"></div>
+          <div class="block-teaser-title">Gli italiani scoprono nuovo metodo di guadagno</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">2</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#f39c12,#e67e22);"></div>
+          <div class="block-teaser-title">Guadagna 3000 euro al giorno da casa</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">3</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#2ecc71,#27ae60);"></div>
+          <div class="block-teaser-title">Il segreto che le banche nascondono</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">4</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#9b59b6,#8e44ad);"></div>
+          <div class="block-teaser-title">Robot di trading automatico - registrati</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">5</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#3498db,#2980b9);"></div>
+          <div class="block-teaser-title">Metodo rivoluzionario per investire online</div>
+        </div>
+        <div class="block-more">...ещё 9 тизеров</div>
+      </div>
+      <div class="block-card-footer">
+        <span>14 тизеров в блоке</span>
+        <span>Скан: 14:28</span>
+      </div>
+    </div>
+
+    <!-- Card 5: No widget -->
+    <div class="block-card" style="opacity:0.5;">
+      <div class="block-card-header">
+        <div>
+          <div class="block-card-site">broken-site.nl</div>
+          <div class="block-card-geo">NL</div>
+        </div>
+        <span class="our-notfound" style="color:var(--red);">Нет виджета</span>
+      </div>
+      <div class="block-card-body" style="padding:16px;text-align:center;">
+        <div style="font-size:12px;color:var(--text2);">Geozo блок не обнаружен на странице</div>
+      </div>
+      <div class="block-card-footer">
+        <span>0 тизеров</span>
+        <span>Скан: 14:15</span>
+      </div>
+    </div>
+
+    <!-- Card 6: Position 2 -->
+    <div class="block-card">
+      <div class="block-card-header">
+        <div>
+          <div class="block-card-site">crypto-news.nl</div>
+          <div class="block-card-geo">NL | Block: 66703</div>
+        </div>
+        <span class="our-found" style="color:var(--green);">Позиция 2 ↑</span>
+      </div>
+      <div class="block-card-body">
+        <div class="block-teaser">
+          <div class="block-teaser-pos">1</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#e74c3c,#c0392b);"></div>
+          <div class="block-teaser-title">Nederlanders verdienen duizenden euros</div>
+        </div>
+        <div class="block-teaser is-our">
+          <div class="block-teaser-pos">2</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#6c7cff,#4a5adf);"></div>
+          <div class="block-teaser-title">Nieuw crypto platform maakt iedereen rijk</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">3</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#2ecc71,#27ae60);"></div>
+          <div class="block-teaser-title">Het geheim van succesvolle handelaren</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">4</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#f39c12,#e67e22);"></div>
+          <div class="block-teaser-title">Verdien 5000 per week vanuit huis</div>
+        </div>
+        <div class="block-teaser">
+          <div class="block-teaser-pos">5</div>
+          <div class="block-teaser-img" style="background:linear-gradient(135deg,#9b59b6,#8e44ad);"></div>
+          <div class="block-teaser-title">Automatisch handelen met AI-robot</div>
+        </div>
+        <div class="block-more">...ещё 3 тизера</div>
+      </div>
+      <div class="block-card-footer">
+        <span>8 тизеров в блоке</span>
+        <span>Скан: 14:15</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showVariant(v) {
+  document.querySelectorAll('.variant-tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.variant-panel').forEach(el => el.classList.remove('active'));
+  document.querySelector(`.variant-tab[onclick*="${v}"]`).classList.add('active');
+  document.getElementById('variant-' + v).classList.add('active');
+}
+</script>
+</body>
+</html>
