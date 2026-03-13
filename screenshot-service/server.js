@@ -125,6 +125,106 @@ const FINGERPRINT_PROFILES = [
 
 const MAX_CAPTURE_RETRIES = parseInt(process.env.MAX_CAPTURE_RETRIES || '3', 10);
 
+// Stealth scripts — injected BEFORE page navigation to hide headless/automation markers
+// Cloakers check these via JS: navigator.webdriver, chrome object, plugins, WebGL, etc.
+const STEALTH_SCRIPTS = `
+  // 1. Hide navigator.webdriver (primary headless detection)
+  Object.defineProperty(navigator, 'webdriver', { get: () => false });
+
+  // 2. Fake window.chrome object (missing in headless Chromium)
+  if (!window.chrome) {
+    window.chrome = {
+      runtime: {
+        onMessage: { addListener: function(){}, removeListener: function(){} },
+        sendMessage: function(){},
+        connect: function(){ return { onMessage: { addListener: function(){} }, postMessage: function(){} }; }
+      },
+      loadTimes: function(){ return {}; },
+      csi: function(){ return {}; },
+      app: { isInstalled: false, getIsInstalled: function(){ return false; }, installState: 'disabled' }
+    };
+  }
+
+  // 3. Fake plugins (headless has empty plugins array)
+  Object.defineProperty(navigator, 'plugins', {
+    get: () => {
+      const plugins = [
+        { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format', length: 1, item: function(i){ return this[i]; }, 0: { type: 'application/x-google-chrome-pdf', suffixes: 'pdf', description: 'Portable Document Format' } },
+        { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '', length: 1, item: function(i){ return this[i]; }, 0: { type: 'application/pdf', suffixes: 'pdf', description: '' } },
+        { name: 'Native Client', filename: 'internal-nacl-plugin', description: '', length: 2, item: function(i){ return this[i]; }, 0: { type: 'application/x-nacl', suffixes: '', description: 'Native Client Executable' }, 1: { type: 'application/x-pnacl', suffixes: '', description: 'Portable Native Client Executable' } }
+      ];
+      plugins.namedItem = function(name) { return this.find(p => p.name === name) || null; };
+      plugins.refresh = function(){};
+      return plugins;
+    }
+  });
+
+  // 4. Fake languages (headless may have empty array)
+  Object.defineProperty(navigator, 'languages', {
+    get: () => [navigator.language || 'en-US', 'en']
+  });
+
+  // 5. Fix permissions API (headless returns 'denied' for notifications)
+  const origQuery = window.Permissions?.prototype?.query;
+  if (origQuery) {
+    window.Permissions.prototype.query = function(params) {
+      if (params.name === 'notifications') {
+        return Promise.resolve({ state: 'default', onchange: null });
+      }
+      return origQuery.call(this, params);
+    };
+  }
+
+  // 6. Fake WebGL vendor/renderer (headless shows "Google SwiftShader")
+  const getParameterOrig = WebGLRenderingContext.prototype.getParameter;
+  WebGLRenderingContext.prototype.getParameter = function(param) {
+    if (param === 37445) return 'Google Inc. (NVIDIA)';  // UNMASKED_VENDOR_WEBGL
+    if (param === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1060 6GB Direct3D11 vs_5_0 ps_5_0, D3D11)';  // UNMASKED_RENDERER_WEBGL
+    return getParameterOrig.call(this, param);
+  };
+  if (typeof WebGL2RenderingContext !== 'undefined') {
+    const getParameter2Orig = WebGL2RenderingContext.prototype.getParameter;
+    WebGL2RenderingContext.prototype.getParameter = function(param) {
+      if (param === 37445) return 'Google Inc. (NVIDIA)';
+      if (param === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1060 6GB Direct3D11 vs_5_0 ps_5_0, D3D11)';
+      return getParameter2Orig.call(this, param);
+    };
+  }
+
+  // 7. Fake media devices (headless has none)
+  if (navigator.mediaDevices?.enumerateDevices) {
+    const origEnum = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
+    navigator.mediaDevices.enumerateDevices = async function() {
+      const devices = await origEnum();
+      if (devices.length === 0) {
+        return [
+          { deviceId: 'default', kind: 'audioinput', label: '', groupId: 'default' },
+          { deviceId: 'default', kind: 'audiooutput', label: '', groupId: 'default' },
+          { deviceId: 'default', kind: 'videoinput', label: '', groupId: 'default' },
+        ];
+      }
+      return devices;
+    };
+  }
+
+  // 8. Fix platform for consistency with User-Agent
+  // (navigator.platform will be set by Playwright based on UA, but override if needed)
+
+  // 9. Fake connection info
+  if (!navigator.connection) {
+    Object.defineProperty(navigator, 'connection', {
+      get: () => ({
+        downlink: 10, effectiveType: '4g', rtt: 50, saveData: false,
+        onchange: null, addEventListener: function(){}, removeEventListener: function(){}
+      })
+    });
+  }
+
+  // 10. Hide automation-related properties
+  delete window.__playwright;
+  delete window.__pw_manual;
+`;
+
 // Build Playwright context options from fingerprint params
 function buildContextOptions(params, retryProfile) {
   const profile = retryProfile || {};
@@ -160,6 +260,10 @@ async function attemptCapture(url, proxyConfig, contextOptions) {
 
   const browser = await chromium.launch(launchOptions);
   const context = await browser.newContext(contextOptions);
+
+  // Inject stealth scripts BEFORE any page loads — critical for cloaker bypass
+  await context.addInitScript(STEALTH_SCRIPTS);
+
   const page = await context.newPage();
 
   // Collect assets via network interception
@@ -200,11 +304,51 @@ async function attemptCapture(url, proxyConfig, contextOptions) {
   });
 
   // Navigate and wait for content
+  const startUrl = url;
   const response = await page.goto(url, { waitUntil: 'networkidle', timeout: TIMEOUT });
   const httpStatus = response ? response.status() : 0;
 
   // Wait for page to be fully rendered
   await page.waitForTimeout(3000);
+
+  // Check if page did a JS redirect (cloaker TDS) — wait for it to complete
+  const currentUrl = page.url();
+  if (currentUrl !== startUrl) {
+    console.log(`[capture] JS redirect detected: ${startUrl} -> ${currentUrl}`);
+    // Wait for the redirected page to fully load
+    try {
+      await page.waitForLoadState('networkidle', { timeout: 15000 });
+    } catch {}
+    await page.waitForTimeout(2000);
+  }
+
+  // Also check for pending meta-refresh / JS location changes
+  const pendingRedirect = await page.evaluate(() => {
+    // Check meta refresh
+    const meta = document.querySelector('meta[http-equiv="refresh"]');
+    if (meta) {
+      const match = meta.content.match(/url=(.+)/i);
+      if (match) return match[1].trim().replace(/['"]/g, '');
+    }
+    // Check for JS redirect patterns in inline scripts
+    const scripts = document.querySelectorAll('script:not([src])');
+    for (const s of scripts) {
+      const code = s.textContent || '';
+      const locMatch = code.match(/(?:window\.location|location\.href|location\.replace)\s*[=(]\s*["']([^"']+)["']/);
+      if (locMatch && locMatch[1].startsWith('http')) return locMatch[1];
+    }
+    return null;
+  });
+
+  if (pendingRedirect) {
+    console.log(`[capture] Following pending redirect: ${pendingRedirect}`);
+    try {
+      await page.goto(pendingRedirect, { waitUntil: 'networkidle', timeout: TIMEOUT });
+      await page.waitForTimeout(3000);
+    } catch (err) {
+      console.log(`[capture] Redirect follow failed: ${err.message}`);
+    }
+  }
 
   // Scroll down to trigger lazy-loaded images
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
@@ -214,6 +358,19 @@ async function attemptCapture(url, proxyConfig, contextOptions) {
 
   // Detect error/garbage pages
   const errorReason = await detectErrorPage(page, httpStatus);
+
+  // Debug logging for blank pages — helps diagnose what cloaker returned
+  if (errorReason) {
+    const debugInfo = await page.evaluate(() => ({
+      url: location.href,
+      title: document.title,
+      bodyText: (document.body?.innerText || '').substring(0, 200),
+      bodyHTML: (document.body?.innerHTML || '').substring(0, 500),
+      scripts: document.querySelectorAll('script').length,
+      iframes: document.querySelectorAll('iframe').length,
+    }));
+    console.log(`[capture] Debug (${errorReason}): url=${debugInfo.url} title="${debugInfo.title}" scripts=${debugInfo.scripts} iframes=${debugInfo.iframes} bodyText="${debugInfo.bodyText}" bodyHTML="${debugInfo.bodyHTML.substring(0, 200)}"`);
+  }
 
   return { success: !errorReason, errorReason, httpStatus, page, browser, collectedAssets, assetUrls };
 }
