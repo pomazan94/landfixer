@@ -258,8 +258,18 @@ app.post('/capture', async (req, res) => {
         const isAsset = /\.(png|jpg|jpeg|gif|webp|svg|css|js|woff2?|ttf|eot|ico)(\?|$)/i.test(resUrl)
           || /image\/|text\/css|javascript|font\//i.test(contentType);
         if (isAsset && !assetUrls.has(resUrl)) {
-          const ext = (contentType.split('/')[1] || 'bin').split(';')[0].replace('javascript', 'js').replace('svg+xml', 'svg');
-          const filename = `${assetIdx++}_${crypto.createHash('md5').update(resUrl).digest('hex').slice(0, 8)}.${ext}`;
+          // Extract original filename from URL, fallback to hash
+          let origName = '';
+          try {
+            const urlPath = new URL(resUrl).pathname;
+            origName = path.basename(urlPath).replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
+          } catch {}
+          if (!origName || origName === '/' || !origName.includes('.')) {
+            const ext = (contentType.split('/')[1] || 'bin').split(';')[0].replace('javascript', 'js').replace('svg+xml', 'svg');
+            origName = `${crypto.createHash('md5').update(resUrl).digest('hex').slice(0, 8)}.${ext}`;
+          }
+          // Prefix with index to avoid name collisions (different dirs can have same filename)
+          const filename = `${assetIdx++}_${origName}`;
           assetUrls.set(resUrl, filename);
           const body = await response.body().catch(() => null);
           if (body) {
