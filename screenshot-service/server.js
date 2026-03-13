@@ -157,11 +157,19 @@ async function inlineResources(page) {
 // Create ZIP archive with HTML + collected assets
 async function createArchive(htmlContent, assets, baseName) {
   const zipPath = path.join(ARCHIVES_DIR, `${baseName}.zip`);
+  console.log(`[archive] Creating ${baseName}.zip with ${assets.length} assets:`);
+  for (const asset of assets) {
+    console.log(`  [asset] ${asset.filename} (${(asset.buffer.length / 1024).toFixed(1)} KB) <- ${asset.url}`);
+  }
   return new Promise((resolve, reject) => {
     const output = fs.createWriteStream(zipPath);
     const archive = archiver('zip', { zlib: { level: 6 } });
 
-    output.on('close', () => resolve(zipPath));
+    output.on('close', () => {
+      const sizeMB = (archive.pointer() / 1024 / 1024).toFixed(2);
+      console.log(`[archive] Done: ${baseName}.zip (${sizeMB} MB, ${assets.length} assets)`);
+      resolve(zipPath);
+    });
     archive.on('error', reject);
 
     archive.pipe(output);
