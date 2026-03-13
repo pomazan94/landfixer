@@ -370,13 +370,28 @@ async function attemptCapture(url, proxyConfig, contextOptions) {
   const response = await page.goto(url, { waitUntil: 'networkidle', timeout: TIMEOUT });
   const httpStatus = response ? response.status() : 0;
 
-  // Debug: log HTTP response details for the main navigation
+  // Debug: log HTTP response details + raw body for the main navigation
+  let rawBody = '';
   if (response) {
     const respHeaders = response.headers();
     const contentType = respHeaders['content-type'] || 'none';
     const contentLength = respHeaders['content-length'] || 'unknown';
     const server = respHeaders['server'] || respHeaders['x-powered-by'] || 'unknown';
-    console.log(`[capture] HTTP ${httpStatus} | content-type: ${contentType} | content-length: ${contentLength} | server: ${server} | final-url: ${page.url()}`);
+    const cfRay = respHeaders['cf-ray'] || '';
+    const cfCacheStatus = respHeaders['cf-cache-status'] || '';
+    console.log(`[capture] HTTP ${httpStatus} | content-type: ${contentType} | content-length: ${contentLength} | server: ${server} | cf-ray: ${cfRay} | cf-cache: ${cfCacheStatus} | final-url: ${page.url()}`);
+    // Capture raw response body — see what Cloudflare/Keitaro actually sent
+    try {
+      const bodyBuf = await response.body();
+      rawBody = bodyBuf.toString('utf8');
+      if (rawBody.length > 0) {
+        console.log(`[capture] Raw body (${rawBody.length} bytes): ${rawBody.substring(0, 500)}`);
+      } else {
+        console.log(`[capture] Raw body: EMPTY (0 bytes)`);
+      }
+    } catch (e) {
+      console.log(`[capture] Raw body: failed to read (${e.message})`);
+    }
   }
 
   // Wait for page to be fully rendered
@@ -432,15 +447,22 @@ async function attemptCapture(url, proxyConfig, contextOptions) {
 
   // Debug logging for blank pages — helps diagnose what cloaker returned
   if (errorReason) {
+    // Get full page source (including <head>) — not just body
+    let fullHTML = '';
+    try { fullHTML = await page.content(); } catch {}
     const debugInfo = await page.evaluate(() => ({
       url: location.href,
       title: document.title,
       bodyText: (document.body?.innerText || '').substring(0, 200),
-      bodyHTML: (document.body?.innerHTML || '').substring(0, 500),
+      headHTML: (document.head?.innerHTML || '').substring(0, 500),
       scripts: document.querySelectorAll('script').length,
       iframes: document.querySelectorAll('iframe').length,
+      metaTags: Array.from(document.querySelectorAll('meta')).map(m => m.outerHTML).join(' '),
     }));
-    console.log(`[capture] Debug (${errorReason}): url=${debugInfo.url} title="${debugInfo.title}" scripts=${debugInfo.scripts} iframes=${debugInfo.iframes} bodyText="${debugInfo.bodyText}" bodyHTML="${debugInfo.bodyHTML.substring(0, 200)}"`);
+    console.log(`[capture] Debug (${errorReason}): url=${debugInfo.url} title="${debugInfo.title}" scripts=${debugInfo.scripts} iframes=${debugInfo.iframes}`);
+    console.log(`[capture] Debug head: ${debugInfo.headHTML}`);
+    console.log(`[capture] Debug meta: ${debugInfo.metaTags}`);
+    console.log(`[capture] Debug fullHTML (${fullHTML.length} bytes): ${fullHTML.substring(0, 800)}`);
   }
 
   return { success: !errorReason, errorReason, httpStatus, page, browser, collectedAssets, assetUrls };
