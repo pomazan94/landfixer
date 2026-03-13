@@ -657,6 +657,7 @@ function fmtDate(s) { if (!s) return '-'; const d = new Date(s); return d.toLoca
 function screenshotUrl(path) { return path ? SCREENSHOT_SERVICE_URL + '/data/' + path : ''; }
 function hasCapture(c) { return c.screenshot_path && c.screenshot_path !== 'undefined' && c.screenshot_path !== 'null'; }
 function hasArchive(c) { return c.archive_path && c.archive_path !== 'undefined' && c.archive_path !== 'null'; }
+function canCapture(c) { return c.landing_url && c.landing_type !== 'luckyfeed'; }
 
 function showScreenshot(path) {
   $('modal-content').innerHTML = `
@@ -1568,7 +1569,7 @@ function renderCreativeCard(c) {
       <div style="display:flex;gap:6px;margin-top:6px;">
         ${hasCapture(c) ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();showScreenshot('${esc(c.screenshot_path)}')" style="font-size:10px;padding:2px 8px;" title="Screenshot">Screenshot</button>` : ''}
         ${hasArchive(c) ? `<button class="btn btn-sm btn-outline" onclick="event.stopPropagation();downloadArchive('${esc(c.archive_path)}')" style="font-size:10px;padding:2px 8px;" title="Download landing">Download</button>` : ''}
-        ${!hasCapture(c) && c.landing_url ? `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();captureCreative(${c.id}, '${esc(c.landing_url)}', this)" style="font-size:10px;padding:2px 8px;" title="Capture screenshot & landing">Capture</button>` : ''}
+        ${!hasCapture(c) && canCapture(c) ? `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();captureCreative(${c.id}, '${esc(c.landing_url)}', this)" style="font-size:10px;padding:2px 8px;" title="Capture screenshot & landing">Capture</button>` : ''}
       </div>
     </div>
   </div>`;
@@ -1691,12 +1692,12 @@ async function showCreativeDetail(id) {
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Media ID</td><td>${c.media_id||'-'}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Гео</td><td>${countries||'-'}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Landing</td><td style="word-break:break-all;">${c.landing_url ? `<a href="${esc(c.landing_url)}" target="_blank" style="color:var(--accent);">${esc(c.landing_domain||c.landing_url)}</a>` : '-'}</td></tr>
-            <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Landing Capture</td><td style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            ${hasCapture(c) || hasArchive(c) || canCapture(c) ? `<tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Landing Capture</td><td style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
               ${hasCapture(c) ? `<button class="btn btn-sm btn-outline" onclick="showScreenshot('${esc(c.screenshot_path)}')" style="font-size:11px;">Screenshot</button>` : ''}
               ${hasArchive(c) ? `<a href="${screenshotUrl(esc(c.archive_path))}" download class="btn btn-sm btn-outline" style="font-size:11px;">Download ZIP</a>` : ''}
-              ${c.landing_url ? `<button class="btn btn-sm btn-primary" id="btn-capture-${c.id}" onclick="captureCreative(${c.id}, '${esc(c.landing_url)}', this)" style="font-size:11px;">${hasCapture(c) ? 'Re-capture' : 'Capture'}</button>` : ''}
+              ${canCapture(c) ? `<button class="btn btn-sm btn-primary" id="btn-capture-${c.id}" onclick="captureCreative(${c.id}, '${esc(c.landing_url)}', this)" style="font-size:11px;">${hasCapture(c) ? 'Re-capture' : 'Capture'}</button>` : ''}
               ${c.captured_at ? `<span style="font-size:10px;color:var(--text2);align-self:center;">${new Date(c.captured_at).toLocaleString('ru-RU')}</span>` : ''}
-            </td></tr>
+            </td></tr>` : `<tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Landing Type</td><td><span class="badge badge-orange">${esc(c.landing_type || 'unknown')}</span> — витрина, capture не нужен</td></tr>`}
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Gravity</td><td>${gravityBadge(c.gravity)} ${trendArrow(c.trend)}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Strength</td><td>${c.strength||0}</td></tr>
             <tr><td style="color:var(--text2);padding:3px 8px 3px 0;">Avg Position</td><td>${c.avg_position ? parseFloat(c.avg_position).toFixed(1) : '-'}</td></tr>
