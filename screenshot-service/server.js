@@ -166,9 +166,9 @@ async function createArchive(htmlContent, assets, baseName) {
 
     archive.pipe(output);
     archive.append(htmlContent, { name: 'index.html' });
-    // Add collected assets (images, css, js, fonts)
+    // Add collected assets preserving original path structure
     for (const asset of assets) {
-      archive.append(asset.buffer, { name: 'assets/' + asset.filename });
+      archive.append(asset.buffer, { name: asset.filename });
     }
     archive.finalize();
   });
@@ -258,19 +258,23 @@ app.post('/capture', async (req, res) => {
         const isAsset = /\.(png|jpg|jpeg|gif|webp|svg|css|js|woff2?|ttf|eot|ico)(\?|$)/i.test(resUrl)
           || /image\/|text\/css|javascript|font\//i.test(contentType);
         if (isAsset && !assetUrls.has(resUrl)) {
-          // Extract original filename from URL, fallback to hash
-          let origName = '';
+          // Preserve original path structure: domain/path/file.ext
+          let localPath = '';
           try {
-            const urlPath = new URL(resUrl).pathname;
-            origName = path.basename(urlPath).replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
-          } catch {}
-          if (!origName || origName === '/' || !origName.includes('.')) {
+            const parsed = new URL(resUrl);
+            const safeDomain = parsed.hostname.replace(/[^a-zA-Z0-9.-]/g, '_');
+            let safePath = parsed.pathname.replace(/^\/+/, '').replace(/[^a-zA-Z0-9._\/-]/g, '_');
+            if (!safePath || safePath.endsWith('/')) {
+              const ext = (contentType.split('/')[1] || 'bin').split(';')[0].replace('javascript', 'js').replace('svg+xml', 'svg');
+              safePath += `index_${assetIdx}.${ext}`;
+            }
+            localPath = `${safeDomain}/${safePath}`;
+          } catch {
             const ext = (contentType.split('/')[1] || 'bin').split(';')[0].replace('javascript', 'js').replace('svg+xml', 'svg');
-            origName = `${crypto.createHash('md5').update(resUrl).digest('hex').slice(0, 8)}.${ext}`;
+            localPath = `unknown/${assetIdx}.${ext}`;
           }
-          // Prefix with index to avoid name collisions (different dirs can have same filename)
-          const filename = `${assetIdx++}_${origName}`;
-          assetUrls.set(resUrl, filename);
+          assetIdx++;
+          assetUrls.set(resUrl, localPath);
           const body = await response.body().catch(() => null);
           if (body) {
             collectedAssets.push({ url: resUrl, filename, buffer: body });
@@ -325,10 +329,10 @@ app.post('/capture', async (req, res) => {
     }
 
     // Replace absolute URLs with local asset paths in HTML
-    for (const [assetUrl, filename] of assetUrls) {
+    for (const [assetUrl, localPath] of assetUrls) {
       // Escape special regex chars in URL
       const escaped = assetUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      htmlContent = htmlContent.replace(new RegExp(escaped, 'g'), 'assets/' + filename);
+      htmlContent = htmlContent.replace(new RegExp(escaped, 'g'), localPath);
     }
 
     // Create ZIP archive with HTML + assets
