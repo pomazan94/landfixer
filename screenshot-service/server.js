@@ -305,15 +305,90 @@ function buildContextOptions(params, retryProfile, captureUrl) {
   return opts;
 }
 
+// Probe URL with plain HTTPS (node fetch, no Playwright) to check if TLS fingerprint is the issue
+async function probeWithFetch(url, proxyUrl, headers) {
+  const https = require('https');
+  const http = require('http');
+
+  // Build request options
+  const parsedUrl = new URL(url);
+  const reqHeaders = {
+    'User-Agent': headers['User-Agent'] || headers.userAgent || 'Mozilla/5.0',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
+    ...headers,
+  };
+  // Remove non-HTTP headers
+  delete reqHeaders.userAgent;
+
+  return new Promise((resolve) => {
+    const options = {
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || 443,
+      path: parsedUrl.pathname + parsedUrl.search,
+      method: 'GET',
+      headers: reqHeaders,
+      rejectUnauthorized: false,
+      timeout: 15000,
+    };
+
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        resolve({
+          status: res.statusCode,
+          headers: res.headers,
+          bodyLength: body.length,
+          bodyPreview: body.substring(0, 500),
+        });
+      });
+    });
+    req.on('error', (e) => resolve({ error: e.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ error: 'timeout' }); });
+    req.end();
+  });
+}
+
 // Single capture attempt — returns { success, errorReason, httpStatus, page, browser, collectedAssets, assetUrls }
-async function attemptCapture(url, proxyConfig, contextOptions) {
+async function attemptCapture(url, proxyConfig, contextOptions, attemptNum) {
+  // Log ALL parameters used for this attempt
+  console.log(`[capture] === Attempt ${attemptNum} params ===`);
+  console.log(`[capture]   URL: ${url}`);
+  console.log(`[capture]   Proxy: ${proxyConfig ? proxyConfig.server : 'NONE'}`);
+  console.log(`[capture]   User-Agent: ${contextOptions.userAgent}`);
+  console.log(`[capture]   Locale: ${contextOptions.locale || 'default'}`);
+  console.log(`[capture]   Timezone: ${contextOptions.timezoneId || 'default'}`);
+  console.log(`[capture]   Viewport: ${contextOptions.viewport?.width}x${contextOptions.viewport?.height}`);
+  console.log(`[capture]   isMobile: ${contextOptions.isMobile || false}`);
+  console.log(`[capture]   Headers: ${JSON.stringify(contextOptions.extraHTTPHeaders || {})}`);
+
+  // On first attempt: also try plain HTTPS fetch (no Playwright) to compare
+  if (attemptNum === 1) {
+    console.log(`[capture] --- Node.js HTTPS probe (no Playwright, no proxy) ---`);
+    const probeHeaders = { ...(contextOptions.extraHTTPHeaders || {}), 'User-Agent': contextOptions.userAgent };
+    const probeResult = await probeWithFetch(url, null, probeHeaders);
+    if (probeResult.error) {
+      console.log(`[capture] Probe failed: ${probeResult.error}`);
+    } else {
+      console.log(`[capture] Probe HTTP ${probeResult.status} | body: ${probeResult.bodyLength} bytes | content-type: ${probeResult.headers['content-type'] || 'none'}`);
+      if (probeResult.bodyLength > 0) {
+        console.log(`[capture] Probe body preview: ${probeResult.bodyPreview}`);
+      } else {
+        console.log(`[capture] Probe body: EMPTY`);
+      }
+    }
+    console.log(`[capture] --- End probe ---`);
+  }
+
   const launchOptions = {
     headless: true,
     args: [
-      '--disable-blink-features=AutomationControlled',  // removes navigator.webdriver at browser level
-      '--disable-features=IsolateOrigins,site-per-process',  // reduce fingerprint differences
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process',
       '--disable-site-isolation-trials',
-      '--disable-web-security',   // allow cross-origin for TDS redirects
+      '--disable-web-security',
       '--no-first-run',
       '--no-default-browser-check',
     ],
@@ -327,6 +402,14 @@ async function attemptCapture(url, proxyConfig, contextOptions) {
   await context.addInitScript(STEALTH_SCRIPTS);
 
   const page = await context.newPage();
+
+  // Log actual request headers sent by the browser (intercept first request)
+  let actualRequestHeaders = null;
+  page.on('request', (request) => {
+    if (!actualRequestHeaders && request.isNavigationRequest()) {
+      actualRequestHeaders = request.headers();
+    }
+  });
 
   // Collect assets via network interception
   const collectedAssets = [];
@@ -369,6 +452,11 @@ async function attemptCapture(url, proxyConfig, contextOptions) {
   const startUrl = url;
   const response = await page.goto(url, { waitUntil: 'networkidle', timeout: TIMEOUT });
   const httpStatus = response ? response.status() : 0;
+
+  // Log actual headers the browser sent
+  if (actualRequestHeaders) {
+    console.log(`[capture] Actual request headers sent: ${JSON.stringify(actualRequestHeaders)}`);
+  }
 
   // Debug: log HTTP response details + raw body for the main navigation
   let rawBody = '';
@@ -622,7 +710,7 @@ app.post('/capture', async (req, res) => {
 
       let result;
       try {
-        result = await attemptCapture(url, proxyConfig, contextOptions);
+        result = await attemptCapture(url, proxyConfig, contextOptions, attempt + 1);
       } catch (err) {
         console.log(`[capture] Attempt ${attempt + 1} failed with error: ${err.message}`);
         lastErrorReason = err.message;
