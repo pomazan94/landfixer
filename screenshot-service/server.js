@@ -53,6 +53,32 @@ function urlToFilename(url) {
   return `${domain}_${hash}`;
 }
 
+// Detect error/garbage pages that should NOT be cached
+function detectErrorPage(page, httpStatus) {
+  return page.evaluate((status) => {
+    const text = (document.body?.innerText || '').toLowerCase();
+    const title = (document.title || '').toLowerCase();
+
+    // HTTP-level errors
+    if (status >= 400) return `HTTP ${status}`;
+
+    // Cloudflare errors
+    if (/error \d{3}/.test(title) && /cloudflare/i.test(text)) return 'Cloudflare error page';
+    if (/connection timed out|error 522|error 521|error 520|error 523|error 524|error 525|error 526/.test(text) && /cloudflare/.test(text)) return 'Cloudflare error';
+
+    // Generic error pages
+    if (/502 bad gateway|503 service|504 gateway|500 internal server/i.test(text) && text.length < 2000) return 'Server error page';
+
+    // Hosting/parking pages
+    if (/this domain|domain is parked|domain has expired|buy this domain|this site can.t be reached/i.test(text) && text.length < 1000) return 'Parked/expired domain';
+
+    // Blank or near-blank pages
+    if (text.trim().length < 20) return 'Blank page';
+
+    return null;
+  }, httpStatus);
+}
+
 // Parse proxy URL into Playwright format
 // Input: socks5://user:pass@host:port or http://user:pass@host:port
 function parseProxy(proxyUrl) {
@@ -174,7 +200,7 @@ function releaseSlot() {
 
 // Main capture endpoint — screenshot + download
 app.post('/capture', async (req, res) => {
-  const { url, proxy, viewport } = req.body;
+  const { url, proxy, viewport, force } = req.body;
 
   if (!url) {
     return res.status(400).json({ error: 'url is required' });
@@ -185,8 +211,8 @@ app.post('/capture', async (req, res) => {
   const screenshotRelative = `screenshots/${baseName}.png`;
   const archiveRelative = `archives/${baseName}.zip`;
 
-  // Check if already captured
-  if (fs.existsSync(screenshotPath)) {
+  // Check if already captured (skip if force=true)
+  if (!force && fs.existsSync(screenshotPath)) {
     const archivePath = path.join(ARCHIVES_DIR, `${baseName}.zip`);
     return res.json({
       screenshot_path: screenshotRelative,
@@ -244,10 +270,11 @@ app.post('/capture', async (req, res) => {
     });
 
     // Navigate and wait for content
-    await page.goto(url, {
+    const response = await page.goto(url, {
       waitUntil: 'networkidle',
       timeout: TIMEOUT,
     });
+    const httpStatus = response ? response.status() : 0;
 
     // Wait for page to be fully rendered
     await page.waitForTimeout(3000);
@@ -258,15 +285,18 @@ app.post('/capture', async (req, res) => {
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(500);
 
-    // Check if page has visible content (anti-blank detection)
-    const hasContent = await page.evaluate(() => {
-      const body = document.body;
-      return body && body.innerText.trim().length > 10;
-    });
-
-    if (!hasContent) {
-      // Try waiting more for JS-heavy pages
-      await page.waitForTimeout(5000);
+    // Detect error/garbage pages — don't cache these
+    const errorReason = await detectErrorPage(page, httpStatus);
+    if (errorReason) {
+      await browser.close();
+      browser = null;
+      return res.status(422).json({
+        error: `Page not captured: ${errorReason}`,
+        reason: errorReason,
+        http_status: httpStatus,
+        screenshot_path: null,
+        archive_path: null,
+      });
     }
 
     // Take screenshot
@@ -323,14 +353,14 @@ app.post('/capture', async (req, res) => {
 
 // Screenshot only
 app.post('/screenshot', async (req, res) => {
-  const { url, proxy, viewport } = req.body;
+  const { url, proxy, viewport, force } = req.body;
   if (!url) return res.status(400).json({ error: 'url is required' });
 
   const baseName = urlToFilename(url);
   const screenshotPath = path.join(SCREENSHOTS_DIR, `${baseName}.png`);
   const screenshotRelative = `screenshots/${baseName}.png`;
 
-  if (fs.existsSync(screenshotPath)) {
+  if (!force && fs.existsSync(screenshotPath)) {
     return res.json({ screenshot_path: screenshotRelative, cached: true });
   }
 
@@ -348,8 +378,17 @@ app.post('/screenshot', async (req, res) => {
       ignoreHTTPSErrors: true,
     });
     const page = await context.newPage();
-    await page.goto(url, { waitUntil: 'networkidle', timeout: TIMEOUT });
+    const response = await page.goto(url, { waitUntil: 'networkidle', timeout: TIMEOUT });
+    const httpStatus = response ? response.status() : 0;
     await page.waitForTimeout(2000);
+
+    const errorReason = await detectErrorPage(page, httpStatus);
+    if (errorReason) {
+      await browser.close();
+      browser = null;
+      return res.status(422).json({ error: `Page not captured: ${errorReason}`, reason: errorReason });
+    }
+
     await page.screenshot({ path: screenshotPath, fullPage: true, type: 'png' });
     await browser.close();
     browser = null;
