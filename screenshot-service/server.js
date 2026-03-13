@@ -32,6 +32,8 @@ function stripTrackingParams(url) {
       'adgroupid','ad_campaign_id','creative_id',
       'source','cost','bid','cs','price',
       'ref','referrer','aff_id','offer_id','pid','tid',
+      'external_id','transaction_id','idfa','gaid','sub1','sub2','sub3','sub4','sub5',
+      'fbpixel','pixel','ttclid','sclid','msclkid','twclid','li_fat_id',
     ];
     for (const key of trackingKeys) {
       u.searchParams.delete(key);
