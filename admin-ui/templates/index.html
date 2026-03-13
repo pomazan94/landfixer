@@ -696,14 +696,15 @@ async function captureCreative(id, landingUrl, btnEl) {
     });
     const result = await captureResp.json();
 
-    // 422 = error page detected (Cloudflare, 5xx, blank, parked domain)
-    if (captureResp.status === 422) {
-      toast('Сайт недоступен: ' + (result.reason || result.error), 'error');
+    if (!captureResp.ok) throw new Error(result.error || 'Screenshot service error');
+
+    // captured=false means error page detected (Cloudflare, 5xx, blank, parked domain)
+    if (result.captured === false) {
+      toast('Сайт недоступен: ' + (result.reason || 'unknown error'), 'error');
       btnEl.disabled = false;
       btnEl.textContent = origText;
       return;
     }
-    if (!captureResp.ok) throw new Error(result.error || 'Screenshot service error');
 
     // 2. Save paths to database
     await api('update_creative_capture', {

@@ -223,6 +223,7 @@ app.post('/capture', async (req, res) => {
   if (!force && fs.existsSync(screenshotPath)) {
     const archivePath = path.join(ARCHIVES_DIR, `${baseName}.zip`);
     return res.json({
+      captured: true,
       screenshot_path: screenshotRelative,
       archive_path: fs.existsSync(archivePath) ? archiveRelative : null,
       cached: true,
@@ -308,12 +309,14 @@ app.post('/capture', async (req, res) => {
     await page.waitForTimeout(500);
 
     // Detect error/garbage pages — don't cache these
+    // Return 200 with captured:false instead of 422 so n8n HTTP Request node
+    // doesn't throw AxiosError — the request itself is valid, the target page is bad
     const errorReason = await detectErrorPage(page, httpStatus);
     if (errorReason) {
       await browser.close();
       browser = null;
-      return res.status(422).json({
-        error: `Page not captured: ${errorReason}`,
+      return res.json({
+        captured: false,
         reason: errorReason,
         http_status: httpStatus,
         screenshot_path: null,
@@ -354,6 +357,7 @@ app.post('/capture', async (req, res) => {
     browser = null;
 
     res.json({
+      captured: true,
       screenshot_path: screenshotRelative,
       archive_path: archiveRelative,
       cached: false,
@@ -383,7 +387,7 @@ app.post('/screenshot', async (req, res) => {
   const screenshotRelative = `screenshots/${baseName}.png`;
 
   if (!force && fs.existsSync(screenshotPath)) {
-    return res.json({ screenshot_path: screenshotRelative, cached: true });
+    return res.json({ captured: true, screenshot_path: screenshotRelative, cached: true });
   }
 
   await acquireSlot();
@@ -408,14 +412,14 @@ app.post('/screenshot', async (req, res) => {
     if (errorReason) {
       await browser.close();
       browser = null;
-      return res.status(422).json({ error: `Page not captured: ${errorReason}`, reason: errorReason });
+      return res.json({ captured: false, reason: errorReason, screenshot_path: null });
     }
 
     await page.screenshot({ path: screenshotPath, fullPage: true, type: 'png' });
     await browser.close();
     browser = null;
 
-    res.json({ screenshot_path: screenshotRelative, cached: false });
+    res.json({ captured: true, screenshot_path: screenshotRelative, cached: false });
   } catch (err) {
     if (browser) try { await browser.close(); } catch {}
     console.error(`Screenshot failed for ${url}:`, err.message);
